@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# App data — YOUR local "database" lives here. Never commit it.
+/data/
+
+# Build output
+client/dist/
+server/dist/
+
+# Env / secrets
+.env
+.env.local
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

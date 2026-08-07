@@ -1,0 +1,16 @@
+{
+  "name": "rpg-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small, self-hosted Roll20-like virtual tabletop. No database: data lives in a gitignored /data folder.",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "serve": "npm run build && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
