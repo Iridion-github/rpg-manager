@@ -8,16 +8,33 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 
 const store = require('./store');
-const { gateEnabled, attachActor, resolveActor } = require('./auth');
+const { gateEnabled, signupIsOpen, attachActor, resolveActor } = require('./auth');
+const { attachCampaign, isCampaignId, touchActivity, CAMPAIGNS } = require('./campaigns');
+const { importJson } = require('./importJson');
+const authRouter = require('./routes/auth');
+const usersRouter = require('./routes/users');
+const campaignsRouter = require('./routes/campaigns');
 const sheetsRouter = require('./routes/sheets');
-const playersRouter = require('./routes/players');
 const scenesRouter = require('./routes/scenes');
-const chatRouter = require('./routes/chat');
+const { router: chatRouter } = require('./routes/chat');
+const notesRouter = require('./routes/notes');
+const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
-const { registerTokenDrag } = require('./tokenDrag');
+const { registerTokenDrag, roomFor } = require('./tokenDrag');
 
 const PORT = Number(process.env.PORT) || 3001;
+
+/**
+ * Listen on localhost only, by default.
+ *
+ * The tunnel runs on this same machine and dials localhost, so binding here
+ * costs it nothing — and it means the only way in from outside is the tunnel,
+ * which you can shut off. A default of 0.0.0.0 would quietly put the table on
+ * every coffee-shop network you ever join. Set HOST=0.0.0.0 to reach it from
+ * another device on your LAN.
+ */
+const HOST = process.env.HOST || '127.0.0.1';
 
 const app = express();
 app.use(cors());
@@ -32,8 +49,12 @@ app.set('io', io); // routes reach io via req.app.get('io')
 // connection. A key revoked mid-session takes effect on their next reconnect.
 io.use(async (socket, next) => {
   try {
-    const { gmPassword, playerKey } = socket.handshake.auth || {};
-    socket.data.actor = await resolveActor({ gmPassword, playerKey });
+    const { gmPassword, adminPassword, playerKey, userKey, session } = socket.handshake.auth || {};
+    socket.data.actor = await resolveActor({
+      session,
+      adminPassword: adminPassword || gmPassword,
+      userKey: userKey || playerKey,
+    });
     next();
   } catch (err) {
     next(err);
@@ -42,6 +63,41 @@ io.use(async (socket, next) => {
 
 io.on('connection', (socket) => {
   socket.emit('hello', { message: 'connected to rpg-manager', actor: socket.data.actor });
+
+  /**
+   * "I'm looking at this campaign now."
+   *
+   * Live updates are scoped to a campaign, and a socket has no URL to read that
+   * from — so it says. Membership is verified here rather than taken on trust,
+   * because this is what decides which broadcasts the connection receives: a
+   * socket that could name any campaign could listen to any table.
+   */
+  socket.on('campaign:enter', async ({ campaignId } = {}, ack) => {
+    try {
+      if (socket.data.campaignId) socket.leave(roomFor(socket.data.campaignId));
+      socket.data.campaignId = null;
+      socket.data.drag = null; // a drag doesn't survive leaving the table
+
+      if (!isCampaignId(campaignId)) return ack?.({ ok: true, campaignId: null });
+
+      const campaign = await store.get(CAMPAIGNS, campaignId);
+      const role = campaign?.members?.[socket.data.actor?.userId];
+      if (!role) return ack?.({ ok: false, error: 'You are not at this table.' });
+
+      socket.data.campaignId = campaignId;
+      socket.join(roomFor(campaignId));
+
+      // "Last activity" on the campaign list means a DM was here. A player
+      // wandering in doesn't make a table active — the person who runs it
+      // showing up does. Throttled inside touchActivity so a refresh isn't a
+      // disk write.
+      if (role === 'dm') await touchActivity(campaignId, campaign);
+
+      ack?.({ ok: true, campaignId, role });
+    } catch (err) {
+      ack?.({ ok: false, error: 'Could not open that campaign.' });
+    }
+  });
 });
 
 registerTokenDrag(io);
@@ -51,10 +107,27 @@ app.get('/api/status', (req, res) => {
   res.json({ ok: true, writeGate: gateEnabled, actor: req.actor, dataDir: store.DATA_DIR });
 });
 
-app.use('/api/sheets', sheetsRouter);
-app.use('/api/players', playersRouter);
-app.use('/api/scenes', scenesRouter);
-app.use('/api/chat', chatRouter);
+// --- global scope: people and the campaigns they belong to ---
+app.use('/api/auth', authRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/campaigns', campaignsRouter);
+
+/**
+ * --- campaign scope ---
+ *
+ * Everything below lives inside one campaign. attachCampaign runs first and
+ * answers 404 unless the caller is a member, so no handler further down has to
+ * remember to check: by the time one runs, the campaign and the caller's role
+ * in it are already settled.
+ */
+app.use('/api/campaigns/:campaignId/sheets', attachCampaign, sheetsRouter);
+app.use('/api/campaigns/:campaignId/scenes', attachCampaign, scenesRouter);
+app.use('/api/campaigns/:campaignId/chat', attachCampaign, chatRouter);
+app.use('/api/campaigns/:campaignId/notes', attachCampaign, notesRouter);
+app.use('/api/campaigns/:campaignId/music', attachCampaign, musicRouter);
+
+// Uploads and the built-in map list are campaign-independent: they're files on
+// disk, not table data, and a map image is the same image whoever looks at it.
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/maps', mapsRouter);
 
@@ -113,13 +186,68 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-server.listen(PORT, () => {
-  console.log(`rpg-manager server on http://localhost:${PORT}`);
-  console.log(`  data dir: ${store.DATA_DIR}`);
-  console.log(`  write gate: ${gateEnabled ? 'ON (GM password required)' : 'OFF (dev mode)'}`);
-  console.log(
-    hasClientBuild
-      ? `  app: serving client/dist — open http://localhost:${PORT}`
-      : '  app: API only (no client build — run `npm run build` to serve the UI)'
-  );
-});
+/**
+ * Fail closed on the open gate.
+ *
+ * With no ADMIN_PASSWORD every visitor resolves to the admin (see auth.js) —
+ * harmless on your own machine, catastrophic on a hostname a stranger can find.
+ * So the password is required unless someone explicitly asks for the open door,
+ * which `npm run dev` does by passing --open-gate.
+ *
+ * A CLI flag rather than an env var because `FOO=1 npm run dev` isn't portable
+ * to a Windows shell, and this has to be the *easy* path or it'll be worked
+ * around. Defaulting to closed matters more than defaulting to convenient: the
+ * mistake this prevents is silent, and you'd discover it when a stranger moves
+ * your tokens.
+ */
+if (!gateEnabled && !process.argv.includes('--open-gate')) {
+  console.error(`
+Refusing to start: ADMIN_PASSWORD is not set.
+
+Without it, everyone who reaches this server is treated as the admin —
+including anyone who finds your tunnel's hostname. Set one:
+
+  PowerShell   $env:ADMIN_PASSWORD='your-secret'; npm start
+  bash         ADMIN_PASSWORD=your-secret npm start
+
+Working locally and don't want a password? Use \`npm run dev\`.
+`);
+  process.exit(1);
+}
+
+// Bring a pre-campaign data folder into the campaign layout before serving a
+// single request, so nothing ever reads the half-migrated state.
+importJson()
+  .then((result) => {
+    if (result) {
+      console.log(
+        `imported ${result.records} record(s) from ${result.files} JSON file(s) into SQLite` +
+          (result.foldedIntoCampaign ? ', folding the pre-campaign data into "Imported Campaign"' : '')
+      );
+    }
+    server.listen(PORT, HOST, () => {
+      console.log(`rpg-manager server on http://localhost:${PORT}`);
+      console.log(`  database: ${store.DB_FILE}`);
+      console.log(`  write gate: ${gateEnabled ? 'ON (admin password required)' : 'OFF (dev mode)'}`);
+      console.log(
+        HOST === '127.0.0.1'
+          ? '  bound to: localhost only (a tunnel still works; set HOST=0.0.0.0 for LAN)'
+          : `  bound to: ${HOST} — reachable from other machines on this network`
+      );
+      console.log(
+        signupIsOpen
+          ? '  signup: OPEN — anyone who reaches this server can register (set SIGNUP_CODE to close it)'
+          : '  signup: requires SIGNUP_CODE'
+      );
+      console.log(
+        hasClientBuild
+          ? `  app: serving client/dist — open http://localhost:${PORT}`
+          : '  app: API only (no client build — run `npm run build` to serve the UI)'
+      );
+    });
+  })
+  .catch((err) => {
+    console.error('Import failed — refusing to start rather than serving half-moved data:');
+    console.error(err);
+    process.exit(1);
+  });

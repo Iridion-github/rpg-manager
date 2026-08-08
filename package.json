@@ -8,7 +8,9 @@
     "dev": "concurrently -n server,client -c blue,green \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
     "build": "npm --prefix client run build",
     "start": "npm --prefix server start",
-    "serve": "npm run build && npm start"
+    "serve": "npm run build && npm start",
+    "tunnel": "cloudflared tunnel --url http://localhost:3001",
+    "online": "npm run build && concurrently -n server,tunnel -c blue,magenta \"npm start\" \"npm run tunnel\""
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

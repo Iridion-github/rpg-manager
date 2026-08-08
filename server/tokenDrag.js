@@ -15,12 +15,19 @@
  * this?" would put the disk back in the hot path. The drop still goes through
  * the HTTP route, which re-checks ownership from disk — so a lie told over the
  * socket moves a ghost on other people's screens but never gets saved.
+ *
+ * The campaign is taken from the socket's own state, never from the drag
+ * payload: the socket said which table it was sitting at when it joined, and
+ * letting a later message name a different one would be a way to reach into a
+ * campaign you aren't in.
  */
 
 const store = require('./store');
-const { canMoveToken } = require('./auth');
+const { scoped, roleIn, canMoveToken, CAMPAIGNS } = require('./campaigns');
 
 const SCENES = 'scenes';
+
+const roomFor = (campaignId) => `campaign:${campaignId}`;
 
 // Cheap sanity bounds: a drag position is in grid cells.
 const inBounds = (v) => Number.isFinite(v) && v >= -500 && v <= 500;
@@ -29,13 +36,23 @@ function registerTokenDrag(io) {
   io.on('connection', (socket) => {
     socket.on('token:drag:start', async ({ sceneId, tokenId } = {}, ack) => {
       try {
-        const scene = await store.get(SCENES, sceneId);
+        const campaignId = socket.data.campaignId;
+        if (!campaignId) return ack?.({ ok: false, error: 'No campaign open.' });
+
+        // Re-read membership rather than trusting what it was at join time: a
+        // drag lasts seconds, but a socket can sit open for hours after the DM
+        // has removed someone from the table.
+        const campaign = await store.get(CAMPAIGNS, campaignId);
+        const role = roleIn(campaign, socket.data.actor);
+        if (!role) return ack?.({ ok: false, error: 'You are not at this table.' });
+
+        const scene = await store.get(scoped(campaignId, SCENES), sceneId);
         const token = scene && (scene.tokens || []).find((t) => t.id === tokenId);
         if (!token) return ack?.({ ok: false, error: 'Token not found' });
-        if (!canMoveToken(socket.data.actor, token)) {
+        if (!canMoveToken(socket.data.actor, role, token)) {
           return ack?.({ ok: false, error: 'You can only move your own token.' });
         }
-        socket.data.drag = { sceneId, tokenId };
+        socket.data.drag = { campaignId, sceneId, tokenId };
         ack?.({ ok: true });
       } catch (err) {
         ack?.({ ok: false, error: 'Could not start drag' });
@@ -48,9 +65,9 @@ function registerTokenDrag(io) {
       // client from shoving other people's tokens around.
       if (!drag) return;
       if (!inBounds(Number(x)) || !inBounds(Number(y))) return;
-      // To everyone *except* the dragger, who is already rendering their own
-      // pointer — hence broadcast rather than io.emit, and no origin needed.
-      socket.broadcast.emit('token:dragging', {
+      // To everyone at *this table* except the dragger, who is already
+      // rendering their own pointer.
+      socket.to(roomFor(drag.campaignId)).emit('token:dragging', {
         sceneId: drag.sceneId,
         tokenId: drag.tokenId,
         x: Number(x),
@@ -65,7 +82,10 @@ function registerTokenDrag(io) {
       socket.data.drag = null;
       // Tell others the ghost is gone; the authoritative position arrives via
       // the scenes:changed broadcast from the persisted PUT.
-      socket.broadcast.emit('token:drag:ended', { sceneId: drag.sceneId, tokenId: drag.tokenId });
+      socket.to(roomFor(drag.campaignId)).emit('token:drag:ended', {
+        sceneId: drag.sceneId,
+        tokenId: drag.tokenId,
+      });
     };
 
     socket.on('token:drag:end', endDrag);
@@ -73,4 +93,4 @@ function registerTokenDrag(io) {
   });
 }
 
-module.exports = { registerTokenDrag };
+module.exports = { registerTokenDrag, roomFor };

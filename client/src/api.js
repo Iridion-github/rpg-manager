@@ -9,6 +9,7 @@
 const GM_KEY = 'rpg-manager:gm-password';
 const PLAYER_KEY = 'rpg-manager:player-key';
 const CLIENT_KEY = 'rpg-manager:client-id';
+const SESSION_KEY = 'rpg-manager:session';
 
 // Per-tab identity. Sent on every write so the server can tag its broadcast with
 // the originator; we then ignore the echo of our own change (we already applied
@@ -30,6 +31,22 @@ export function getGmPassword() {
 export function setGmPassword(value) {
   if (value) localStorage.setItem(GM_KEY, value);
   else localStorage.removeItem(GM_KEY);
+}
+
+/**
+ * The session token from logging in — the normal credential now.
+ *
+ * In localStorage rather than a cookie because the app already sends its
+ * credentials as headers and the socket sends them in its handshake, so a token
+ * fits both without cookie plumbing or CSRF handling.
+ */
+export function getSession() {
+  return localStorage.getItem(SESSION_KEY) || '';
+}
+
+export function setSession(value) {
+  if (value) localStorage.setItem(SESSION_KEY, value);
+  else localStorage.removeItem(SESSION_KEY);
 }
 
 export function getPlayerKey() {
@@ -67,11 +84,43 @@ claimKeyFromUrl();
 
 export function authHeaders() {
   const headers = { 'x-client-id': clientId };
+  const session = getSession();
   const pw = getGmPassword();
   const playerKey = getPlayerKey();
-  if (pw) headers['x-gm-password'] = pw;
-  if (playerKey) headers['x-player-key'] = playerKey;
+  // All three can be present; the server prefers the session. The other two are
+  // the pre-login credentials, still sent so old invite links keep working.
+  if (session) headers['x-session'] = session;
+  if (pw) headers['x-admin-password'] = pw;
+  if (playerKey) headers['x-user-key'] = playerKey;
   return headers;
+}
+
+/**
+ * The campaign every table-scoped call belongs to.
+ *
+ * Held here rather than passed to each call: every one of them is inside a
+ * campaign, so threading an id through dozens of call sites would only create
+ * dozens of chances to forget one — and forgetting one means reading another
+ * table's data. Set once when the campaign changes (see App.jsx), and the URLs
+ * below can't be built without it.
+ */
+let currentCampaignId = null;
+
+export function setCampaign(id) {
+  currentCampaignId = id || null;
+}
+
+export function getCampaign() {
+  return currentCampaignId;
+}
+
+function table(suffix) {
+  if (!currentCampaignId) {
+    // A bug, not a user error: something rendered a table view before a
+    // campaign was chosen. Fail loudly here rather than fetching /undefined/.
+    throw new Error('No campaign selected');
+  }
+  return `/api/campaigns/${currentCampaignId}${suffix}`;
 }
 
 async function json(res) {
@@ -99,37 +148,76 @@ const del = (url) => fetch(url, { method: 'DELETE', headers: authHeaders() }).th
 
 export const api = {
   status: () => get('/api/status'),
-  whoami: () => get('/api/players/me'),
+  whoami: () => get('/api/auth/me'),
 
-  listSheets: () => get('/api/sheets'),
-  createSheet: (data) => post('/api/sheets', data),
-  updateSheet: (id, data) => put(`/api/sheets/${id}`, data),
-  deleteSheet: (id) => del(`/api/sheets/${id}`),
+  // --- signing in ---
+  authConfig: () => get('/api/auth/config'),
+  register: (data) => post('/api/auth/register', data),
+  login: (username, password) => post('/api/auth/login', { username, password }),
+  logout: () => post('/api/auth/logout', {}),
+  changePassword: (current, password) => post('/api/auth/password', { current, password }),
 
-  listPlayers: () => get('/api/players'),
-  listPlayerKeys: () => get('/api/players/keys'),
-  createPlayer: (data) => post('/api/players', data),
-  updatePlayer: (id, data) => put(`/api/players/${id}`, data),
-  rotatePlayerKey: (id) => post(`/api/players/${id}/rotate-key`, {}),
-  deletePlayer: (id) => del(`/api/players/${id}`),
+  // --- global: people, and the campaigns they belong to ---
+  listUsers: () => get('/api/users'),
+  listUserKeys: () => get('/api/users/keys'),
+  createUser: (data) => post('/api/users', data),
+  updateUser: (id, data) => put(`/api/users/${id}`, data),
+  rotateUserKey: (id) => post(`/api/users/${id}/rotate-key`, {}),
+  deleteUser: (id) => del(`/api/users/${id}`),
 
-  listChat: () => get('/api/chat'),
-  sendChat: (text) => post('/api/chat', { text }),
+  // Only ever the campaigns you're a member of — someone else's table doesn't
+  // appear at all, admin included.
+  listCampaigns: () => get('/api/campaigns'),
+  createCampaign: (data) => post('/api/campaigns', data),
+  updateCampaign: (id, data) => put(`/api/campaigns/${id}`, data),
+  deleteCampaign: (id) => del(`/api/campaigns/${id}`),
+  listMembers: (id) => get(`/api/campaigns/${id}/members`),
+  setMembers: (id, members) => put(`/api/campaigns/${id}/members`, { members }),
+
+  // --- inside the current campaign ---
+  listSheets: () => get(table('/sheets')),
+  createSheet: (data) => post(table('/sheets'), data),
+  updateSheet: (id, data) => put(table(`/sheets/${id}`), data),
+  deleteSheet: (id) => del(table(`/sheets/${id}`)),
+  // Separate from updateSheet on purpose: changing who may edit a sheet is a
+  // DM act, and it must not be expressible as part of editing the sheet.
+  setSheetAccess: (id, access) => put(table(`/sheets/${id}/access`), { access }),
+
+  listChat: () => get(table('/chat')),
+  sendChat: (text) => post(table('/chat'), { text }),
   rollDice: ({ count, sides, modifier, advantage, label }) =>
-    post('/api/chat/roll', { count, sides, modifier, advantage, label }),
+    post(table('/chat/roll'), { count, sides, modifier, advantage, label }),
 
-  listMaps: () => get('/api/maps'),
+  // The list comes back already filtered by role — a player is never sent an
+  // unshared note, so there is nothing here for the UI to have to hide.
+  listNotes: () => get(table('/notes')),
+  createNote: (data) => post(table('/notes'), data),
+  updateNote: (id, data) => put(table(`/notes/${id}`), data),
+  deleteNote: (id) => del(table(`/notes/${id}`)),
 
-  listScenes: () => get('/api/scenes'),
-  createScene: (data) => post('/api/scenes', data),
-  updateScene: (id, data) => put(`/api/scenes/${id}`, data),
-  deleteScene: (id) => del(`/api/scenes/${id}`),
+  // Tracks plus what's playing, in one call — the tab needs both and they're
+  // read together on every refresh.
+  getMusic: () => get(table('/music')),
+  addTrack: (url, title) => post(table('/music'), { url, title }),
+  renameTrack: (id, title) => put(table(`/music/${id}`), { title }),
+  playTrack: (id) => post(table(`/music/${id}/play`), {}),
+  stopMusic: () => post(table('/music/stop'), {}),
+  deleteTrack: (id) => del(table(`/music/${id}`)),
 
-  addToken: (sceneId, data) => post(`/api/scenes/${sceneId}/tokens`, data),
-  updateToken: (sceneId, tokenId, data) => put(`/api/scenes/${sceneId}/tokens/${tokenId}`, data),
+  listScenes: () => get(table('/scenes')),
+  createScene: (data) => post(table('/scenes'), data),
+  updateScene: (id, data) => put(table(`/scenes/${id}`), data),
+  deleteScene: (id) => del(table(`/scenes/${id}`)),
+
+  addToken: (sceneId, data) => post(table(`/scenes/${sceneId}/tokens`), data),
+  updateToken: (sceneId, tokenId, data) =>
+    put(table(`/scenes/${sceneId}/tokens/${tokenId}`), data),
   moveToken: (sceneId, tokenId, x, y) =>
-    put(`/api/scenes/${sceneId}/tokens/${tokenId}/position`, { x, y }),
-  deleteToken: (sceneId, tokenId) => del(`/api/scenes/${sceneId}/tokens/${tokenId}`),
+    put(table(`/scenes/${sceneId}/tokens/${tokenId}/position`), { x, y }),
+  deleteToken: (sceneId, tokenId) => del(table(`/scenes/${sceneId}/tokens/${tokenId}`)),
+
+  // Campaign-independent: a map image is the same image at any table.
+  listMaps: () => get('/api/maps'),
 
   uploadImage: (file) => {
     const form = new FormData();

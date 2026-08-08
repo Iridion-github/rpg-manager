@@ -26,7 +26,7 @@ export default function Chat({ actor, offline }) {
   // reading history is worse than missing a line.
   const stickRef = useRef(true);
 
-  const canPost = !offline && (actor?.role === 'gm' || actor?.role === 'player');
+  const canPost = !offline && (actor?.role === 'dm' || actor?.role === 'player');
 
   const load = useCallback(async () => {
     try {
@@ -103,7 +103,7 @@ export default function Chat({ actor, offline }) {
 
       <div className="chat-log" ref={listRef} onScroll={onScroll}>
         {messages.map((m) => (
-          <div key={m.id} className={`chat-msg${m.role === 'gm' ? ' from-gm' : ''}`}>
+          <div key={m.id} className={`chat-msg${m.role === 'dm' ? ' from-gm' : ''}`}>
             <div className="chat-meta">
               <strong>{m.author}</strong>
               <span>{time(m.at)}</span>

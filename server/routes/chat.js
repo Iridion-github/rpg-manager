@@ -1,22 +1,22 @@
 'use strict';
 
 /**
- * Table chat.
+ * Table chat, within one campaign.
  *
  * The whole log lives in a single record rather than one record per message, so
  * appending and trimming happen in one atomic write. A message per record would
  * mean a write to add and further writes to prune, with the log briefly over
  * its cap in between.
  *
- * Anyone who can reach the server may *read* the chat — spectators included,
- * since they can already see the table. Posting requires an identity: the GM or
- * a player holding an invite key.
+ * Every member of the campaign may read and post; a campaign you aren't in has
+ * no chat you can reach at all, which is handled before this file runs.
  */
 
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
 const { broadcast } = require('../realtime');
+const { scoped } = require('../campaigns');
 
 const COLLECTION = 'chat';
 const LOG_ID = 'log';
@@ -29,22 +29,24 @@ const COIN = 2;
 const MAX_DICE = 50;
 const MAX_MODIFIER = 99;
 
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const chatOf = (req) => scoped(req.campaignId, COLLECTION);
 
-function speakerFor(actor) {
-  if (!actor) return null;
-  // 'GM (dev mode)' is a useful startup log line but a silly chat name.
-  if (actor.role === 'gm') return { author: 'GM', role: 'gm' };
-  if (actor.role === 'player') return { author: actor.name || 'Player', role: 'player' };
-  return null; // spectators can read, not speak
+// The name on a message is the name of whoever's credential sent it, and the
+// role is the one they hold *at this table* — the same person is "DM" in one
+// campaign's log and themselves in another's.
+function speakerFor(req) {
+  if (!req.campaignRole) return null;
+  if (req.campaignRole === 'dm') return { author: 'DM', role: 'dm' };
+  return { author: req.actor.name || 'Player', role: 'player' };
 }
 
 // Append + trim in one atomic write; creates the log on the very first message.
-function appendMessage(message) {
+function appendMessage(req, message) {
   return store.mutate(
-    COLLECTION,
+    chatOf(req),
     LOG_ID,
     (current) => ({
       ...current,
@@ -69,9 +71,30 @@ function describeRoll({ count, sides, modifier, rolls, total, advantage, label }
   return `rolled ${what}${advantage ? ' with advantage' : ''}: ${rolls.join(', ')}${kept} = ${total}`;
 }
 
+/**
+ * Post a line the table didn't type — "the DM shared a handout", and friends.
+ *
+ * It's attributed to the DM rather than to a nameless system voice because it
+ * only ever reports something the DM just did, and an unattributed line in a
+ * chat log invites the question of who's talking.
+ */
+async function postSystemMessage(req, text) {
+  const message = {
+    id: crypto.randomUUID(),
+    kind: 'system',
+    text: String(text).slice(0, MAX_LENGTH),
+    author: 'DM',
+    role: 'dm',
+    at: new Date().toISOString(),
+  };
+  await appendMessage(req, message);
+  broadcast(req, 'chat:message', { message });
+  return message;
+}
+
 router.get('/', async (req, res, next) => {
   try {
-    const log = await store.get(COLLECTION, LOG_ID);
+    const log = await store.get(chatOf(req), LOG_ID);
     res.json(log?.messages || []);
   } catch (err) {
     next(err);
@@ -80,10 +103,8 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const speaker = speakerFor(req.actor);
-    if (!speaker) {
-      return res.status(403).json({ error: 'Ask your GM for an invite link to join the chat.' });
-    }
+    const speaker = speakerFor(req);
+    if (!speaker) return res.status(403).json({ error: 'You are not at this table.' });
     const text = String(req.body?.text ?? '').trim().slice(0, MAX_LENGTH);
     if (!text) return res.status(400).json({ error: 'Nothing to send.' });
 
@@ -97,7 +118,7 @@ router.post('/', async (req, res, next) => {
       at: new Date().toISOString(),
     };
 
-    await appendMessage(message);
+    await appendMessage(req, message);
     broadcast(req, 'chat:message', { message });
     res.status(201).json(message);
   } catch (err) {
@@ -114,10 +135,8 @@ router.post('/', async (req, res, next) => {
  */
 router.post('/roll', async (req, res, next) => {
   try {
-    const speaker = speakerFor(req.actor);
-    if (!speaker) {
-      return res.status(403).json({ error: 'Ask your GM for an invite link to roll dice.' });
-    }
+    const speaker = speakerFor(req);
+    if (!speaker) return res.status(403).json({ error: 'You are not at this table.' });
 
     const sides = Number(req.body?.sides);
     if (!DICE.has(sides)) {
@@ -153,7 +172,7 @@ router.post('/roll', async (req, res, next) => {
       at: new Date().toISOString(),
     };
 
-    await appendMessage(message);
+    await appendMessage(req, message);
     broadcast(req, 'chat:message', { message });
     res.status(201).json(message);
   } catch (err) {
@@ -161,4 +180,4 @@ router.post('/roll', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+module.exports = { router, postSystemMessage };

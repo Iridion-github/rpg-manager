@@ -1,0 +1,35 @@
+# Named Cloudflare Tunnel — a hostname that survives a restart.
+#
+# Only worth setting up if you own a domain on Cloudflare. Without one, use the
+# quick tunnel instead (`npm run tunnel`), which needs no account and no config
+# but hands you a new random URL every time it starts.
+#
+# Setup, once:
+#
+#   cloudflared tunnel login                     # opens a browser; pick your domain
+#   cloudflared tunnel create rpg-manager        # prints the tunnel's UUID
+#   cloudflared tunnel route dns rpg-manager table.example.com
+#
+# Then copy this file to config.yml, fill in the two blanks below, and run:
+#
+#   cloudflared tunnel --config cloudflared/config.yml run
+#
+# config.yml is gitignored — it names your host and points at a credentials
+# file, neither of which belongs in a public repo.
+
+# From `cloudflared tunnel create`. The name works here too, but the UUID keeps
+# working if you ever rename the tunnel.
+tunnel: PASTE-TUNNEL-UUID-HERE
+
+# Written by `tunnel create`. Windows puts it in %USERPROFILE%\.cloudflared\,
+# macOS and Linux in ~/.cloudflared/.
+credentials-file: C:\Users\YOU\.cloudflared\PASTE-TUNNEL-UUID-HERE.json
+
+ingress:
+  - hostname: table.example.com
+    # The server binds to localhost by default and the tunnel runs on the same
+    # machine, so localhost is the whole point: the tunnel is the only door in.
+    service: http://localhost:3001
+
+  # Every ingress list must end in a catch-all, or cloudflared refuses to start.
+  - service: http_status:404

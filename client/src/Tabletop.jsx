@@ -21,6 +21,14 @@ const ZOOM_STEP = 0.1;
 const WHEEL_NOTCH = 100;
 
 const round1 = (v) => Math.round(v * 10) / 10;
+// Free placement still gets rounded, just far more finely than to a cell —
+// there's no sense storing a token position to fifteen decimal places.
+const round2 = (v) => Math.round(v * 100) / 100;
+
+// Mirrors SAME_SPOT in server/routes/scenes.js: how close counts as "the same
+// place" once there's no grid to define one. If these two drift apart, the
+// client's red outline stops predicting what the server will refuse.
+const SAME_SPOT = 0.02;
 
 // Ask the browser how big an image actually is. A scene stores the map's real
 // pixel size so the grid can be retuned against it without the map resizing.
@@ -59,18 +67,30 @@ export default function Tabletop({ actor, players, offline }) {
   const zoomAnchor = useRef(null);
   const [panning, setPanning] = useState(false);
 
-  const isGm = actor?.role === 'gm';
-  const rawScene = scenes.find((s) => s.id === activeId) || null;
+  const isDm = actor?.role === 'dm';
+  /**
+   * The scene on screen, which is not merely "the one whose id is selected".
+   *
+   * A selection can stop resolving — you deleted that scene, or another DM did.
+   * Falling back to the first scene means an id pointing at nothing costs you a
+   * selection rather than the whole view: the alternative is rendering the
+   * empty state while scenes plainly exist, and since the scene picker lives
+   * below that branch there'd be no way back.
+   */
+  const rawScene = scenes.find((s) => s.id === activeId) || scenes[0] || null;
+  // Everything downstream — the picker, the draft, the wheel handler — follows
+  // what's actually shown, so the id and the view can't disagree.
+  const selectedId = rawScene?.id || '';
   // Tokens are always an array from here on, whatever the server sent.
   const scene = rawScene ? { ...rawScene, tokens: rawScene.tokens || [] } : null;
 
   const canMove = useCallback(
     (token) => {
       if (offline) return false;
-      if (isGm) return true;
-      return actor?.role === 'player' && token.ownerId && token.ownerId === actor.playerId;
+      if (isDm) return true;
+      return actor?.role === 'player' && token.ownerId && token.ownerId === actor.userId;
     },
-    [actor, isGm, offline]
+    [actor, isDm, offline]
   );
 
   const refresh = useCallback(async () => {
@@ -93,7 +113,7 @@ export default function Tabletop({ actor, players, offline }) {
   useEffect(() => {
     setGridDraft(null);
     clearTimeout(gridTimer.current);
-  }, [activeId]);
+  }, [selectedId]);
 
   useEffect(() => () => clearTimeout(gridTimer.current), []);
 
@@ -158,6 +178,9 @@ export default function Tabletop({ actor, players, offline }) {
   // sized from the image and only the *cell* size follows the grid slider —
   // sliding right makes cells bigger and therefore fewer, not the map larger.
   const gridSize = gridDraft ?? scene?.gridSize ?? 70;
+  // Absent means on, matching the server: scenes made before the toggle existed
+  // had a grid.
+  const gridOn = scene?.gridOn !== false;
   const mapW = scene?.width || 1200;
   const mapH = scene?.height || 840;
   const cellPx = gridSize * zoom;
@@ -171,10 +194,13 @@ export default function Tabletop({ actor, players, offline }) {
     (x, y, size, ignoreId) =>
       (scene?.tokens || []).find((t) => {
         if (t.id === ignoreId) return false;
+        // Without a grid the only occupied position is one exactly taken;
+        // with one, footprints may not overlap at all.
+        if (!gridOn) return Math.abs(x - t.x) < SAME_SPOT && Math.abs(y - t.y) < SAME_SPOT;
         const ts = t.size || 1;
         return x < t.x + ts && t.x < x + size && y < t.y + ts && t.y < y + size;
       }) || null,
-    [scene]
+    [scene, gridOn]
   );
 
   // --- dragging ---
@@ -280,7 +306,7 @@ export default function Tabletop({ actor, players, offline }) {
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoom, activeId]);
+  }, [zoom, selectedId]);
 
   // Re-pin the anchor point after the zoom has been laid out.
   useLayoutEffect(() => {
@@ -363,8 +389,9 @@ export default function Tabletop({ actor, players, offline }) {
   async function onPointerUp() {
     const d = dragRef.current;
     if (!d) return;
-    const x = Math.round(d.x); // snap to the grid on drop
-    const y = Math.round(d.y);
+    // Snap to the grid on drop — or don't, when there isn't one.
+    const x = gridOn ? Math.round(d.x) : round2(d.x);
+    const y = gridOn ? Math.round(d.y) : round2(d.y);
     const tokenId = d.tokenId;
     endDrag();
 
@@ -416,9 +443,16 @@ export default function Tabletop({ actor, players, offline }) {
 
   const removeScene = () =>
     guard(async () => {
-      await api.deleteScene(scene.id);
-      setScenes((prev) => prev.filter((s) => s.id !== scene.id));
-      setActiveId((cur) => (cur === scene.id ? '' : cur));
+      const goneId = scene.id;
+      const i = scenes.findIndex((s) => s.id === goneId);
+      await api.deleteScene(goneId);
+      const remaining = scenes.filter((s) => s.id !== goneId);
+      setScenes(remaining);
+      // Step back to the scene above the one you just deleted rather than
+      // dropping to an empty tabletop. Deleting the first scene leaves index 0,
+      // which is now whatever used to be second; deleting the last one leaves
+      // nothing to land on.
+      setActiveId(remaining[Math.max(0, i - 1)]?.id || '');
     });
 
   const patchScene = (changes) =>
@@ -486,11 +520,13 @@ export default function Tabletop({ actor, players, offline }) {
     });
 
   // --- render ---
+  // Reachable only when there are genuinely no scenes: any scene at all now
+  // resolves above.
   if (!scene) {
     return (
       <div className="tabletop-empty">
         <p>No scene yet.</p>
-        {isGm && !offline && (
+        {isDm && !offline && (
           <button onClick={newScene} disabled={busy}>
             + Create a scene
           </button>
@@ -507,7 +543,7 @@ export default function Tabletop({ actor, players, offline }) {
   return (
     <div className="tabletop">
       <div className="scene-bar">
-        <select value={activeId} onChange={(e) => setActiveId(e.target.value)}>
+        <select value={selectedId} onChange={(e) => setActiveId(e.target.value)}>
           {scenes.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -529,12 +565,22 @@ export default function Tabletop({ actor, players, offline }) {
           <small>{Math.round(zoom * 100)}%</small>
         </label>
 
-        {isGm && !offline && (
+        {isDm && !offline && (
           <>
             {/* Grid ratio: how much of the map one cell covers. The map does
                 not change size — only the number of cells over it does. */}
             <label className="zoom grid-ratio">
+              <input
+                type="checkbox"
+                checked={gridOn}
+                onChange={(e) => patchScene({ gridOn: e.target.checked })}
+                title="Show the grid and snap tokens to it"
+              />
               Grid
+              {/* The slider stays live with the grid off: cell size is still
+                  the scale tokens are measured in, even when no cells are
+                  drawn. Only the readout changes, since there are no rows and
+                  columns to count. */}
               <input
                 type="range"
                 min="16"
@@ -542,11 +588,9 @@ export default function Tabletop({ actor, players, offline }) {
                 step="1"
                 value={gridSize}
                 onChange={(e) => onGridSlide(Number(e.target.value))}
-                title="Cell size relative to the map"
+                title={gridOn ? 'Cell size relative to the map' : 'Token scale relative to the map'}
               />
-              <small>
-                {cols}×{rows}
-              </small>
+              <small>{gridOn ? `${cols}×${rows}` : `${gridSize}px`}</small>
             </label>
 
             <input
@@ -623,7 +667,7 @@ export default function Tabletop({ actor, players, offline }) {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          <div className="grid-overlay" />
+          {gridOn && <div className="grid-overlay" />}
 
           {scene.tokens.map((token) => {
             const mine = drag?.tokenId === token.id ? drag : null;
@@ -635,7 +679,12 @@ export default function Tabletop({ actor, players, offline }) {
             const blocked =
               mine &&
               Boolean(
-                blockerAt(Math.round(mine.x), Math.round(mine.y), token.size || 1, token.id)
+                blockerAt(
+                  gridOn ? Math.round(mine.x) : mine.x,
+                  gridOn ? Math.round(mine.y) : mine.y,
+                  token.size || 1,
+                  token.id
+                )
               );
             return (
               <div
@@ -666,7 +715,7 @@ export default function Tabletop({ actor, players, offline }) {
         </div>
       </div>
 
-      {isGm && !offline && (
+      {isDm && !offline && (
         <div className="token-admin">
           <div className="add-token">
             <span>Add token:</span>

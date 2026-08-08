@@ -1,0 +1,225 @@
+'use strict';
+
+/**
+ * Shared music for a campaign.
+ *
+ * The DM keeps a list of YouTube links and presses play on one; everyone at the
+ * table hears it. What travels is not audio — it's an instruction: *this video,
+ * started at this moment*. Each browser plays its own copy and seeks to
+ * `now - startedAt`, which is what lets someone arriving late join the track
+ * already in progress instead of starting it over for themselves.
+ *
+ * That also means sync is as good as the clients' clocks and buffering, which
+ * is to say within a second or so. For background music at a table that is
+ * fine; it is not a way to play a song in unison for an audience.
+ *
+ * The DM alone controls playback. A player hearing music they can't stop is
+ * the point — it's the table's soundtrack, not a shared jukebox.
+ */
+
+const express = require('express');
+const store = require('../store');
+const { broadcast } = require('../realtime');
+const { scoped, requireDm } = require('../campaigns');
+
+const TRACKS = 'music';
+const STATE = 'musicState';
+const STATE_ID = 'now';
+const MAX_TRACKS = 200;
+const MAX_TITLE = 200;
+
+const router = express.Router({ mergeParams: true });
+
+const tracksOf = (req) => scoped(req.campaignId, TRACKS);
+const stateOf = (req) => scoped(req.campaignId, STATE);
+
+// A YouTube id is exactly 11 characters of URL-safe base64.
+const ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const idOrNull = (v) => (ID_RE.test(String(v || '')) ? String(v) : null);
+const cleanTitle = (v) => String(v ?? '').trim().slice(0, MAX_TITLE);
+
+/**
+ * Pull the video id out of whatever the DM pasted.
+ *
+ * Parsed here rather than in the browser so a bad link is rejected once, by the
+ * one party every client trusts — and so what gets stored is the id, not
+ * whichever of the half-dozen URL shapes happened to be in the clipboard.
+ */
+function videoIdFrom(input) {
+  const raw = String(input || '').trim();
+  if (ID_RE.test(raw)) return raw; // someone pasted the bare id
+
+  let url;
+  try {
+    url = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.replace(/^www\./, '');
+
+  if (host === 'youtu.be') return idOrNull(url.pathname.slice(1));
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    if (url.pathname === '/watch') return idOrNull(url.searchParams.get('v'));
+    const m = /^\/(embed|v|shorts|live)\/([^/?#]+)/.exec(url.pathname);
+    if (m) return idOrNull(m[2]);
+  }
+  return null;
+}
+
+/**
+ * Ask YouTube what the video is called.
+ *
+ * oEmbed is public and needs no API key. It's a best effort: the request goes
+ * out from the host machine, which may be offline or firewalled, so a failure
+ * costs the track its title and nothing else.
+ */
+async function fetchTitle(videoId) {
+  try {
+    const target = encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`);
+    const res = await fetch(`https://www.youtube.com/oembed?url=${target}&format=json`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    return String(data.title || '').slice(0, 200);
+  } catch {
+    return '';
+  }
+}
+
+const readState = async (req) => (await store.get(stateOf(req), STATE_ID))?.playing || null;
+
+function setState(req, playing) {
+  return store.mutate(stateOf(req), STATE_ID, (current) => ({ ...current, playing }), {
+    createIfMissing: { playing: null },
+  });
+}
+
+// Everyone at the table gets the same payload: a playlist isn't a secret, and
+// the whole point of playback state is that it's shared.
+function announce(req, playing) {
+  broadcast(req, 'music:state', { playing });
+}
+
+router.get('/', async (req, res, next) => {
+  try {
+    const [tracks, playing] = await Promise.all([store.list(tracksOf(req)), readState(req)]);
+    res.json({ tracks, playing });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/', requireDm, async (req, res, next) => {
+  try {
+    const videoId = videoIdFrom(req.body?.url);
+    if (!videoId) {
+      return res.status(400).json({ error: "That doesn't look like a YouTube link." });
+    }
+    const existing = await store.list(tracksOf(req));
+    if (existing.length >= MAX_TRACKS) {
+      return res.status(400).json({ error: 'That is enough music for one campaign.' });
+    }
+    if (existing.some((t) => t.videoId === videoId)) {
+      return res.status(409).json({ error: "That's already in the list." });
+    }
+
+    // A title you typed wins over the one YouTube reports — you know what the
+    // track is for at your table better than its uploader does — and it skips
+    // the lookup entirely. Failing that, ask YouTube; failing that, the id,
+    // so a track added while the host is offline is still recognisable.
+    const title = cleanTitle(req.body?.title) || (await fetchTitle(videoId)) || videoId;
+    const record = await store.create(tracksOf(req), {
+      videoId,
+      title,
+      url: `https://www.youtube.com/watch?v=${videoId}`,
+    });
+    broadcast(req, 'music:tracks', { action: 'create', record });
+    res.status(201).json(record);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rename. The only thing about a track that's editable — the video it points
+// at isn't a property of the entry so much as the entry itself.
+router.put('/:id', requireDm, async (req, res, next) => {
+  try {
+    const title = cleanTitle(req.body?.title);
+    if (!title) return res.status(400).json({ error: 'A track needs a name.' });
+
+    const record = await store.mutate(tracksOf(req), req.params.id, (current) => ({
+      ...current,
+      title,
+    }));
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    broadcast(req, 'music:tracks', { action: 'update', record });
+
+    // The playing state carries its own copy of the title, so renaming what's
+    // currently on would otherwise leave the player bar showing the old name
+    // until the next track. startedAt is preserved deliberately: clients key
+    // playback off it, and a new one would restart the song for everybody.
+    const playing = await readState(req);
+    if (playing?.trackId === record.id) {
+      const renamed = { ...playing, title };
+      await setState(req, renamed);
+      announce(req, renamed);
+    }
+    res.json(record);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/play', requireDm, async (req, res, next) => {
+  try {
+    const track = await store.get(tracksOf(req), req.params.id);
+    if (!track) return res.status(404).json({ error: 'Not found' });
+
+    // startedAt is the server's clock, not the DM's browser's — every client
+    // works out its seek offset against the same reference.
+    const playing = {
+      trackId: track.id,
+      videoId: track.videoId,
+      title: track.title,
+      startedAt: new Date().toISOString(),
+    };
+    await setState(req, playing);
+    announce(req, playing);
+    res.json(playing);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/stop', requireDm, async (req, res, next) => {
+  try {
+    await setState(req, null);
+    announce(req, null);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id', requireDm, async (req, res, next) => {
+  try {
+    const ok = await store.remove(tracksOf(req), req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+
+    // Deleting what's currently playing stops it. Leaving it running would mean
+    // music nobody can name and only the DM can silence, by pressing stop on a
+    // track that no longer exists.
+    const playing = await readState(req);
+    if (playing?.trackId === req.params.id) {
+      await setState(req, null);
+      announce(req, null);
+    }
+    broadcast(req, 'music:tracks', { action: 'delete', record: { id: req.params.id } });
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

@@ -3,9 +3,13 @@
 /**
  * Map image uploads — the first binary assets in the project.
  *
- * Files land in DATA_DIR/uploads and are served read-only from /uploads. Only
- * the GM can upload: this writes to your actual disk, so it is the one endpoint
- * where getting the gate wrong is expensive.
+ * Files land in DATA_DIR/uploads and are served read-only from /uploads.
+ *
+ * Uploading needs an identity but not a campaign: an image is the same image
+ * whichever table it ends up on, and anyone who can run a campaign needs to be
+ * able to bring maps to it. It stops at "signed in" because this writes to your
+ * actual disk, which makes it the one endpoint where getting the gate wrong is
+ * expensive.
  *
  * Filenames are generated, never taken from the client. A name like
  * "../../index.js" would otherwise let an upload escape the uploads directory.
@@ -18,7 +22,7 @@ const fsp = require('node:fs/promises');
 const multer = require('multer');
 
 const store = require('../store');
-const { requireGm } = require('../auth');
+const { requireUser } = require('../auth');
 
 const router = express.Router();
 
@@ -44,7 +48,7 @@ const upload = multer({
   },
 });
 
-router.post('/', requireGm, (req, res, next) => {
+router.post('/', requireUser, (req, res, next) => {
   upload.single('image')(req, res, async (err) => {
     if (err) {
       const tooBig = err.code === 'LIMIT_FILE_SIZE';

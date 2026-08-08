@@ -6,18 +6,22 @@
  * Token coordinates are stored in *grid cells*, not pixels, so the same scene
  * renders correctly at any zoom or canvas size. Snapping is the client's job.
  *
- * Permissions: the GM owns the scene (image, grid, which tokens exist and who
- * they belong to). A player may only move a token whose ownerId is theirs.
+ * Permissions: this campaign's DM owns the scene (image, grid, which tokens
+ * exist and who they belong to). A player may only move a token whose ownerId
+ * is theirs. Both are decided by role *in this campaign* — the same person may
+ * be the DM here and a player at the next table.
  */
 
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
 const { broadcast } = require('../realtime');
-const { requireGm, canMoveToken } = require('../auth');
+const { scoped, requireDm, canMoveToken } = require('../campaigns');
 
 const COLLECTION = 'scenes';
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
+
+const scenesOf = (req) => scoped(req.campaignId, COLLECTION);
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -47,6 +51,9 @@ function sanitizeScene(body = {}) {
     name: String(name).slice(0, 120),
     imageUrl: String(imageUrl).slice(0, 500),
     gridSize: clamp(num(gridSize, 70), 8, 500), // map px per cell
+    // Absent means on: every scene that existed before this flag did had a
+    // grid, and they should keep it.
+    gridOn: body.gridOn !== false,
     width: clamp(Math.round(num(body.width, 0) || fallbackW), 32, 12000),
     height: clamp(Math.round(num(body.height, 0) || fallbackH), 32, 12000),
   };
@@ -93,9 +100,36 @@ function overlaps(a, b) {
   );
 }
 
+/**
+ * How close counts as "the same place" on a gridless scene.
+ *
+ * A fraction of a cell, and it exists because positions are floats: two tokens
+ * dropped on the same spot are almost never bit-identical, so a literal `===`
+ * would forbid nothing. It is a tolerance for arithmetic, not for stacking —
+ * anywhere a human could see daylight between two tokens is allowed.
+ */
+const SAME_SPOT = 0.02;
+
+/**
+ * Is this position already taken?
+ *
+ * With a grid, footprints may not overlap at all — a table with squares has one
+ * token per square. Without one, a token goes where you put it and the only
+ * refusal left is dropping it exactly where another already stands, which would
+ * hide one behind the other with no way to tell they're both there.
+ */
+function conflicts(scene, a, b) {
+  if (scene.gridOn === false) {
+    return Math.abs(a.x - b.x) < SAME_SPOT && Math.abs(a.y - b.y) < SAME_SPOT;
+  }
+  return overlaps(a, b);
+}
+
 // The token standing where `candidate` wants to be, if any.
 function blockerFor(scene, candidate, ignoreId) {
-  return (scene.tokens || []).find((t) => t.id !== ignoreId && overlaps(t, candidate)) || null;
+  return (
+    (scene.tokens || []).find((t) => t.id !== ignoreId && conflicts(scene, t, candidate)) || null
+  );
 }
 
 // Cell counts are derived from the map size, exactly as the client derives them.
@@ -112,8 +146,11 @@ function gridOf(scene) {
 function firstFreeCell(scene, size, ignoreId) {
   const { cols, rows } = gridOf(scene);
   const span = Math.max(1, Math.ceil(size || 1));
-  for (let y = 0; y + span <= Math.max(rows, span); y++) {
-    for (let x = 0; x + span <= Math.max(cols, span); x++) {
+  // A gridless scene has no cells to step through, and needs none: the only
+  // thing in the way is an exact overlap, which any nudge clears.
+  const step = scene.gridOn === false ? 0.5 : 1;
+  for (let y = 0; y + span <= Math.max(rows, span); y += step) {
+    for (let x = 0; x + span <= Math.max(cols, span); x += step) {
       if (!blockerFor(scene, { x, y, size }, ignoreId)) return { x, y };
     }
   }
@@ -138,7 +175,7 @@ function tokenIn(scene, tokenId) {
 
 router.get('/', async (req, res, next) => {
   try {
-    res.json(await store.list(COLLECTION));
+    res.json(await store.list(scenesOf(req)));
   } catch (err) {
     next(err);
   }
@@ -146,7 +183,7 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const scene = await store.get(COLLECTION, req.params.id);
+    const scene = await store.get(scenesOf(req), req.params.id);
     if (!scene) return res.status(404).json({ error: 'Not found' });
     res.json(scene);
   } catch (err) {
@@ -154,9 +191,9 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', requireGm, async (req, res, next) => {
+router.post('/', requireDm, async (req, res, next) => {
   try {
-    const record = await store.create(COLLECTION, { ...sanitizeScene(req.body), tokens: [] });
+    const record = await store.create(scenesOf(req), { ...sanitizeScene(req.body), tokens: [] });
     announce(req, 'create', record);
     res.status(201).json(record);
   } catch (err) {
@@ -164,11 +201,11 @@ router.post('/', requireGm, async (req, res, next) => {
   }
 });
 
-router.put('/:id', requireGm, async (req, res, next) => {
+router.put('/:id', requireDm, async (req, res, next) => {
   try {
     // Merge scene fields only — tokens have their own endpoints, so a stale
     // client PUT can't wipe the board.
-    const record = await store.update(COLLECTION, req.params.id, sanitizeScene(req.body));
+    const record = await store.update(scenesOf(req), req.params.id, sanitizeScene(req.body));
     if (!record) return res.status(404).json({ error: 'Not found' });
     announce(req, 'update', record);
     res.json(record);
@@ -177,9 +214,9 @@ router.put('/:id', requireGm, async (req, res, next) => {
   }
 });
 
-router.delete('/:id', requireGm, async (req, res, next) => {
+router.delete('/:id', requireDm, async (req, res, next) => {
   try {
-    const ok = await store.remove(COLLECTION, req.params.id);
+    const ok = await store.remove(scenesOf(req), req.params.id);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     announce(req, 'delete', { id: req.params.id });
     res.status(204).end();
@@ -190,10 +227,10 @@ router.delete('/:id', requireGm, async (req, res, next) => {
 
 // ---- Tokens ----
 
-router.post('/:id/tokens', requireGm, async (req, res, next) => {
+router.post('/:id/tokens', requireDm, async (req, res, next) => {
   try {
     const wanted = { id: crypto.randomUUID(), ...sanitizeToken(req.body) };
-    const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       let token = wanted;
       // Asking for an occupied cell isn't an error when adding — slide the new
       // token to the first free one instead, so "+ Alice, + Bob, + Goblin"
@@ -214,10 +251,10 @@ router.post('/:id/tokens', requireGm, async (req, res, next) => {
   }
 });
 
-// Full token edit (label, colour, owner, size) — GM only.
-router.put('/:id/tokens/:tokenId', requireGm, async (req, res, next) => {
+// Full token edit (label, colour, owner, size) — DM only.
+router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
   try {
-    const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
       const updated = { ...existing, ...sanitizeToken(req.body, existing) };
       // Growing a token can push it into a neighbour just as moving it can.
@@ -239,9 +276,9 @@ router.put('/:id/tokens/:tokenId', requireGm, async (req, res, next) => {
 // can't repaint or rename a token by POSTing extra fields here.
 router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
   try {
-    const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
-      if (!canMoveToken(req.actor, existing)) {
+      if (!canMoveToken(req.actor, req.campaignRole, existing)) {
         throw new HttpError(403, 'You can only move your own token.');
       }
       const moved = { ...existing, x: num(req.body?.x, existing.x), y: num(req.body?.y, existing.y) };
@@ -259,9 +296,9 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
   }
 });
 
-router.delete('/:id/tokens/:tokenId', requireGm, async (req, res, next) => {
+router.delete('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
   try {
-    const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       tokenIn(current, req.params.tokenId); // 404 if it isn't there
       return { ...current, tokens: current.tokens.filter((t) => t.id !== req.params.tokenId) };
     });

@@ -16,6 +16,12 @@ body {
   gap: 1rem;
   align-items: start;
 }
+/* Outside a campaign there is no chat — the chat belongs to a table. Without
+   this the grid would still reserve its 250px and the directory would sit next
+   to a column of nothing. */
+.app.solo {
+  grid-template-columns: minmax(0, 1fr);
+}
 /* minmax(0, 1fr) above is load-bearing: a grid item's default min-width is
    auto, so the wide map would refuse to shrink and push the chat off-screen. */
 .main {
@@ -24,6 +30,7 @@ body {
 /* Reading-width column for the text-heavy views. An open character sheet is
    three columns of its own and wants the room, so it opts out. */
 .sheets-view,
+.notes-view,
 .roster {
   max-width: 900px;
 }
@@ -244,6 +251,12 @@ button.linky:hover {
 }
 .grid-ratio input[type='range'] {
   width: 7rem;
+}
+/* Sits to the left of the word "Grid" and toggles the whole thing on and off. */
+.grid-ratio input[type='checkbox'] {
+  margin: 0 0.1rem 0 0;
+  accent-color: #58a6ff;
+  cursor: pointer;
 }
 .grid-ratio small {
   color: #8b90a0;
@@ -891,14 +904,319 @@ button.linky:hover {
   }
 }
 
+/* --- campaigns --- */
+.campaigns {
+  max-width: 900px;
+}
+.campaign-name {
+  color: #9aa0b2;
+  font-size: 0.9rem;
+}
+.campaign-switch {
+  background: #1e222b;
+  color: #e7e9ee;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+  max-width: 14rem;
+}
+.new-campaign {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.new-campaign input {
+  flex: 1 1 12rem;
+}
+.campaign-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+/* One grid definition, shared by the header and every row, so the columns line
+   up without either side knowing the other's widths. */
+.campaign-head,
+.campaign-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5rem 7rem 8rem 7rem;
+  gap: 0.75rem;
+  align-items: center;
+}
+.campaign-head {
+  padding: 0 0.7rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b90a0;
+}
+.campaign-card {
+  border: 1px solid #2c3140;
+  border-left: 3px solid #2c3140;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: #16191f;
+}
+/* Campaigns you're part of carry the accent; everyone else's stay muted, so
+   "mine" is legible at a glance rather than needing to be read. */
+.campaign-card.mine {
+  background: #1a1d25;
+  border-left-color: #58a6ff;
+}
+.campaign-card.current {
+  border-color: #58a6ff;
+}
+.campaign-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.campaign-badges {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.campaign-open,
+.campaign-open-disabled {
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #e7e9ee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-open {
+  cursor: pointer;
+}
+.campaign-open:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+/* Not a member: the name is information, not a door. */
+.campaign-open-disabled {
+  color: #9aa0b2;
+}
+.campaign-subtitle {
+  font-size: 0.82rem;
+  color: #8b90a0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.campaign-count,
+.campaign-date {
+  font-size: 0.85rem;
+  color: #9aa0b2;
+  font-variant-numeric: tabular-nums;
+}
+.campaign-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+.campaign-danger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #2c3140;
+}
+.campaign-rename {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+  margin-bottom: 0.5rem;
+}
+.badge.role.dm {
+  background: #3a2f16;
+  color: #f0c674;
+}
+.badge.role.player {
+  background: #16351f;
+  color: #6ee787;
+}
+/* Sits in the tab row but isn't a tab — it takes you out of the campaign
+   rather than to another view of it. */
+.tabs button.leave {
+  border-bottom: none;
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+}
+
+/* --- per-sheet access (DM only) --- */
+.sheet-toolbar button.active {
+  background: #35406a;
+  border-color: #58a6ff;
+}
+.access-panel {
+  background: #1a1d25;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+}
+.access-panel .hint {
+  margin-top: 0;
+}
+.access-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.access-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* The name column is fixed so the dropdowns line up into a column you can
+   read down, rather than stepping raggedly with each name's length. */
+.access-list strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.access-list select {
+  flex: none;
+  width: 9rem;
+  background: #1e222b;
+  color: #e7e9ee;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  padding: 0.3rem 0.4rem;
+  font: inherit;
+}
+.card-access {
+  font-size: 0.75rem;
+  color: #8b90a0;
+  margin-top: 0.35rem;
+}
+
+/* --- notes & handouts --- */
+.notes-title {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.notes-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.note-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.note-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: left;
+  background: #1e222b;
+}
+.note-item.active {
+  background: #35406a;
+  border-color: #58a6ff;
+}
+/* A long title truncates rather than wrapping the sidebar into a paragraph. */
+.note-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-flag {
+  flex: none;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: #2c3140;
+  color: #8b90a0;
+}
+.note-flag.on {
+  background: #16351f;
+  color: #6ee787;
+}
+.note-pane {
+  min-width: 0;
+}
+.note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.note-title-input {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.note-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.note-share {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+.note-body-input {
+  min-height: 55vh;
+  resize: vertical;
+  line-height: 1.5;
+}
+.note-read h3 {
+  margin: 0 0 0.5rem;
+}
+/* pre-wrap keeps the GM's paragraphs and line breaks without asking a
+   markdown renderer to guess at them. */
+.note-body {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* --- chat --- */
-.chat {
+/* Chat and the music player share the right-hand column. The *sidebar* is what
+   sticks; the chat then flexes into whatever the player leaves. */
+.sidebar {
   position: sticky;
   top: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   height: calc(100vh - 5rem);
+  min-width: 0;
+}
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 0;
   background: #1a1e27;
   border: 1px solid #262b38;
   border-radius: 10px;
@@ -1111,8 +1429,216 @@ button.linky:hover {
   .app {
     grid-template-columns: minmax(0, 1fr);
   }
-  .chat {
+  .sidebar {
     position: static;
+    height: auto;
+  }
+  .chat {
     height: 60vh;
   }
+  /* The note list becomes a strip above the note instead of a column beside
+     it — 220px of sidebar is most of a phone. */
+  .notes-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Five columns don't fit a phone. Drop the header and let each row stack,
+     with the metadata running along the bottom as a caption. */
+  .campaign-head {
+    display: none;
+  }
+  .campaign-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .campaign-count,
+  .campaign-date {
+    grid-column: 1 / -1;
+    display: inline;
+    margin-right: 0.75rem;
+    font-size: 0.78rem;
+  }
+  /* Without the header row these numbers lose their meaning, so each carries
+     its own label once it's stacked. */
+  .campaign-count::before {
+    content: 'Players: ';
+  }
+  .campaign-date.created::before {
+    content: 'Created: ';
+  }
+  .campaign-date.activity::before {
+    content: 'Active: ';
+  }
+}
+
+/* --- music --- */
+.music-view {
+  max-width: 900px;
+}
+.track-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.track-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #1a1d25;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+}
+.track-list li.playing {
+  border-color: #6ee787;
+}
+.track-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Holds the ♪ column so titles line up whether or not a track is playing. */
+.track-mark {
+  flex: none;
+  width: 0.9rem;
+  color: #6ee787;
+}
+.track-title-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border-color: transparent;
+}
+.track-title-input:hover,
+.track-title-input:focus {
+  background: #1e222b;
+  border-color: #2c3140;
+}
+
+/* The player itself, under the chat. */
+.music-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+/* Nothing playing: the element stays mounted — tearing the iframe down and
+   rebuilding it would cost a beat on the next play — but takes up no room. */
+.music-bar.idle {
+  padding: 0;
+  border: none;
+  background: none;
+}
+.music-bar.idle .music-frame {
+  display: none;
+}
+/* Players hear the music and see nothing of it. The iframe is parked off-screen
+   rather than removed or display:none'd — a frame that isn't rendered can have
+   its playback suspended by the browser, and silence is the one outcome this
+   must not produce. */
+.music-bar.hidden {
+  padding: 0;
+  border: none;
+  background: none;
+  gap: 0;
+}
+.music-bar.hidden .music-frame {
+  display: block;
+  position: fixed;
+  left: -9999px;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  aspect-ratio: auto;
+  pointer-events: none;
+}
+.music-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #10131a;
+}
+.music-frame > div,
+.music-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.music-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+.music-title {
+  color: #9aa0b2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.music-error {
+  color: #ff9a9a;
+}
+/* The click that dismisses this is itself the gesture the browser wanted. */
+.music-enable {
+  background: #2b3350;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.5rem;
+}
+
+/* --- sign in --- */
+.auth {
+  max-width: 22rem;
+  margin: 12vh auto;
+  padding: 0 1rem;
+}
+.auth h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.auth-switch {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #2c3140;
+  margin-bottom: 1rem;
+}
+.auth-switch button {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #8b90a0;
+  padding: 0.5rem;
+}
+.auth-switch button.active {
+  color: #e7e9ee;
+  border-bottom-color: #58a6ff;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+.auth-form small {
+  color: #8b90a0;
+}
+.auth-form input {
+  font-size: 1rem;
 }

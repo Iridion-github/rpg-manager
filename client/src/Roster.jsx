@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 
-// GM-only roster. Creating a player mints a key; the key becomes an invite link
-// you send to that friend. Their browser claims it and remembers who they are.
-export default function Roster({ onPlayersChanged }) {
-  const [rows, setRows] = useState([]); // players *including* keys — GM only
+/**
+ * The people this server knows about — admin only.
+ *
+ * Creating someone mints their credential, and that's the one thing reserved to
+ * the admin: an endpoint anyone could call would be open registration on a
+ * public URL. What each person can *do* isn't decided here at all — that's
+ * campaign membership, where admin carries no weight.
+ */
+export default function Roster({ onUsersChanged }) {
+  const [rows, setRows] = useState([]); // users *including* keys — admin only
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -12,7 +18,7 @@ export default function Roster({ onPlayersChanged }) {
 
   const load = useCallback(async () => {
     try {
-      setRows(await api.listPlayerKeys());
+      setRows(await api.listUserKeys());
       setError('');
     } catch (e) {
       setError(e.message);
@@ -28,7 +34,7 @@ export default function Roster({ onPlayersChanged }) {
     try {
       await fn();
       setError('');
-      onPlayersChanged?.();
+      onUsersChanged?.();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -39,23 +45,23 @@ export default function Roster({ onPlayersChanged }) {
   const inviteLink = (key) =>
     `${window.location.origin}${window.location.pathname}?key=${encodeURIComponent(key)}`;
 
-  async function copyInvite(player) {
-    const link = inviteLink(player.key);
+  async function copyInvite(user) {
+    const link = inviteLink(user.key);
     try {
       await navigator.clipboard.writeText(link);
-      setCopied(player.id);
+      setCopied(user.id);
       setTimeout(() => setCopied(''), 1500);
     } catch {
       // Clipboard blocked (non-https origin, denied permission) — show the link
       // so it can still be copied by hand rather than failing silently.
-      window.prompt(`Invite link for ${player.name}:`, link);
+      window.prompt(`Invite link for ${user.name}:`, link);
     }
   }
 
   const add = (e) => {
     e.preventDefault();
     return guard(async () => {
-      const created = await api.createPlayer({ name: name || 'Player' });
+      const created = await api.createUser({ name: name || 'Player' });
       setRows((prev) => [...prev, created]);
       setName('');
     });
@@ -63,53 +69,55 @@ export default function Roster({ onPlayersChanged }) {
 
   const remove = (id) =>
     guard(async () => {
-      await api.deletePlayer(id);
-      setRows((prev) => prev.filter((p) => p.id !== id));
+      await api.deleteUser(id);
+      setRows((prev) => prev.filter((u) => u.id !== id));
     });
 
   const rotate = (id) =>
     guard(async () => {
-      const updated = await api.rotatePlayerKey(id);
-      setRows((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      const updated = await api.rotateUserKey(id);
+      setRows((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
     });
 
   return (
     <div className="roster">
       <p className="hint">
-        Add a friend, then send them their invite link. Anyone holding a link can
-        move that player's tokens — rotate the key if one leaks.
+        Add someone here and send them their invite link — that link <em>is</em>
+        their identity, so rotate the key if one leaks. Being on this list gets
+        them onto the server, not into any campaign: that's each DM's call.
       </p>
 
       {error && <p className="error">{error}</p>}
 
       <form className="new-player" onSubmit={add}>
-        <input
-          placeholder="Player name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit" disabled={busy}>
-          + Add player
+          + Add person
         </button>
       </form>
 
       <ul className="player-list">
-        {rows.map((p) => (
-          <li key={p.id}>
-            <span className="swatch" style={{ background: p.color }} />
-            <strong>{p.name}</strong>
-            <button onClick={() => copyInvite(p)} disabled={busy}>
-              {copied === p.id ? 'Copied!' : 'Copy invite link'}
+        {rows.map((u) => (
+          <li key={u.id}>
+            <span className="swatch" style={{ background: u.color }} />
+            <strong>{u.name}</strong>
+            {u.globalRole === 'admin' && <span className="badge role gm">admin</span>}
+            <button onClick={() => copyInvite(u)} disabled={busy}>
+              {copied === u.id ? 'Copied!' : 'Copy invite link'}
             </button>
-            <button onClick={() => rotate(p.id)} disabled={busy} title="Invalidate the old link">
+            <button onClick={() => rotate(u.id)} disabled={busy} title="Invalidate the old link">
               Rotate key
             </button>
-            <button className="del" onClick={() => remove(p.id)} disabled={busy}>
-              ✕
-            </button>
+            {/* The admin account has no delete: removing it would leave a server
+                whose password authenticates as nobody. */}
+            {u.globalRole !== 'admin' && (
+              <button className="del" onClick={() => remove(u.id)} disabled={busy}>
+                ✕
+              </button>
+            )}
           </li>
         ))}
-        {rows.length === 0 && <li className="empty">No players yet.</li>}
+        {rows.length === 0 && <li className="empty">Nobody yet.</li>}
       </ul>
     </div>
   );
