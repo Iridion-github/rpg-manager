@@ -78,7 +78,9 @@ async function json(res) {
   if (res.status === 204) return null;
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    const err = new Error(body.error || `Request failed (${res.status})`);
+    err.status = res.status; // callers sometimes handle a status differently
+    throw err;
   }
   return res.json();
 }
@@ -110,6 +112,13 @@ export const api = {
   updatePlayer: (id, data) => put(`/api/players/${id}`, data),
   rotatePlayerKey: (id) => post(`/api/players/${id}/rotate-key`, {}),
   deletePlayer: (id) => del(`/api/players/${id}`),
+
+  listChat: () => get('/api/chat'),
+  sendChat: (text) => post('/api/chat', { text }),
+  rollDice: ({ count, sides, modifier, advantage, label }) =>
+    post('/api/chat/roll', { count, sides, modifier, advantage, label }),
+
+  listMaps: () => get('/api/maps'),
 
   listScenes: () => get('/api/scenes'),
   createScene: (data) => post('/api/scenes', data),

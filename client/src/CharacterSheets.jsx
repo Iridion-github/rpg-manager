@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAllSheets, cachePutAllSheets, getLastSynced } from './cache.js';
-
-const BLANK = { name: '', class: '', level: 1, hp: 10, maxHp: 10, ac: 10, notes: '' };
+import CharacterSheet from './sheet/CharacterSheet.jsx';
+import { abilityMod, blankSheet, signed } from './sheet/rules.js';
 
 // How long we let edits settle before writing them to the server. Typing a
 // sentence in a notes field is one save, not one save per keystroke.
@@ -11,8 +11,8 @@ const SAVE_DEBOUNCE_MS = 400;
 
 export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
   const [sheets, setSheets] = useState([]);
+  const [openId, setOpenId] = useState('');
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState(BLANK);
   const [saving, setSaving] = useState(0); // in-flight + queued writes
 
   // Edits waiting to be written, keyed by sheet id, plus their debounce timers.
@@ -22,6 +22,7 @@ export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
   const timers = useRef(new Map());
 
   const readOnly = !canEdit || offline;
+  const open = sheets.find((s) => s.id === openId) || null;
 
   const refresh = useCallback(async () => {
     try {
@@ -49,7 +50,6 @@ export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
       try {
         await api.updateSheet(id, payload);
       } catch (e) {
-        // The optimistic edit didn't stick — show why and resync to the truth.
         setError(e.message);
         refresh();
       } finally {
@@ -124,22 +124,16 @@ export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
     return () => clearTimeout(t);
   }, [sheets, offline, onOfflineData]);
 
-  async function addSheet(e) {
-    e.preventDefault();
+  async function addSheet() {
     if (readOnly) return;
     try {
       // Not optimistic: only the server can mint the record's id.
-      const record = await api.createSheet({ ...draft, name: draft.name || 'New Character' });
+      const record = await api.createSheet({ ...blankSheet(), name: 'New Character' });
       setSheets((prev) => [...prev, record]);
-      setDraft(BLANK);
+      setOpenId(record.id);
     } catch (e) {
       setError(e.message);
     }
-  }
-
-  function patch(sheet, changes) {
-    if (readOnly) return;
-    queueSave({ ...sheet, ...changes });
   }
 
   async function removeSheet(id) {
@@ -149,6 +143,7 @@ export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
     timers.current.delete(id);
     if (pending.current.delete(id)) setSaving((n) => n - 1);
     setSheets((cur) => cur.filter((s) => s.id !== id));
+    if (openId === id) setOpenId('');
     try {
       await api.deleteSheet(id);
     } catch (e) {
@@ -157,74 +152,62 @@ export default function CharacterSheets({ canEdit, offline, onOfflineData }) {
     }
   }
 
+  // --- the open sheet ---
+  if (open) {
+    return (
+      <div className="sheets-view open">
+        <div className="sheet-toolbar">
+          <button className="linky" onClick={() => setOpenId('')}>
+            ← All characters
+          </button>
+          {saving > 0 && <span className="badge saving">saving…</span>}
+          {readOnly && <span className="badge role anon">read-only</span>}
+          <div className="spacer" />
+          {!readOnly && (
+            <button className="del" onClick={() => removeSheet(open.id)}>
+              Delete character
+            </button>
+          )}
+        </div>
+        {error && <p className="error">{error}</p>}
+        <CharacterSheet sheet={open} onChange={queueSave} readOnly={readOnly} />
+      </div>
+    );
+  }
+
+  // --- the roster of characters ---
   return (
     <div className="sheets-view">
-      {saving > 0 && <span className="badge saving">saving…</span>}
+      <div className="sheet-toolbar">
+        {saving > 0 && <span className="badge saving">saving…</span>}
+        <div className="spacer" />
+        {!readOnly && <button onClick={addSheet}>+ New character</button>}
+      </div>
+
       {error && <p className="error">{error}</p>}
 
-      {!readOnly && (
-        <form className="new-sheet" onSubmit={addSheet}>
-          <input
-            placeholder="Character name"
-            value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          />
-          <input
-            placeholder="Class"
-            value={draft.class}
-            onChange={(e) => setDraft({ ...draft, class: e.target.value })}
-          />
-          <input
-            type="number"
-            title="Level"
-            value={draft.level}
-            onChange={(e) => setDraft({ ...draft, level: e.target.value })}
-          />
-          <button type="submit">+ Add character</button>
-        </form>
-      )}
-
-      <ul className="sheets">
+      <ul className="sheet-cards">
         {sheets.map((s) => (
-          <li key={s.id} className="sheet">
-            <div className="sheet-head">
-              <strong>{s.name}</strong>
+          <li key={s.id}>
+            <button className="sheet-card" onClick={() => setOpenId(s.id)}>
+              <strong>{s.name || 'Unnamed'}</strong>
               <span>
-                {s.class} · Lv {s.level}
+                {[s.race, s.class && `${s.class} ${s.level ?? 1}`].filter(Boolean).join(' · ') ||
+                  'No class yet'}
               </span>
-              {!readOnly && (
-                <button className="del" onClick={() => removeSheet(s.id)}>
-                  ✕
-                </button>
-              )}
-            </div>
-            <div className="stats">
-              <label>
-                HP
-                <input
-                  type="number"
-                  value={s.hp}
-                  onChange={(e) => patch(s, { hp: e.target.value })}
-                  disabled={readOnly}
-                />
-                / {s.maxHp}
-              </label>
-              <label>
-                AC
-                <input
-                  type="number"
-                  value={s.ac}
-                  onChange={(e) => patch(s, { ac: e.target.value })}
-                  disabled={readOnly}
-                />
-              </label>
-            </div>
-            <textarea
-              placeholder="Notes…"
-              value={s.notes}
-              onChange={(e) => patch(s, { notes: e.target.value })}
-              disabled={readOnly}
-            />
+              <div className="card-stats">
+                <span>
+                  HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
+                </span>
+                <span>AC {s.armorClass ?? 10}</span>
+                <span>
+                  {/* A quick read on the character without opening them up. */}
+                  STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
+                  {signed(abilityMod(s.abilities?.dex))} CON{' '}
+                  {signed(abilityMod(s.abilities?.con))}
+                </span>
+              </div>
+            </button>
           </li>
         ))}
         {sheets.length === 0 && (

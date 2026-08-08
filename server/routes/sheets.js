@@ -4,34 +4,13 @@ const express = require('express');
 const store = require('../store');
 const { broadcast } = require('../realtime');
 const { requireGm } = require('../auth');
+const { sanitizeSheet: sanitize } = require('../sheetSchema');
 
 const COLLECTION = 'sheets';
 const router = express.Router();
 
 function announce(req, action, record) {
   broadcast(req, 'sheets:changed', { action, record });
-}
-
-// Keep only the fields we recognise for a character sheet.
-function sanitize(body = {}) {
-  const {
-    name = 'New Character',
-    class: klass = '',
-    level = 1,
-    hp = 0,
-    maxHp = 0,
-    ac = 10,
-    notes = '',
-  } = body;
-  return {
-    name: String(name).slice(0, 120),
-    class: String(klass).slice(0, 120),
-    level: Number(level) || 1,
-    hp: Number(hp) || 0,
-    maxHp: Number(maxHp) || 0,
-    ac: Number(ac) || 0,
-    notes: String(notes).slice(0, 5000),
-  };
 }
 
 router.get('/', async (req, res, next) => {

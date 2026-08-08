@@ -12,7 +12,9 @@ const { gateEnabled, attachActor, resolveActor } = require('./auth');
 const sheetsRouter = require('./routes/sheets');
 const playersRouter = require('./routes/players');
 const scenesRouter = require('./routes/scenes');
+const chatRouter = require('./routes/chat');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
+const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
 const { registerTokenDrag } = require('./tokenDrag');
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -52,11 +54,16 @@ app.get('/api/status', (req, res) => {
 app.use('/api/sheets', sheetsRouter);
 app.use('/api/players', playersRouter);
 app.use('/api/scenes', scenesRouter);
+app.use('/api/chat', chatRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/maps', mapsRouter);
 
 // Uploaded maps are public to anyone who can reach the server — they're just
 // images, and players need to see the map they're standing on.
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '1h', index: false, dotfiles: 'deny' }));
+
+// Built-in maps: drop a file into public/maps and it's immediately selectable.
+app.use('/maps', express.static(MAPS_DIR, { maxAge: '1h', index: false, dotfiles: 'deny' }));
 
 // An unmatched /api path is a client bug, not a page — answer in JSON rather
 // than falling through to the SPA and handing back HTML.
@@ -90,7 +97,9 @@ if (hasClientBuild) {
   // SPA fallback: any other GET is a client-side route, so hand back the shell.
   app.get('*', (req, res) => {
     // A missing map is a missing file, not a route — don't answer with the app.
-    if (req.path.startsWith('/uploads/')) return res.status(404).json({ error: 'Not found' });
+    if (req.path.startsWith('/uploads/') || req.path.startsWith('/maps/')) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     res.set('Cache-Control', 'no-cache');
     res.sendFile(path.join(CLIENT_DIST, 'index.html'));
   });

@@ -101,11 +101,19 @@ async function update(collection, id, patch) {
  * hold the queue, so it always sees the current record.
  *
  * The mutator may throw to abort; the error propagates and nothing is written.
+ *
+ * `createIfMissing` supplies a starting record when there isn't one yet, so
+ * "create it if absent, then modify it" stays a single trip through the queue.
+ * Doing that as get-then-create outside the lock lets two first writers race,
+ * and one of them loses their write entirely.
  */
-async function mutate(collection, id, mutator) {
+async function mutate(collection, id, mutator, { createIfMissing = null } = {}) {
   return enqueue(fileFor(collection), async () => {
     const data = await readCollection(collection);
-    const current = data[id];
+    let current = data[id];
+    if (!current && createIfMissing) {
+      current = { ...createIfMissing, id, createdAt: new Date().toISOString() };
+    }
     if (!current) return null;
     const updated = await mutator(current);
     if (!updated) return null;

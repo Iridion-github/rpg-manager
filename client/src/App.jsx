@@ -4,6 +4,7 @@ import { socket, reauthenticate } from './socket.js';
 import Tabletop from './Tabletop.jsx';
 import CharacterSheets from './CharacterSheets.jsx';
 import Roster from './Roster.jsx';
+import Chat from './Chat.jsx';
 
 // Note: an invite link's ?key=… is claimed inside api.js at import time, which
 // is early enough for the socket handshake to carry it.
@@ -92,6 +93,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className="main">
       <header>
         <h1>⚔️ RPG Manager</h1>
         <span className={connected ? 'badge on' : 'badge off'}>
@@ -158,6 +160,10 @@ export default function App() {
         <CharacterSheets canEdit={isGm} offline={offline} onOfflineData={setLastSynced} />
       )}
       {tab === 'players' && isGm && <Roster onPlayersChanged={loadPlayers} />}
+      </div>
+
+      {/* Outside .main so it stays put while you switch tabs. */}
+      <Chat actor={actor} offline={offline} />
     </div>
   );
 }

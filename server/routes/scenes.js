@@ -29,14 +29,26 @@ class HttpError extends Error {
 const num = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * A scene is a map of a fixed pixel size with a grid laid over it.
+ *
+ * `width`/`height` are the map's own dimensions and `gridSize` is how many of
+ * those pixels one cell spans — so the GM can retune the grid to match the art
+ * without the map changing size. Column and row counts are *derived* from that
+ * ratio rather than stored, which is what keeps the two from contradicting
+ * each other.
+ */
 function sanitizeScene(body = {}) {
-  const { name = 'New Scene', imageUrl = '', gridSize = 70, cols = 20, rows = 14 } = body;
+  const { name = 'New Scene', imageUrl = '', gridSize = 70 } = body;
+  // Older scenes described their size as cols/rows instead of pixels.
+  const fallbackW = num(body.cols, 0) * num(gridSize, 70) || 1200;
+  const fallbackH = num(body.rows, 0) * num(gridSize, 70) || 840;
   return {
     name: String(name).slice(0, 120),
     imageUrl: String(imageUrl).slice(0, 500),
-    gridSize: clamp(num(gridSize, 70), 10, 400), // px per cell at 100% zoom
-    cols: clamp(Math.round(num(cols, 20)), 1, 200),
-    rows: clamp(Math.round(num(rows, 14)), 1, 200),
+    gridSize: clamp(num(gridSize, 70), 8, 500), // map px per cell
+    width: clamp(Math.round(num(body.width, 0) || fallbackW), 32, 12000),
+    height: clamp(Math.round(num(body.height, 0) || fallbackH), 32, 12000),
   };
 }
 
@@ -63,6 +75,56 @@ function sanitizeToken(body = {}, existing = {}) {
 
 function announce(req, action, record, extra = {}) {
   broadcast(req, 'scenes:changed', { action, record, ...extra });
+}
+
+/**
+ * One token per cell.
+ *
+ * Tokens can be bigger than one cell (a size-2 ogre covers 2×2), so this is a
+ * rectangle-intersection test rather than a comparison of coordinates. Every
+ * check runs inside store.mutate — that is, while holding the write queue — so
+ * two players cannot both be told an empty cell is theirs.
+ */
+function overlaps(a, b) {
+  const aSize = a.size || 1;
+  const bSize = b.size || 1;
+  return (
+    a.x < b.x + bSize && b.x < a.x + aSize && a.y < b.y + bSize && b.y < a.y + aSize
+  );
+}
+
+// The token standing where `candidate` wants to be, if any.
+function blockerFor(scene, candidate, ignoreId) {
+  return (scene.tokens || []).find((t) => t.id !== ignoreId && overlaps(t, candidate)) || null;
+}
+
+// Cell counts are derived from the map size, exactly as the client derives them.
+function gridOf(scene) {
+  const g = scene.gridSize || 70;
+  return {
+    cols: Math.max(1, Math.floor((scene.width || 1200) / g)),
+    rows: Math.max(1, Math.floor((scene.height || 840) / g)),
+  };
+}
+
+// First cell a token of this size fits in, scanning row by row. Lets the GM add
+// several tokens in a row without each one landing on the last.
+function firstFreeCell(scene, size, ignoreId) {
+  const { cols, rows } = gridOf(scene);
+  const span = Math.max(1, Math.ceil(size || 1));
+  for (let y = 0; y + span <= Math.max(rows, span); y++) {
+    for (let x = 0; x + span <= Math.max(cols, span); x++) {
+      if (!blockerFor(scene, { x, y, size }, ignoreId)) return { x, y };
+    }
+  }
+  return null;
+}
+
+function refuseOverlap(scene, candidate, ignoreId) {
+  const blocker = blockerFor(scene, candidate, ignoreId);
+  if (blocker) {
+    throw new HttpError(409, `${blocker.label || 'Another token'} is already there.`);
+  }
 }
 
 // Find a token or fail with the right status.
@@ -130,14 +192,23 @@ router.delete('/:id', requireGm, async (req, res, next) => {
 
 router.post('/:id/tokens', requireGm, async (req, res, next) => {
   try {
-    const token = { id: crypto.randomUUID(), ...sanitizeToken(req.body) };
-    const scene = await store.mutate(COLLECTION, req.params.id, (current) => ({
-      ...current,
-      tokens: [...(current.tokens || []), token],
-    }));
+    const wanted = { id: crypto.randomUUID(), ...sanitizeToken(req.body) };
+    const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
+      let token = wanted;
+      // Asking for an occupied cell isn't an error when adding — slide the new
+      // token to the first free one instead, so "+ Alice, + Bob, + Goblin"
+      // doesn't stack three tokens on 0,0.
+      if (blockerFor(current, token, null)) {
+        const free = firstFreeCell(current, token.size, null);
+        if (!free) throw new HttpError(409, 'No free cell left on this scene.');
+        token = { ...token, ...free };
+      }
+      return { ...current, tokens: [...(current.tokens || []), token] };
+    });
     if (!scene) return res.status(404).json({ error: 'Not found' });
-    announce(req, 'token:add', scene, { token });
-    res.status(201).json(token);
+    const placed = scene.tokens.find((t) => t.id === wanted.id);
+    announce(req, 'token:add', scene, { token: placed });
+    res.status(201).json(placed);
   } catch (err) {
     next(err);
   }
@@ -149,6 +220,8 @@ router.put('/:id/tokens/:tokenId', requireGm, async (req, res, next) => {
     const scene = await store.mutate(COLLECTION, req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
       const updated = { ...existing, ...sanitizeToken(req.body, existing) };
+      // Growing a token can push it into a neighbour just as moving it can.
+      refuseOverlap(current, updated, updated.id);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === updated.id ? updated : t)),
@@ -172,6 +245,7 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
         throw new HttpError(403, 'You can only move your own token.');
       }
       const moved = { ...existing, x: num(req.body?.x, existing.x), y: num(req.body?.y, existing.y) };
+      refuseOverlap(current, moved, moved.id);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === moved.id ? moved : t)),
