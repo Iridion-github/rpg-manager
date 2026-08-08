@@ -465,6 +465,52 @@ credentials file.
   that's the design, not a failure. Friends who've loaded it keep a read-only
   cached view.
 
+## Putting it online (Render)
+The tunnel needs your PC switched on. To have the table reachable all the time,
+`render.yaml` in this repo configures a Render service — create it with
+Render's **Blueprint** option and it reads the file rather than asking you to
+retype the settings.
+
+Three things have to be true together, and each one fixes a failure that is
+otherwise silent:
+
+| | Why |
+| --- | --- |
+| **Starter instance**, not Free | Free instances sleep after ~15 min idle **and** have no disk |
+| **A disk mounted at `/data`**, with `DATA_DIR=/data` | Without it every deploy and restart is a factory reset |
+| **`HOST=0.0.0.0`** | The server binds to localhost by default; in a container nothing can reach it and the health check fails with nothing in the logs |
+
+The free tier is the trap worth naming: it *looks* like it works. You'd deploy,
+register, build a campaign, and come back the next day to an empty server with
+no error anywhere. The instance type is what stops the sleeping; the disk is
+what keeps the data. Buying one without the other solves nothing.
+
+You set `ADMIN_PASSWORD` and `SIGNUP_CODE` in the dashboard — `render.yaml`
+marks them `sync: false` so they're never read from the repo. Leave
+`SIGNUP_CODE` unset and anyone who finds the URL can register.
+
+Note that only **one instance** may run. SQLite is a file, and two processes
+writing one file over a network disk corrupt it. Render enforces this itself
+once a disk is attached, at the cost of a few seconds' downtime per deploy.
+
+You don't need Postgres for this. SQLite on a mounted disk is entirely adequate
+for one instance and a few friends.
+
+## Backups
+A mounted disk survives restarts, not mistakes — a bad import or a campaign
+deleted in the wrong tab is still gone. **People → Download backup** (admin
+only) pulls the entire database down as one file, while the server keeps
+running.
+
+It goes through SQLite's online backup API rather than copying the file, and
+that distinction matters: in WAL mode the committed state is spread across the
+database *and* its write-ahead log, so a plain copy taken while the server runs
+can miss recent transactions or be torn outright. The snapshot you get opens
+cleanly and passes `integrity_check`.
+
+Restoring is putting that file where `DATA_DIR` expects it, with the app
+stopped.
+
 ## Data location
 Everything lives in `./data` (override with `DATA_DIR`): one SQLite database,
 plus uploaded map images as files. The folder is gitignored — back it up like

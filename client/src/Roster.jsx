@@ -15,6 +15,7 @@ export default function Roster({ onUsersChanged }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
+  const [backingUp, setBackingUp] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +89,31 @@ export default function Roster({ onUsersChanged }) {
       </p>
 
       {error && <p className="error">{error}</p>}
+
+      {/* A mounted disk survives restarts, not mistakes. This pulls the whole
+          server down as one file you can keep somewhere else. */}
+      <div className="backup-row">
+        <button
+          onClick={async () => {
+            setBackingUp(true);
+            try {
+              await api.downloadBackup();
+              setError('');
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBackingUp(false);
+            }
+          }}
+          disabled={backingUp}
+        >
+          {backingUp ? 'Preparing…' : '⭳ Download backup'}
+        </button>
+        <small>
+          A consistent snapshot of the entire database — everyone, every
+          campaign. Taken while the server keeps running.
+        </small>
+      </div>
 
       <form className="new-player" onSubmit={add}>
         <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />

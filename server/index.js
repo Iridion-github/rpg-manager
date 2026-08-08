@@ -11,6 +11,7 @@ const store = require('./store');
 const { gateEnabled, signupIsOpen, attachActor, resolveActor } = require('./auth');
 const { attachCampaign, isCampaignId, touchActivity, CAMPAIGNS } = require('./campaigns');
 const { importJson } = require('./importJson');
+const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const campaignsRouter = require('./routes/campaigns');
@@ -109,6 +110,7 @@ app.get('/api/status', (req, res) => {
 
 // --- global scope: people and the campaigns they belong to ---
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/campaigns', campaignsRouter);
 
@@ -215,8 +217,32 @@ Working locally and don't want a password? Use \`npm run dev\`.
   process.exit(1);
 }
 
-// Bring a pre-campaign data folder into the campaign layout before serving a
-// single request, so nothing ever reads the half-migrated state.
+/**
+ * Shout about the one misconfiguration that fails silently.
+ *
+ * HOST defaults to localhost so a tunnel is the only way in. On a hosting
+ * platform that default is wrong and produces no error at all: the app starts
+ * happily, the router can't reach it, the health check times out, and the logs
+ * say nothing. Better to name it here than to leave you reading a green
+ * "deploy succeeded" next to a service nobody can open.
+ */
+const PLATFORM = ['RENDER', 'RAILWAY_ENVIRONMENT', 'FLY_APP_NAME', 'DYNO', 'K_SERVICE'].find(
+  (key) => process.env[key]
+);
+if ((PLATFORM || process.env.PORT) && /^(127\.|::1|localhost)/.test(HOST)) {
+  console.warn(`
+  ================================================================
+  WARNING: bound to ${HOST}, but this looks like a hosted
+  environment${PLATFORM ? ` (${PLATFORM} is set)` : ''}.
+
+  Nothing outside this container can reach the app, and the health
+  check will fail without a useful error. Set HOST=0.0.0.0.
+  ================================================================
+`);
+}
+
+// Bring a JSON data folder into the database before serving a single request,
+// so nothing ever reads the half-imported state.
 importJson()
   .then((result) => {
     if (result) {

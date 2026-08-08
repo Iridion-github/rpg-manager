@@ -1642,3 +1642,21 @@ button.linky:hover {
 .auth-form input {
   font-size: 1rem;
 }
+
+/* --- admin backup --- */
+.backup-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+  padding: 0.6rem 0.7rem;
+  background: #1a1d25;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+}
+.backup-row small {
+  color: #8b90a0;
+  flex: 1;
+  min-width: 12rem;
+}

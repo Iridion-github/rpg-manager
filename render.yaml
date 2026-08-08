@@ -1,0 +1,53 @@
+# Render deployment, defined in the repo rather than typed into a web form.
+#
+# The three settings that actually matter are all below, and each of them fixes
+# a failure that is otherwise silent:
+#
+#   plan: starter   — the free instance type sleeps after ~15 minutes AND has no
+#                     disk, so the database resets whenever it wakes. That looks
+#                     like it works for one evening.
+#   disk            — where the SQLite file and uploaded maps live. Without it
+#                     every deploy is a factory reset.
+#   HOST=0.0.0.0    — the server binds to localhost by default so that a
+#                     Cloudflare Tunnel is the only way in. Inside a container
+#                     that means Render's router cannot reach it at all, and the
+#                     health check fails with nothing useful in the logs.
+#
+# Create the service from this file with Render's Blueprint option, then set the
+# two secrets in the dashboard.
+services:
+  - type: web
+    name: rpg-manager
+    runtime: node
+    plan: starter
+    # Server and client have their own package.json, so a plain root install
+    # would fetch `concurrently` and nothing else. client/dist is gitignored,
+    # so the client is built here rather than committed.
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    # Answers without a credential, so it's a real check of "is the app up"
+    # rather than of whether Render happens to be signed in.
+    healthCheckPath: /api/status
+    # SQLite is a file. Two instances writing one file over a network disk
+    # corrupt it — this must stay at 1, and Render enforces it anyway once a
+    # disk is attached.
+    numInstances: 1
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: '22'
+      # sync: false means "ask me in the dashboard, don't read it from the
+      # repo". Neither of these should ever be committed.
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Leave unset to allow open registration; set it to close signups to
+      # people holding the code. Strongly recommended on a public hostname.
+      - key: SIGNUP_CODE
+        sync: false
