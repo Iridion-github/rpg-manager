@@ -123,7 +123,7 @@ Roles come in two layers, and keeping them apart is the point.
 
 | Global role | How you get it | What it means |
 | --- | --- | --- |
-| **Admin** | log in as `admin` with `ADMIN_PASSWORD` | Can create people. Nothing else. |
+| **Admin** | log in as `admin` with `ADMIN_PASSWORD` | Can create people, and acts as DM at every table |
 | **User** | register, or open an invite link | Can browse the directory and start campaigns |
 | **Spectator** | nothing | No identity — you get the sign-in screen |
 
@@ -171,11 +171,25 @@ would defeat the point.
 | **DM** | start a campaign, or be made one | everything in that campaign |
 | **Player** | a DM adds you | move your own tokens, use the sheets you were given |
 
-**Admin grants nothing inside a campaign.** An admin who wasn't invited to your
-table gets a 404 like anyone else — not a locked door, an absent one. The single
-power it holds is minting user identities, because creating a credential is the
-one act that can't be delegated without turning a public URL into open
-registration. It exists mostly as a hook for later; today that's all it does.
+**Admin is DM at every table**, without being a member of any. It's an
+administrative account — the person who runs the server, not somebody's
+character — so it can open a campaign it was never invited to and do anything
+the real DM could: read the sheets, move the tokens, delete the scene.
+
+This is a deliberate reversal of how it started. Refusing it read as principled,
+but the only person able to fix a broken table had to be invited to it first, by
+the DM whose table was broken. The confidentiality it appeared to protect was
+never real either: `/api/admin/backup` already hands whoever knows
+`ADMIN_PASSWORD` the entire database, private notes included. Admin could always
+read everything; all that changed is whether it has to be done through a file.
+
+Two things follow, and both are intentional. **`ADMIN_PASSWORD` is now the only
+secret that matters** — treat it accordingly, and don't reuse it. And
+**membership still means what it says**: nothing writes the admin into a members
+map, so a campaign's member list remains the truth about who *plays* there, even
+though the admin can act at it. Don't add the admin account to a campaign as a
+player; it would be ignored, since admin outranks membership rather than falling
+back to it.
 
 Any way of starting the server other than `npm run dev` demands `ADMIN_PASSWORD`
 and won't boot without one:

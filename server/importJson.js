@@ -13,10 +13,16 @@
  *       actual game, so they're folded into a campaign rather than left behind
  *       for a fresh empty one.
  *
- * Runs only when the database has no records at all — that emptiness is the
+ * Runs only when the database holds nobody's game yet — that emptiness is the
  * "not yet imported" marker, so a second start does nothing. Source files are
  * renamed to *.imported rather than deleted: this is the one irreversible-
  * looking step in the project and a backup costs nothing.
+ *
+ * "Nobody's game" is deliberately not "no records at all". Opening the app is
+ * enough to write some: the admin is seeded lazily at first login, and a login
+ * leaves a session behind. Counting those would mean a single curious look at
+ * the app before the JSON landed stranded that folder permanently, with no
+ * error and no way back short of deleting the database.
  *
  * Timestamps are carried across as they were. Importing is not the same event
  * as creating, and a campaign that shows "created today" because you changed
@@ -37,6 +43,32 @@ const insert = store.db.prepare(`
   INSERT OR REPLACE INTO records (collection, id, data, created_at, updated_at)
   VALUES (@collection, @id, @data, @createdAt, @updatedAt)
 `);
+
+// Scaffolding: records that exist because the app was opened, not because
+// anyone played. The seeded admin and the sessions handed out since are both
+// re-made on demand, so neither is a reason to refuse an import.
+const anyRealRecord = store.db.prepare(`
+  SELECT 1 FROM records WHERE collection NOT IN ('users', 'sessions') LIMIT 1
+`);
+const scaffoldUsers = store.db.prepare(`SELECT data FROM records WHERE collection = 'users'`);
+const dropScaffolding = store.db.prepare(`
+  DELETE FROM records WHERE collection IN ('users', 'sessions')
+`);
+
+/**
+ * Is the database empty in the only sense that matters — does it hold anybody's
+ * game?
+ *
+ * A lone admin account is scaffolding; a second account is not. Somebody
+ * registering means people have started using this server, and dropping their
+ * account to make room for a JSON folder would be the wrong trade however
+ * little else is stored yet.
+ */
+function onlyScaffolding() {
+  if (anyRealRecord.get()) return false;
+  const users = scaffoldUsers.all().map((row) => JSON.parse(row.data));
+  return users.length === 0 || (users.length === 1 && users[0].globalRole === 'admin');
+}
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
@@ -71,7 +103,7 @@ function findSources(dir) {
 }
 
 async function importJson() {
-  if (!store.isEmpty()) return null; // already holds data — nothing to do
+  if (!onlyScaffolding()) return null; // already somebody's game — nothing to do
 
   const sources = findSources(store.DATA_DIR);
   if (sources.length === 0) return null; // fresh install
@@ -144,6 +176,13 @@ async function importJson() {
 
   let count = 0;
   const run = store.db.transaction(() => {
+    // Clear the scaffolding first and let the JSON decide who exists. The
+    // folder carries its own admin, and two accounts sharing the username
+    // `admin` is a coin toss over which one you log in as — with the loser's
+    // campaigns invisible, since membership is by id. Any session goes with it,
+    // which costs one login. ensureAdminUser() seeds a fresh admin at that
+    // login if the import turned out not to carry one.
+    dropScaffolding.run();
     for (const source of loaded) {
       if (source.collection === 'players') continue; // became users above
       for (const [id, record] of Object.entries(source.records)) {

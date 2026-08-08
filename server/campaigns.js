@@ -59,13 +59,25 @@ async function removeCampaignData(campaignId) {
 /**
  * What this person is *at this table*.
  *
- * Returns 'dm', 'player', or null for someone who isn't a member. Note what is
- * deliberately missing: there is no check for globalRole === 'admin'. Admin is
- * a server role, not a table role — an admin who was never invited to your
- * campaign is not its DM, and this is the function that makes that true.
+ * Returns 'dm', 'player', or null for someone who isn't a member — except for
+ * the admin, who is 'dm' everywhere without being a member anywhere.
+ *
+ * This used to be the opposite, on the reasoning that an admin who was never
+ * invited to your campaign is not its DM. That holds on a server whose admin is
+ * also somebody's player. It doesn't hold here: this admin is an administrative
+ * account that never sits at a table, so refusing it meant the only person who
+ * can fix a table had to be invited to it first — by the DM whose table is
+ * broken. The confidentiality it bought was already nominal, since
+ * /api/admin/backup hands the same password holder the entire database.
+ *
+ * Admin outranks membership rather than falling back to it, so the answer
+ * doesn't depend on whether someone once added this account to their members
+ * map. Membership stays the truth about who *plays*: this function is asked what
+ * you may do, and nothing writes the admin into a members map.
  */
 function roleIn(campaign, actor) {
   if (!campaign || !actor || !actor.userId) return null;
+  if (actor.globalRole === 'admin') return 'dm';
   const role = campaign.members?.[actor.userId];
   return role === 'dm' || role === 'player' ? role : null;
 }
