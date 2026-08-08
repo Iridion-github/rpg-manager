@@ -16,6 +16,9 @@ secrets/
 *.secret
 *.key
 
+# Personal scratch — half-formed ideas, not documentation.
+notes.txt
+
 # Your real tunnel config names your hostname and points at credentials.
 # config.example.yml is the one that's committed.
 cloudflared/config.yml
