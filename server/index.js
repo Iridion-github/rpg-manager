@@ -9,7 +9,7 @@ const { Server } = require('socket.io');
 
 const store = require('./store');
 const { gateEnabled, signupIsOpen, attachActor, resolveActor } = require('./auth');
-const { attachCampaign, isCampaignId, touchActivity, CAMPAIGNS } = require('./campaigns');
+const { attachCampaign, isCampaignId, roleIn, touchActivity, CAMPAIGNS } = require('./campaigns');
 const { importJson } = require('./importJson');
 const adminRouter = require('./routes/admin');
 const authRouter = require('./routes/auth');
@@ -23,6 +23,7 @@ const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
 const { registerTokenDrag, roomFor } = require('./tokenDrag');
+const { registerSceneSignals } = require('./sceneSignals');
 
 const PORT = Number(process.env.PORT) || 3001;
 
@@ -99,7 +100,11 @@ io.on('connection', (socket) => {
       if (!isCampaignId(campaignId)) return ack?.({ ok: true, campaignId: null });
 
       const campaign = await store.get(CAMPAIGNS, campaignId);
-      const role = campaign?.members?.[socket.data.actor?.userId];
+      // Through roleIn, not the members map directly: this is the one gate that
+      // decides which broadcasts a connection receives, and reading membership
+      // raw here would leave the admin able to open any table over HTTP while
+      // silently receiving none of its live updates.
+      const role = roleIn(campaign, socket.data.actor);
       if (!role) return ack?.({ ok: false, error: 'You are not at this table.' });
 
       socket.data.campaignId = campaignId;
@@ -119,6 +124,7 @@ io.on('connection', (socket) => {
 });
 
 registerTokenDrag(io);
+registerSceneSignals(io);
 
 // Health / status endpoint — also tells the client who it is.
 app.get('/api/status', (req, res) => {

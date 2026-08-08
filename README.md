@@ -221,8 +221,15 @@ appeal to.
 
 ## Tabletop
 The **Tabletop** tab holds scenes: a map image, a grid, and tokens. The DM picks
-maps, adds tokens, and assigns each one to a player. Dragging is live — everyone
-sees a token move as it moves.
+maps and creates tokens; dragging is live — everyone sees a token move as it
+moves. Everything a DM does to a scene's tokens happens through the map's own
+right-click menu.
+
+A token carries an `ownerId`, and a player may drag a token that belongs to
+them — but **nothing in the UI assigns one**. Tokens made through the right-click
+menu are unowned, so today they are DM/NPC tokens. The field is still honoured
+by every permission check and by the API; this is a missing form, not a missing
+feature.
 
 ### Maps
 Two ways to give a scene a background:
@@ -246,8 +253,10 @@ same square at the same instant produce exactly one winner.
 
 ### Moving your view
 **Right-drag to pan** — grab the map and push it around instead of reaching for
-the scrollbars. The context menu is suppressed over the map so the gesture stays
-out of its way; right-clicking a *token* still opens the normal menu.
+the scrollbars. A press that travels more than a few pixels is a pan; one that
+doesn't is a click, and opens a menu instead. The threshold is why that works:
+no hand is perfectly still for the length of a click, so testing for *no*
+movement would mean the menu almost never opened.
 
 **Scroll to zoom** — the wheel drives the zoom bar instead of the scrollbars, in
 the same 10% steps, and zooms around the point under your cursor so the map
@@ -255,6 +264,39 @@ doesn't lurch away from what you're looking at. Trackpad deltas accumulate, so a
 light two-finger flick doesn't tear through the whole range.
 
 Left-drag is unchanged: it moves a token you own.
+
+The map runs to the bottom of the window, finishing level with the chat column
+beside it, rather than stopping at a fixed fraction of the screen.
+
+### Right-click menus
+Right-clicking the **map** offers three things:
+
+- **Ping** — coloured rings pulse at that spot on everyone's screen for a couple
+  of seconds, in your own colour. Any member may ping.
+- **Focus** — everyone at the table who is looking at this scene has their zoom
+  set to match yours and their view centred on the spot you clicked. At a border
+  or a corner it scrolls as far as there is map to scroll and no further, so the
+  spot ends up off-centre rather than the map being padded with nothing. Anyone
+  reading a *different* scene is left alone: moving their view to somewhere they
+  can't see would be motion with no meaning.
+- **Create token** (DM only) — a form for name, colour and size. It never asks
+  for a position, because the right-click already answered that; the token
+  appears where you clicked, sliding to the first free cell if that one is
+  taken.
+
+Right-clicking a **token** offers **Edit** — the same form, prefilled — and
+**Delete**, which removes it at once with no confirmation. Editing sends only
+name, colour and size, so the token keeps where it stands and who owns it. Both
+are DM-only, because the routes behind them are: offering a player a button that
+comes back 403 is worse than not offering it, so they keep the browser's own
+menu on a token.
+
+Positions in both signals travel as **map pixels**, not screen coordinates and
+not cells — screen coordinates would send people with different window sizes to
+different places, and cells stop being a unit at all when the grid is off.
+
+Neither ping nor focus is ever stored. They live on the socket and nowhere else:
+a minute later there is nothing that could have been saved.
 
 ### Grid ratio
 A scene stores the map's **pixel size** and a `gridSize` — how many of those
@@ -588,8 +630,21 @@ Ids and timestamps are carried across unchanged, so token ownership, per-sheet
 access grants and invite links all keep working — a campaign doesn't claim it
 was created today because you changed database engines. The source files are
 renamed `*.imported` rather than deleted, and if the import throws, the server
-refuses to start rather than serve half-moved data. It runs only when the
-database is empty, so restarting doesn't repeat it.
+refuses to start rather than serve half-moved data.
+
+It runs when the database holds **nobody's game yet** — either no records at
+all, or nothing but the admin account seeded at first login and the sessions
+handed out since. Those two don't count, and that distinction matters: the admin
+record is written the moment you log in, so treating it as data meant a single
+curious look at the app before the JSON landed stranded that folder for good,
+with no error and no way back short of deleting the database. A second account
+*does* count — once someone has registered, that's their table, and it isn't
+worth trading for a folder.
+
+That scaffolding is cleared as part of the import, so the JSON decides who
+exists rather than colliding with a placeholder that shares its username. You
+sign in again afterwards; the admin password is unchanged, since it's server
+configuration rather than anything stored on the account.
 
 ## Environment variables
 | Variable | Default | Purpose |
@@ -618,3 +673,7 @@ database is empty, so restarting doesn't repeat it.
 8. ✅ Shared music: the DM's YouTube playlist, played for the whole table
 9. ✅ Accounts: registration, login, logout, hashed passwords, sessions
 10. ✅ SQLite instead of JSON files: real transactions, real constraints
+11. ✅ Rate limits on login, registration and password changes
+12. ✅ Right-click menus on the map: ping, focus, create/edit/delete tokens
+13. ⬜ Assign a token to a player from the UI (`ownerId` exists; no form does)
+14. ⬜ Restore a backup through the app, so `/api/admin/backup` round-trips

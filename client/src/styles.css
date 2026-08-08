@@ -279,6 +279,28 @@ button.linky:hover {
 .upload input[type='file'] {
   display: none;
 }
+/* On the tabletop tab the map runs to the bottom of the window instead of
+   stopping at a fraction of it. Sized to match the chat column beside it, so
+   the two bottom-align rather than one trailing off below the other. */
+.app.map .main {
+  height: calc(100vh - 5rem);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app.map .tabletop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.app.map .surface-scroll {
+  flex: 1;
+  /* Lets a flex item shrink past its content. Without it the map's own height
+     sets the floor and the column overflows the window instead of scrolling. */
+  min-height: 0;
+  max-height: none;
+}
 .surface-scroll {
   overflow: auto;
   border: 1px solid #262b38;
@@ -311,6 +333,106 @@ button.linky:hover {
     repeating-linear-gradient(to right, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell)),
     repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell));
 }
+/* --- ping ---
+   Three rings leaving the same point a beat apart. One ring reads as a blip
+   you can miss; three is a heartbeat, which is what you want when the table is
+   looking somewhere else. Sits above the tokens: the whole purpose is to be
+   seen, including over a crowded square. */
+.ping {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 8;
+}
+.ping span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 3px solid var(--ping, #ffd479);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ping-pulse 1.2s ease-out 3;
+}
+.ping span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.ping span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes ping-pulse {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.95;
+  }
+  70% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(4.2);
+    opacity: 0;
+  }
+}
+/* Someone who'd rather not be flashed at still gets to see where the ping is. */
+@media (prefers-reduced-motion: reduce) {
+  .ping span {
+    animation: ping-hold 1.2s ease-out 3;
+  }
+  @keyframes ping-hold {
+    0%,
+    100% {
+      transform: scale(2);
+      opacity: 0.5;
+    }
+  }
+}
+
+/* --- right-click menu ---
+   Fixed, not absolute: it's pinned to the point on screen you clicked, and must
+   not scroll away from it if the map moves underneath. */
+.map-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 118px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.2rem;
+  gap: 0.05rem;
+  background: #171b24;
+  border: 1px solid #2b3242;
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+.map-menu button {
+  width: 100%;
+  padding: 0.22rem 0.45rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #d6dbe6;
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.map-menu button:hover,
+.map-menu button:focus-visible {
+  background: #24304a;
+}
+/* Destructive, and coloured so it isn't chosen by muscle memory. */
+.map-menu button.danger {
+  color: #ff9a9a;
+}
+.map-menu button.danger:hover,
+.map-menu button.danger:focus-visible {
+  background: #3a1d1d;
+}
+
 .token {
   position: absolute;
   box-sizing: border-box;
@@ -362,20 +484,7 @@ button.linky:hover {
   padding: 3rem 1rem;
 }
 
-/* --- token admin + roster --- */
-.token-admin {
-  margin-top: 1rem;
-  max-width: 900px; /* long thin rows are harder to read than short ones */
-}
-.add-token {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-  font-size: 0.85rem;
-  color: #9aa0b2;
-}
-.token-list,
+/* --- roster --- */
 .player-list {
   list-style: none;
   padding: 0;
@@ -383,7 +492,6 @@ button.linky:hover {
   display: grid;
   gap: 0.4rem;
 }
-.token-list li,
 .player-list li {
   display: flex;
   align-items: center;
@@ -393,10 +501,6 @@ button.linky:hover {
   border-radius: 8px;
   padding: 0.45rem 0.6rem;
 }
-.token-list small {
-  color: #8b90a0;
-}
-.token-list .del,
 .player-list .del {
   margin-left: auto;
   background: #3a1d1d;
@@ -1380,6 +1484,44 @@ button.linky:hover {
   gap: 0.5rem;
   margin-top: 0.25rem;
 }
+/* --- create-token form --- */
+.token-field {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+.token-field > input {
+  width: 100%;
+}
+.token-colour,
+.token-size {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.token-colour input[type='color'] {
+  width: 2.6rem;
+  height: 1.9rem;
+  padding: 0;
+  background: none;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.token-colour code {
+  color: #8b90a0;
+  font-size: 0.78rem;
+}
+.token-size input[type='range'] {
+  flex: 1;
+}
+.token-size small {
+  color: #8b90a0;
+  white-space: nowrap;
+}
 .dice-field {
   display: flex;
   align-items: center;
@@ -1435,6 +1577,15 @@ button.linky:hover {
   }
   .chat {
     height: 60vh;
+  }
+  /* One column here, so there's nothing to bottom-align with — and a
+     full-height map would push the chat clean off the bottom of a phone. */
+  .app.map .main {
+    display: block;
+    height: auto;
+  }
+  .app.map .surface-scroll {
+    max-height: 70vh;
   }
   /* The note list becomes a strip above the note instead of a column beside
      it — 220px of sidebar is most of a phone. */

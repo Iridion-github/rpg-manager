@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
+import TokenModal from './TokenModal.jsx';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
 // frames a pointer actually produces.
@@ -19,6 +20,22 @@ const ZOOM_STEP = 0.1;
 // accumulate and only step once this much has gone by — otherwise a light
 // two-finger flick would rocket through the whole zoom range.
 const WHEEL_NOTCH = 100;
+
+// A right-click is a menu; a right-drag is a pan. Under this much travel the
+// gesture is still a click — which is what lets "press, release, don't really
+// move" open the menu instead of panning the map by three pixels and
+// suppressing it. No pointer is perfectly still for the length of a click.
+const PAN_SLOP = 5;
+
+// How long a ping stays on screen: long enough for someone looking at their
+// character sheet to glance up and still catch it.
+const PING_MS = 2400;
+
+// Roughly the menu's own size, used only to stop it opening past the edge of
+// the window. Approximate on purpose — measuring it properly means rendering it
+// somewhere invisible first, for a few pixels nobody will ever notice.
+const MENU_W = 140;
+const MENU_H = 96;
 
 const round1 = (v) => Math.round(v * 10) / 10;
 // Free placement still gets rounded, just far more finely than to a cell —
@@ -56,6 +73,17 @@ export default function Tabletop({ actor, players, offline }) {
   const [ghosts, setGhosts] = useState({});
   // Our own in-flight drag, so the token follows the pointer smoothly.
   const [drag, setDrag] = useState(null);
+  // The right-click menu: where on screen to draw it, and the map point it was
+  // opened on. Null when closed.
+  const [menu, setMenu] = useState(null);
+  // Pings currently pulsing. Ephemeral by nature — never persisted, and dropped
+  // wholesale when the scene changes.
+  const [pings, setPings] = useState([]);
+  // The token form: either { x, y } for a new token at that spot, or { token }
+  // for one being edited. Held here rather than in the modal because the menu
+  // that decided it is closed by the time the modal opens — the choice has to
+  // outlive the thing that made it.
+  const [tokenForm, setTokenForm] = useState(null);
 
   const surfaceRef = useRef(null);
   const scrollRef = useRef(null);
@@ -65,7 +93,14 @@ export default function Tabletop({ actor, players, offline }) {
   const gridTimer = useRef(null);
   const wheelAcc = useRef(0);
   const zoomAnchor = useRef(null);
+  const pendingFocus = useRef(null);
+  const pingTimers = useRef(new Set());
+  const menuRef = useRef(null);
   const [panning, setPanning] = useState(false);
+  // Bumped to force a render after a focus arrives, so the scroll is applied by
+  // a layout effect that runs *after* the new zoom is on screen. Without it a
+  // focus that doesn't change the zoom would re-render nothing and never scroll.
+  const [focusTick, setFocusTick] = useState(0);
 
   const isDm = actor?.role === 'dm';
   /**
@@ -109,13 +144,25 @@ export default function Tabletop({ actor, players, offline }) {
     api.listMaps().then(setMaps).catch(() => setMaps([]));
   }, [refresh]);
 
-  // A draft belongs to the scene it was made on.
+  // A draft belongs to the scene it was made on, and so does a pulse on the map.
   useEffect(() => {
     setGridDraft(null);
+    setPings([]);
+    setMenu(null);
     clearTimeout(gridTimer.current);
   }, [selectedId]);
 
   useEffect(() => () => clearTimeout(gridTimer.current), []);
+
+  // Pings outlive the component if nobody stops them: each one is a pending
+  // timer holding a setState.
+  useEffect(
+    () => () => {
+      for (const timer of pingTimers.current) clearTimeout(timer);
+      pingTimers.current.clear();
+    },
+    []
+  );
 
   // --- live updates ---
   useEffect(() => {
@@ -162,6 +209,41 @@ export default function Tabletop({ actor, players, offline }) {
       socket.off('token:drag:ended', onDragEnded);
     };
   }, []);
+
+  // --- pings and focus pulls ---
+  // Both are ignored unless they're about the scene on screen: a pulse on a map
+  // nobody here is reading, or a camera move for a place they can't see, is
+  // motion with no meaning attached.
+  useEffect(() => {
+    const onPinged = ({ sceneId, x, y, color, by }) => {
+      if (sceneId !== selectedId) return;
+      const id = `${Date.now()}-${Math.random()}`;
+      setPings((prev) => [...prev, { id, x, y, color, by }]);
+      const timer = setTimeout(() => {
+        pingTimers.current.delete(timer);
+        setPings((prev) => prev.filter((p) => p.id !== id));
+      }, PING_MS);
+      pingTimers.current.add(timer);
+    };
+
+    const onFocused = ({ sceneId, x, y, zoom: level }) => {
+      if (sceneId !== selectedId) return;
+      // The scroll can't be set here: the zoom below changes the size of the
+      // thing being scrolled, so the target only exists after layout. Leave the
+      // point for the layout effect and bump the tick so there is a render for
+      // it to run after, even when the zoom is already what we were sent.
+      pendingFocus.current = { mx: x, my: y };
+      setZoom(clamp(round1(level), ZOOM_MIN, ZOOM_MAX));
+      setFocusTick((n) => n + 1);
+    };
+
+    socket.on('scene:pinged', onPinged);
+    socket.on('scene:focused', onFocused);
+    return () => {
+      socket.off('scene:pinged', onPinged);
+      socket.off('scene:focused', onFocused);
+    };
+  }, [selectedId]);
 
   // Reconnecting means we may have missed changes while away.
   useEffect(() => {
@@ -224,6 +306,7 @@ export default function Tabletop({ actor, players, offline }) {
 
   function onPanStart(e) {
     pannedRef.current = false; // any fresh press starts a new gesture
+    setMenu(null); // ...and any fresh press dismisses the last menu
     if (e.button !== 2 || onToken(e)) return;
     const el = scrollRef.current;
     if (!el) return;
@@ -242,6 +325,12 @@ export default function Tabletop({ actor, players, offline }) {
   function onPanMove(e) {
     const p = panRef.current;
     if (!p) return;
+    // Hold still until the pointer has actually gone somewhere. Until then this
+    // gesture is a click, and treating it as a pan would both nudge the map and
+    // eat the context menu on release.
+    if (!pannedRef.current && Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) < PAN_SLOP) {
+      return;
+    }
     pannedRef.current = true;
     const el = scrollRef.current;
     // Drag the map with the cursor: content moves the way the hand does, so
@@ -326,6 +415,56 @@ export default function Tabletop({ actor, players, offline }) {
     el.scrollTop = originY + a.my * zoom - a.cy;
   }, [zoom]);
 
+  /**
+   * Centre the view on a map point, once the zoom it arrived with is on screen.
+   *
+   * Runs after every render that bumped focusTick, which is why the tick exists
+   * — a focus at the zoom you already had changes no state the renderer can see.
+   */
+  useLayoutEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    const el = scrollRef.current;
+    const surf = surfaceRef.current;
+    if (!el || !surf) return;
+    const box = el.getBoundingClientRect();
+    const sBox = surf.getBoundingClientRect();
+    // Where the surface begins in content coordinates — derived rather than
+    // read from offsetLeft, because `margin: 0 auto` centring shifts it.
+    const originX = sBox.left - box.left + el.scrollLeft;
+    const originY = sBox.top - box.top + el.scrollTop;
+    // Put the point in the middle of the viewport. Assigning past either end is
+    // clamped by the browser, which is exactly what should happen at a border
+    // or a corner: scroll as far as there is map to scroll, and no further. The
+    // spot ends up off-centre there, which is the honest result — the alternative
+    // is showing everyone a margin of nothing so the maths can come out even.
+    el.scrollLeft = originX + target.mx * zoom - el.clientWidth / 2;
+    el.scrollTop = originY + target.my * zoom - el.clientHeight / 2;
+  }, [focusTick, zoom]);
+
+  // An open menu is dismissed by anything that isn't using it.
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e) => {
+      // Not a press on the menu itself — that press is someone choosing an item,
+      // and closing here would unmount the button before its click landed.
+      if (e?.target && menuRef.current?.contains(e.target)) return;
+      setMenu(null);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMenu(null);
+    };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('wheel', close, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('wheel', close);
+    };
+  }, [menu]);
+
   function onContextMenu(e) {
     // Windows fires contextmenu on mouse-*up*, so a pan that finishes over a
     // token would otherwise pop that token's menu. A gesture that panned never
@@ -335,8 +474,97 @@ export default function Tabletop({ actor, players, offline }) {
       e.preventDefault();
       return;
     }
-    // Otherwise: suppress it over the map, leave it alone over a token.
-    if (!onToken(e)) e.preventDefault();
+    // A token gets a menu about *that token* rather than about the map under
+    // it. Only for the DM, since both items are things only a DM may do —
+    // anyone else keeps the browser's own menu, exactly as before.
+    const el = e.target.closest?.('.token');
+    if (el) {
+      if (!isDm || offline) return;
+      e.preventDefault();
+      setMenu({
+        clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+        clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+        tokenId: el.dataset.tokenId,
+      });
+      return;
+    }
+    e.preventDefault();
+    // Every item in the menu is something the server relays to other people, so
+    // there's nothing to offer while the server is unreachable.
+    if (offline) return;
+    const surf = surfaceRef.current;
+    if (!surf) return;
+    const rect = surf.getBoundingClientRect();
+    setMenu({
+      // Where to draw the menu: viewport coordinates, since it's positioned
+      // fixed and must not scroll away from the spot it describes.
+      clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+      clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+      // What it points at: unzoomed map pixels, the one frame of reference
+      // every client shares whatever their zoom or window size. Clamped to the
+      // map because the surface is centred and you can right-click beside it.
+      mx: clamp((e.clientX - rect.left) / zoom, 0, mapW),
+      my: clamp((e.clientY - rect.top) / zoom, 0, mapH),
+    });
+  }
+
+  // --- right-click actions ---
+  // Your own colour, so a ping is recognisably yours without carrying a name
+  // across the wire for the eye to read mid-combat.
+  const myColor = players.find((p) => p.id === actor?.userId)?.color || '#ffd479';
+
+  function ping() {
+    if (!menu || !scene) return;
+    socket.emit('scene:ping', { sceneId: scene.id, x: menu.mx, y: menu.my, color: myColor });
+    setMenu(null);
+  }
+
+  function focusEveryone() {
+    if (!menu || !scene) return;
+    // Sent to the whole room including us, so one path moves every camera and
+    // we end up looking at exactly what we just asked everyone else to look at.
+    socket.emit('scene:focus', { sceneId: scene.id, x: menu.mx, y: menu.my, zoom });
+    setMenu(null);
+  }
+
+  // Remember where the menu was opened and hand the rest to the modal. The spot
+  // is settled here, not there: a token summoned into the top-left corner is one
+  // you then have to go and find, and the point of asking for it *here* is that
+  // here is where you want it.
+  function openTokenModal() {
+    if (!menu || !scene) return;
+    const cellX = menu.mx / gridSize;
+    const cellY = menu.my / gridSize;
+    setTokenForm({
+      x: clamp(gridOn ? Math.round(cellX) : round2(cellX), 0, cols - 1),
+      y: clamp(gridOn ? Math.round(cellY) : round2(cellY), 0, rows - 1),
+    });
+    setMenu(null);
+  }
+
+  // --- token actions ---
+  // Resolved from the live scene rather than captured when the menu opened, so
+  // an edit can't be applied to a token someone deleted in the meantime.
+  const menuToken = menu?.tokenId ? scene?.tokens.find((t) => t.id === menu.tokenId) : null;
+
+  function editToken() {
+    if (!menuToken) return;
+    setTokenForm({ token: menuToken });
+    setMenu(null);
+  }
+
+  function deleteToken() {
+    const tokenId = menu?.tokenId;
+    if (!tokenId || !scene) return;
+    setMenu(null);
+    guard(async () => {
+      await api.deleteToken(scene.id, tokenId);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id ? { ...s, tokens: s.tokens.filter((t) => t.id !== tokenId) } : s
+        )
+      );
+    });
   }
 
   function onPointerDown(e, token) {
@@ -494,30 +722,46 @@ export default function Tabletop({ actor, players, offline }) {
     }, GRID_SAVE_MS);
   }
 
-  const addToken = (ownerId) =>
-    guard(async () => {
-      const owner = players.find((p) => p.id === ownerId);
-      const token = await api.addToken(scene.id, {
-        label: owner ? owner.name : 'NPC',
-        color: owner ? owner.color : '#e5534b',
-        ownerId: ownerId || null,
-        x: 0,
-        y: 0,
-      });
-      setScenes((prev) =>
-        prev.map((s) => (s.id === scene.id ? { ...s, tokens: [...s.tokens, token] } : s))
-      );
-    });
+  /**
+   * Make the token the modal describes, at the spot the menu chose.
+   *
+   * Deliberately not wrapped in guard(): the modal is showing, and an error
+   * belongs in front of the person still looking at the form rather than in the
+   * page-level banner behind it. Throwing is how it gets there.
+   */
+  async function submitToken({ label, color, size }) {
+    if (!scene || !tokenForm) return;
 
-  const removeToken = (tokenId) =>
-    guard(async () => {
-      await api.deleteToken(scene.id, tokenId);
+    // Editing sends only these three fields. The server merges them onto the
+    // stored token (routes/scenes.js), so where it stands and who owns it
+    // survive an edit rather than being silently reset to the form's idea of
+    // them. It also refuses a size that would grow the token into a neighbour,
+    // which surfaces in the modal.
+    if (tokenForm.token) {
+      const updated = await api.updateToken(scene.id, tokenForm.token.id, { label, color, size });
       setScenes((prev) =>
         prev.map((s) =>
-          s.id === scene.id ? { ...s, tokens: s.tokens.filter((t) => t.id !== tokenId) } : s
+          s.id === scene.id
+            ? { ...s, tokens: s.tokens.map((t) => (t.id === updated.id ? updated : t)) }
+            : s
         )
       );
+      return;
+    }
+
+    const token = await api.addToken(scene.id, {
+      label,
+      color,
+      size,
+      ownerId: null,
+      x: tokenForm.x,
+      y: tokenForm.y,
     });
+    setScenes((prev) =>
+      prev.map((s) => (s.id === scene.id ? { ...s, tokens: [...s.tokens, token] } : s))
+    );
+  }
+
 
   // --- render ---
   // Reachable only when there are genuinely no scenes: any scene at all now
@@ -669,6 +913,21 @@ export default function Tabletop({ actor, players, offline }) {
         >
           {gridOn && <div className="grid-overlay" />}
 
+          {/* Inside the surface, so a ping sits at its map position and stays
+              there through panning and zooming rather than at a point on glass. */}
+          {pings.map((p) => (
+            <div
+              key={p.id}
+              className="ping"
+              style={{ left: p.x * zoom, top: p.y * zoom, '--ping': p.color }}
+              title={p.by ? `${p.by} pinged here` : 'ping'}
+            >
+              <span />
+              <span />
+              <span />
+            </div>
+          ))}
+
           {scene.tokens.map((token) => {
             const mine = drag?.tokenId === token.id ? drag : null;
             const ghost = ghosts[token.id];
@@ -689,6 +948,9 @@ export default function Tabletop({ actor, players, offline }) {
             return (
               <div
                 key={token.id}
+                // Read back by the right-click handler: the event knows which
+                // element was hit, not which token that element stands for.
+                data-token-id={token.id}
                 className={`token${movable ? ' movable' : ''}${mine ? ' dragging' : ''}${
                   blocked ? ' blocked' : ''
                 }${ghost && !mine ? ' remote' : ''}`}
@@ -715,37 +977,35 @@ export default function Tabletop({ actor, players, offline }) {
         </div>
       </div>
 
-      {isDm && !offline && (
-        <div className="token-admin">
-          <div className="add-token">
-            <span>Add token:</span>
-            <button onClick={() => addToken(null)} disabled={busy}>
-              + NPC
-            </button>
-            {players.map((p) => (
-              <button key={p.id} onClick={() => addToken(p.id)} disabled={busy}>
-                + {p.name}
+      {menu && (
+        <div className="map-menu" ref={menuRef} style={{ left: menu.clientX, top: menu.clientY }}>
+          {menu.tokenId ? (
+            <>
+              <button onClick={editToken}>Edit</button>
+              <button className="danger" onClick={deleteToken}>
+                Delete
               </button>
-            ))}
-          </div>
-          <ul className="token-list">
-            {scene.tokens.map((t) => {
-              const owner = players.find((p) => p.id === t.ownerId);
-              return (
-                <li key={t.id}>
-                  <span className="swatch" style={{ background: t.color }} />
-                  <span>{t.label}</span>
-                  <small>{owner ? owner.name : 'GM / NPC'}</small>
-                  <button className="del" onClick={() => removeToken(t.id)} disabled={busy}>
-                    ✕
-                  </button>
-                </li>
-              );
-            })}
-            {scene.tokens.length === 0 && <li className="empty">No tokens on this scene.</li>}
-          </ul>
+            </>
+          ) : (
+            <>
+              <button onClick={ping}>Ping</button>
+              <button onClick={focusEveryone}>Focus</button>
+              {isDm && <button onClick={openTokenModal}>Create token</button>}
+            </>
+          )}
         </div>
       )}
+
+      {tokenForm && (
+        <TokenModal
+          token={tokenForm.token}
+          onSubmit={submitToken}
+          onClose={() => setTokenForm(null)}
+        />
+      )}
+
+      {/* Tokens are made from the map's own right-click menu now — see the
+          `Create token` item — so there is no panel here any more. */}
     </div>
   );
 }

@@ -233,8 +233,9 @@ router.post('/:id/tokens', requireDm, async (req, res, next) => {
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       let token = wanted;
       // Asking for an occupied cell isn't an error when adding — slide the new
-      // token to the first free one instead, so "+ Alice, + Bob, + Goblin"
-      // doesn't stack three tokens on 0,0.
+      // token to the first free one instead. Tokens are created where the DM
+      // right-clicked, and "on top of that one" is a near miss rather than a
+      // mistake worth refusing.
       if (blockerFor(current, token, null)) {
         const free = firstFreeCell(current, token.size, null);
         if (!free) throw new HttpError(409, 'No free cell left on this scene.');

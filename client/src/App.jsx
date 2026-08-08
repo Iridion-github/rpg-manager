@@ -229,8 +229,15 @@ export default function App() {
    */
   if (!authed && !offline) return <Auth onSignedIn={signedIn} />;
 
+  // `map` lets the tabletop claim the full height of the window. Only that tab
+  // wants it: the text views grow with their content and are scrolled by the
+  // page, which a fixed-height column would break.
   return (
-    <div className={`app${insideCampaign ? '' : ' solo'}`}>
+    <div
+      className={`app${insideCampaign ? '' : ' solo'}${
+        insideCampaign && activeTab === 'tabletop' ? ' map' : ''
+      }`}
+    >
       <div className="main">
         <header>
           <h1>⚔️ RPG Manager</h1>
