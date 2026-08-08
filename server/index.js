@@ -38,6 +38,23 @@ const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 
 const app = express();
+
+/**
+ * How many proxies sit in front of us.
+ *
+ * This is load-bearing for rate limiting, not a detail. Behind Render's router
+ * or a Cloudflare Tunnel every request arrives from the same address, so
+ * without this the limiter would put the entire table in one bucket and one
+ * person's mistyped password would lock everybody out.
+ *
+ * It defaults to off because the opposite mistake is worse: trusting a
+ * forwarding header nobody set lets a caller claim any address it likes, and
+ * then the limiter can be sidestepped by lying. Render sets TRUST_PROXY=1 in
+ * render.yaml; behind a tunnel, set it to 1 too.
+ */
+const TRUST_PROXY = process.env.TRUST_PROXY || '';
+if (TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
+
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(attachActor); // every request knows who it is
@@ -259,6 +276,11 @@ importJson()
         HOST === '127.0.0.1'
           ? '  bound to: localhost only (a tunnel still works; set HOST=0.0.0.0 for LAN)'
           : `  bound to: ${HOST} — reachable from other machines on this network`
+      );
+      console.log(
+        TRUST_PROXY
+          ? `  trust proxy: ${TRUST_PROXY} — client addresses read from X-Forwarded-For`
+          : '  trust proxy: off (set TRUST_PROXY=1 behind Render or a tunnel, or rate limits see one address)'
       );
       console.log(
         signupIsOpen

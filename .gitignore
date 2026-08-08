@@ -11,6 +11,10 @@ server/dist/
 # Env / secrets
 .env
 .env.local
+secrets.txt
+secrets/
+*.secret
+*.key
 
 # Your real tunnel config names your hostname and points at credentials.
 # config.example.yml is the one that's committed.

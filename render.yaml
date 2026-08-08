@@ -43,6 +43,11 @@ services:
         value: 0.0.0.0
       - key: NODE_VERSION
         value: '22'
+      # Render's router is one hop in front of us. Without this every request
+      # looks like it comes from the same address and the rate limiter would
+      # lock out the whole table at once.
+      - key: TRUST_PROXY
+        value: '1'
       # sync: false means "ask me in the dashboard, don't read it from the
       # repo". Neither of these should ever be committed.
       - key: ADMIN_PASSWORD

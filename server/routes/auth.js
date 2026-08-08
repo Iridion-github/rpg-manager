@@ -17,6 +17,7 @@
 
 const express = require('express');
 const store = require('../store');
+const limits = require('../rateLimit');
 const {
   USERS,
   ADMIN_USERNAME,
@@ -66,7 +67,15 @@ router.get('/config', (req, res) => {
 
 router.post('/register', async (req, res, next) => {
   try {
+    const from = limits.addressOf(req);
+    const blocked = limits.signup.retryAfter(from);
+    if (blocked) return limits.refuse(res, blocked);
+
     if (!signupIsOpen && !secretsMatch(String(req.body?.code || ''), SIGNUP_CODE)) {
+      // Guessing the code is the only failure counted here. A password that's
+      // too short is a typo, and holding that against someone would lock out
+      // the one honest user fumbling the form.
+      limits.signup.fail(from);
       return res.status(403).json({ error: 'That signup code is not right.' });
     }
 
@@ -105,6 +114,7 @@ router.post('/register', async (req, res, next) => {
     // Registering signs you in — an account you then have to log into
     // separately is a form for its own sake.
     const session = await createSession(record.id);
+    limits.signup.clear(from);
     res.status(201).json(sessionPayload(record, session));
   } catch (err) {
     next(err);
@@ -116,6 +126,16 @@ router.post('/login', async (req, res, next) => {
     const username = normalizeUsername(req.body?.username);
     const password = String(req.body?.password ?? '');
 
+    // Both keys, because one address trying every account and every address
+    // trying one account are both brute force. Checked before the password is,
+    // so a blocked attempt costs no hashing.
+    const keys = [limits.addressOf(req), `user:${username}`];
+    for (const key of keys) {
+      const blocked = limits.login.retryAfter(key);
+      if (blocked) return limits.refuse(res, blocked);
+    }
+    const failed = () => keys.forEach((k) => limits.login.fail(k));
+
     /**
      * The admin signs in with ADMIN_PASSWORD rather than a stored hash.
      *
@@ -125,10 +145,12 @@ router.post('/login', async (req, res, next) => {
      */
     if (username === ADMIN_USERNAME) {
       if (!gateEnabled || !secretsMatch(password, ADMIN_PASSWORD)) {
+        failed();
         return res.status(401).json({ error: 'Wrong username or password.' });
       }
       const admin = await ensureAdminUser();
       const session = await createSession(admin.id);
+      keys.forEach((k) => limits.login.clear(k));
       return res.json(sessionPayload(admin, session));
     }
 
@@ -136,10 +158,12 @@ router.post('/login', async (req, res, next) => {
     // Same message either way: which half was wrong is not information a
     // stranger guessing at accounts should be given.
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
+      failed();
       return res.status(401).json({ error: 'Wrong username or password.' });
     }
 
     const session = await createSession(user.id);
+    keys.forEach((k) => limits.login.clear(k));
     res.json(sessionPayload(user, session));
   } catch (err) {
     next(err);
@@ -173,12 +197,19 @@ router.post('/password', async (req, res, next) => {
       });
     }
 
+    // A stolen session shouldn't become a way to guess the password at leisure.
+    const key = `pw:${user.id}`;
+    const blocked = limits.login.retryAfter(key);
+    if (blocked) return limits.refuse(res, blocked);
+
     const next_ = String(req.body?.password ?? '');
     const problem = validateCredentials(user.username || 'placeholder', next_);
     if (problem) return res.status(400).json({ error: problem });
     if (!(await verifyPassword(String(req.body?.current ?? ''), user.passwordHash))) {
+      limits.login.fail(key);
       return res.status(401).json({ error: 'That current password is not right.' });
     }
+    limits.login.clear(key);
 
     await store.update(USERS, user.id, { passwordHash: await hashPassword(next_) });
     res.status(204).end();

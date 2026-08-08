@@ -496,6 +496,28 @@ once a disk is attached, at the cost of a few seconds' downtime per deploy.
 You don't need Postgres for this. SQLite on a mounted disk is entirely adequate
 for one instance and a few friends.
 
+### Guessing attacks
+Login and registration count failed attempts and stop answering after ten, for
+fifteen minutes and an hour respectively. Without that, a secret is only as
+strong as it is long — a four-digit signup code is ten thousand requests, which
+is minutes of scripting.
+
+Only *failures* count and a success clears the counter, so an evening of
+mistyping never adds up to a lockout. Login is keyed by address **and** by
+account, because one address trying every account and every address trying one
+account are both brute force.
+
+The counters live in memory. A restart forgets them, which is the right trade
+here: the alternative is a table of failed logins on disk, and the thing being
+defended already sits behind a password.
+
+**`TRUST_PROXY` matters for this.** Behind Render's router or a Cloudflare
+Tunnel every request arrives from the same address, so without it the limiter
+puts the whole table in one bucket and one person's typo locks out everybody.
+`render.yaml` sets it to `1`; set it to `1` behind a tunnel too. It defaults to
+off because the opposite mistake is worse — trusting a forwarding header nobody
+set lets a caller claim any address it likes.
+
 ## Backups
 A mounted disk survives restarts, not mistakes — a bad import or a campaign
 deleted in the wrong tab is still gone. **People → Download backup** (admin
@@ -567,6 +589,7 @@ database is empty, so restarting doesn't repeat it.
 | `DB_FILE` | `$DATA_DIR/rpg-manager.db` | The SQLite file itself |
 | `PORT` | `3001` | Server port |
 | `HOST` | `127.0.0.1` | Interface to bind. Localhost by default; `0.0.0.0` for LAN |
+| `TRUST_PROXY` | *(off)* | Proxies in front of the app. `1` behind Render or a tunnel |
 | `VITE_API_TARGET` | `http://localhost:3001` | Backend the dev client proxies to |
 | `CLIENT_DIST` | `client/dist` | Built UI to serve in production |
 
