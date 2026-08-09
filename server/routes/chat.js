@@ -15,7 +15,7 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
-const { broadcast } = require('../realtime');
+const { broadcast, broadcastPerActor } = require('../realtime');
 const { scoped } = require('../campaigns');
 
 const COLLECTION = 'chat';
@@ -42,6 +42,21 @@ function speakerFor(req) {
   if (req.campaignRole === 'dm') return { author: 'DM', role: 'dm' };
   return { author: req.actor.name || 'Player', role: 'player' };
 }
+
+/**
+ * May this connection see this line?
+ *
+ * A secret roll is for the person who made it and the DM, nobody else. The rule
+ * is enforced on the way out as well as on the way in: everyone else is never
+ * *sent* it, rather than sent it and asked not to look — a hidden line in the
+ * payload is a hidden line the dev tools will happily show.
+ *
+ * `secretFor` is the roller's user id, recorded at the time. A player without
+ * one (an invite key, no account) can't be matched, so their secret rolls are
+ * the DM's alone — which is the safe way for that to be wrong.
+ */
+const canSeeMessage = (message, actor, role) =>
+  !message.secret || role === 'dm' || Boolean(actor?.userId && actor.userId === message.secretFor);
 
 // Append + trim in one atomic write; creates the log on the very first message.
 function appendMessage(req, message) {
@@ -95,7 +110,8 @@ async function postSystemMessage(req, text) {
 router.get('/', async (req, res, next) => {
   try {
     const log = await store.get(chatOf(req), LOG_ID);
-    res.json(log?.messages || []);
+    const messages = log?.messages || [];
+    res.json(messages.filter((m) => canSeeMessage(m, req.actor, req.campaignRole)));
   } catch (err) {
     next(err);
   }
@@ -155,6 +171,11 @@ router.post('/roll', async (req, res, next) => {
     const label = String(req.body?.label ?? '').trim().slice(0, 100);
     const rolled = advantage ? 2 : count;
 
+    // A roll the rest of the table doesn't get to see. The DM always does —
+    // this hides a result from the other players, it isn't a way to roll where
+    // the DM can't check.
+    const secret = Boolean(req.body?.secret);
+
     const rolls = Array.from({ length: rolled }, () => crypto.randomInt(1, sides + 1));
     // The modifier lands on the total once, not on each die: 2d20+5 rolling
     // 5 and 15 is 25, not 30.
@@ -170,10 +191,18 @@ router.post('/roll', async (req, res, next) => {
       author: speaker.author,
       role: speaker.role,
       at: new Date().toISOString(),
+      // Only carried when it means something, so an ordinary roll keeps the
+      // shape it has always had — including in browsers holding an older
+      // cached copy of the log.
+      ...(secret ? { secret: true, secretFor: req.actor?.userId || null } : {}),
     };
 
     await appendMessage(req, message);
-    broadcast(req, 'chat:message', { message });
+    // Per connection rather than to the room: the same line goes to some people
+    // and to nobody else, which is a decision `broadcast` can't express.
+    broadcastPerActor(req, 'chat:message', (actor, role) =>
+      canSeeMessage(message, actor, role) ? { message } : null
+    );
     res.status(201).json(message);
   } catch (err) {
     next(err);

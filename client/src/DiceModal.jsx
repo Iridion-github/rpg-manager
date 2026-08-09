@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DICE_OPTIONS,
   MAX_DICE,
@@ -63,7 +64,12 @@ export default function DiceModal({
     }
   }
 
-  return (
+  // Rendered into <body> rather than where it was called from. This dialog can
+  // be opened from inside the floating character-sheet window, and that window
+  // is a query container — which means layout containment, which means it would
+  // otherwise become the containing block for `position: fixed` and trap the
+  // backdrop inside itself instead of over the page.
+  return createPortal(
     <div
       className="modal-backdrop"
       // Only a click that both starts and ends on the backdrop dismisses —
@@ -146,6 +152,7 @@ export default function DiceModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

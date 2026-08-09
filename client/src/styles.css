@@ -32,16 +32,13 @@ body {
   min-width: 0;
 }
 
-/* Reading-width column for the text-heavy views. An open character sheet is
-   three columns of its own and wants the room, so it opts out. */
+/* Reading-width column for the text-heavy views. An open character sheet needs
+   far more room than this, which is why it floats in its own window rather
+   than being laid out here. */
 .sheets-view,
 .notes-view,
 .roster {
   max-width: 900px;
-}
-
-.sheets-view.open {
-  max-width: none;
 }
 
 header {
@@ -296,6 +293,41 @@ button.linky:hover {
   text-align: right;
 }
 
+/* The name of a bar, which is also the way to point the wheel at it. Styled to
+   read as the label it replaced — the border below is what says it's pickable,
+   so it shouldn't also look like a button. */
+.wheel-pick {
+  background: none;
+  border: 1px solid transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.1rem 0.3rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.wheel-pick:hover {
+  background: #1e2430;
+  color: #e7e9ee;
+}
+
+/* The bar the wheel is currently driving. Both bars reserve the border whether
+   or not they have it, so selecting one doesn't nudge the row along. */
+.zoom {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0.15rem 0.35rem;
+}
+
+.zoom.wheel-target {
+  border-color: #35406a;
+  background: #1a1e27;
+}
+
+.zoom.wheel-target .wheel-pick {
+  color: #9fb4ff;
+}
+
 .grid-ratio input[type='range'] {
   width: 7rem;
 }
@@ -471,7 +503,8 @@ button.linky:hover {
    not scroll away from it if the map moves underneath. */
 .map-menu {
   position: fixed;
-  z-index: 60;
+  /* Above any stack of floating sheets — see the bands by .modal-backdrop. */
+  z-index: 450;
   min-width: 118px;
   display: flex;
   flex-direction: column;
@@ -639,6 +672,34 @@ button.linky:hover {
 .sheet-card:hover {
   background: #1e2430;
   border-color: #35406a;
+}
+
+/* The one currently up in the window — the list stays on screen behind it, so
+   it should be obvious which card you're looking at. */
+.sheet-card.open {
+  background: #1e2430;
+  border-color: #58a6ff;
+}
+
+/* An empty slot rather than a character: dashed and unfilled, so it reads as a
+   place to make one instead of one you already have. */
+.sheet-card.new {
+  background: none;
+  border-style: dashed;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  color: #8b90a0;
+}
+
+.sheet-card.new:hover {
+  background: #1a1e27;
+  border-color: #58a6ff;
+  color: #e7e9ee;
+}
+
+.sheet-card.new strong {
+  font-size: 0.95rem;
 }
 
 .sheet-card strong {
@@ -1176,14 +1237,17 @@ button.linky:hover {
   padding: 0.2rem 0.45rem;
 }
 
-/* One column per screenful is unreadable; collapse gracefully instead. */
-@media (max-width: 1500px) {
+/* Three thin columns are unreadable; collapse gracefully instead.
+   Measured against the *window* the sheet is in, not the screen — the sheet is
+   resized by dragging its own edges now, so the viewport says nothing useful
+   about how much room it actually has. (.win-body declares the container.) */
+@container (max-width: 1150px) {
   .sheet-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 1000px) {
+@container (max-width: 720px) {
 
   .sheet-grid,
   .sheet-grid.two,
@@ -1521,6 +1585,28 @@ button.linky:hover {
   line-height: 1.5;
 }
 
+/* The same note, popped out. In a window the height is the window's, so the
+   body grows to fill whatever's left instead of standing at the page-sized
+   height the side pane wants — and the window resizes it, not a drag handle
+   in its corner. */
+.win-body .note-edit,
+.win-body .note-read {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.win-body .note-body-input {
+  flex: 1;
+  min-height: 6rem;
+  resize: none;
+}
+
+.win-body .note-read {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .note-read h3 {
   margin: 0 0 0.5rem;
 }
@@ -1602,6 +1688,20 @@ button.linky:hover {
 
 .chat-msg.from-gm .chat-meta strong {
   color: #f0c674;
+}
+
+/* A roll only its author and the DM were sent. Marked rather than merely
+   different: the point is that the reader knows the rest of the table isn't
+   seeing this, which a colour alone wouldn't say. */
+.chat-msg.secret {
+  border-left: 2px solid #6f5bb5;
+  padding-left: 0.4rem;
+  margin-left: -0.6rem;
+}
+
+.secret-badge {
+  background: #2b2450;
+  color: #c4b5ff;
 }
 
 .chat-send {
@@ -1693,6 +1793,11 @@ button.linky:hover {
 }
 
 /* --- modal --- */
+/* Stacking bands, high to low: dice and roll dialogs (500), the map's context
+   menu (450), then floating windows, which climb from 40 as you open more and
+   are capped below the two above (see WIN_Z_CEILING in CharacterSheets.jsx).
+   A dialog opened from inside a window has to clear the whole stack, not just
+   the window it came from. */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1701,7 +1806,7 @@ button.linky:hover {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 50;
+  z-index: 500;
 }
 
 .modal {
@@ -1743,7 +1848,253 @@ button.linky:hover {
   margin-top: 0.25rem;
 }
 
+/* --- floating window --- */
+/* Above the page and the sidebar, but below .modal-backdrop's 50: a dice roll
+   started from inside a window still belongs on top of that window.
+   Positioned with left/top rather than a transform, deliberately — a transform
+   would make this the containing block for every fixed-position thing inside. */
+.win {
+  position: fixed;
+  /* A floor only. The real order is set inline, one step per open sheet, so the
+     one you last reached for is the one in front. */
+  z-index: 40;
+  /* The width and height come from the resize maths, which clamps against the
+     viewport. Let the border eat into that rather than add to it, or a window
+     pushed against an edge overhangs it by the border's width. */
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  background: #1a1e27;
+  border: 1px solid #35406a;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+}
+
+/* The drag surface. It reads as a title bar, but it is a handle first — hence
+   the grab cursor and no text selection to fight with the drag. */
+.win-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  padding: 0.5rem 0.7rem;
+  background: #20252f;
+  border-bottom: 1px solid #2c3140;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.win-moving .win-head {
+  cursor: grabbing;
+}
+
+/* Which sheet is in front. Only the border changes, so bringing one forward
+   never shifts anything by a pixel. */
+.win:not(.win-top) {
+  border-color: #262b38;
+}
+
+/* Rolled up by a double-click on the bar: the window *is* the bar. It borrows
+   the header's own background so that if the measured height and the header
+   ever disagree by a pixel, the remainder is the same colour rather than a
+   stripe. The header keeps its natural height on purpose — stretching it to
+   fill would make the measurement that sets that height circular. */
+.win-min {
+  background: #20252f;
+}
+
+.win-min .win-head {
+  border-bottom: none;
+}
+
+/* A long character name shrinks rather than shoving the buttons off the end. */
+.win-title {
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.win-head .del {
+  background: #3a1d1d;
+}
+
+/* The window's own buttons, in the order Windows puts them: fold, then close.
+   Sized and spaced alike so they read as one set rather than two decisions. */
+/* Qualified by .win-head, not left as bare classes: these are .linky buttons,
+   and `button.linky` carries the underline at a specificity a lone class can't
+   beat — so the rule that's meant to drop it has to outweigh the element it's
+   overriding. Same shape as .modal-head .linky above.
+
+   Equal square targets with their contents centred, so the mark inside each one
+   lands in the same place whether it's drawn or typed. */
+.win-head .win-fold,
+.win-head .win-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  text-decoration: none;
+  font-size: 1rem;
+  line-height: 1;
+  flex: none;
+}
+
+/* currentColor, so the icon dims and lights with the button's own text. */
+.win-fold svg {
+  /* Sized to the ✕ beside it rather than to a round number — a stroked square
+     reads smaller than a glyph of the same box, so it needs the extra. */
+  width: 0.78rem;
+  height: 0.78rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: square;
+}
+
+
+.win-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem;
+  /* What the sheet's @container rules measure themselves against. This also
+     brings layout containment, which is why the dice dialogs opened from in
+     here portal themselves to <body>. */
+  container-type: inline-size;
+}
+
+/* Mid-drag the contents are scenery: they must not take the pointer, start a
+   selection, or light up under a cursor that's busy doing something else. */
+.win-busy .win-body {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The grab zones, one per edge and corner. Inset rather than straddling the
+   border, so the window can clip its own rounded corners without clipping
+   these away with them. The corners come last in the DOM and so win the four
+   squares where they overlap an edge. */
+.win-grip {
+  position: absolute;
+  touch-action: none;
+}
+
+.win-grip.n {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.win-grip.s {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+.win-grip.w {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.win-grip.e {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.win-grip.nw,
+.win-grip.ne,
+.win-grip.sw,
+.win-grip.se {
+  width: 14px;
+  height: 14px;
+}
+
+.win-grip.nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.win-grip.se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
+
+.win-grip.ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.win-grip.sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+/* --- delete confirmation --- */
+.confirm-delete {
+  width: min(26rem, 100%);
+}
+
+.confirm-delete .hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+
+/* Label above the box rather than beside it: the label carries the name you
+   have to copy, which is longer than any sensible left-hand column. */
+.confirm-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+
+.confirm-field strong {
+  color: #e7e9ee;
+}
+
+.confirm-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Red only once it will actually do something. Disabled, it's the same grey as
+   any other dead control — a button that can't be pressed shouldn't shout. */
+.confirm-delete .modal-actions .del:not(:disabled) {
+  background: #3a1d1d;
+  border-color: #5c2b2b;
+}
+
+.confirm-delete .modal-actions .del:not(:disabled):hover {
+  background: #4d2626;
+}
+
 /* --- create-token form --- */
+/* A little wider than the default dialog: the file picker has a button and a
+   filename to fit, and the alternative is a form that scrolls sideways. */
+.token-form {
+  width: min(27rem, 100%);
+}
+
 .token-field {
   display: grid;
   grid-template-columns: 5rem 1fr;
@@ -1755,13 +2106,51 @@ button.linky:hover {
 
 .token-field>input {
   width: 100%;
+  /* Or the padding and border are added to the 100% and the field hangs a
+     dozen pixels past its column. */
+  box-sizing: border-box;
 }
 
 .token-colour,
-.token-size {
+.token-size,
+.token-image {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* A grid item's default min-width is auto, so a file input — which is as wide
+     as the filename it holds — would push the dialog wider than the screen
+     instead of shrinking inside its column. */
+  min-width: 0;
+}
+
+.token-colour input[type='checkbox'] {
+  accent-color: #58a6ff;
+  cursor: pointer;
+  margin: 0;
+}
+
+/* The file input's own button is the browser's; keep it from crowding the row
+   and let a long generated filename shrink rather than widen the dialog. */
+.token-image input[type='file'] {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.78rem;
+  padding: 0.25rem;
+}
+
+/* The token as it will look: same circle, same ring, same label treatment as
+   the real one on the map, at the size it usually is there. */
+.token-preview {
+  box-sizing: border-box;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .token-colour input[type='color'] {

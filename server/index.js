@@ -264,6 +264,71 @@ if ((PLATFORM || process.env.PORT) && /^(127\.|::1|localhost)/.test(HOST)) {
 `);
 }
 
+/**
+ * Give the port back when told to stop.
+ *
+ * `npm run dev` runs this under `node --watch`, which restarts by killing this
+ * process and launching another straight away. Socket.IO connections are
+ * long-lived, and a websocket still attached keeps the listening socket — and
+ * `server.close()` — waiting, so the replacement can land on a port this
+ * process hasn't let go of yet. Hang up deliberately instead of leaving it to
+ * chance, and don't wait forever for a client that won't take the hint.
+ */
+const openSockets = new Set();
+server.on('connection', (socket) => {
+  openSockets.add(socket);
+  socket.on('close', () => openSockets.delete(socket));
+});
+
+let stopping = false;
+function shutdown() {
+  if (stopping) return; // a second Ctrl-C is impatience, not a new instruction
+  stopping = true;
+  server.close(() => process.exit(0));
+  io.close();
+  for (const socket of openSockets) socket.destroy();
+  setTimeout(() => process.exit(0), 2000).unref();
+}
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, shutdown);
+
+/**
+ * A busy port is usually busy for a moment, not for good — the watch restart
+ * above races the old process's last breath. So retry for a couple of seconds
+ * before giving up, and when it really is taken, say so in a sentence. Left
+ * alone this arrives as an unhandled 'error' event: a stack trace through
+ * node:net that never names the actual problem.
+ */
+// Enough to ride out a handover, short enough that the far more common case —
+// a copy of this server genuinely already running — reaches the message below
+// while you're still looking at the terminal.
+const BIND_ATTEMPTS = 6;
+const BIND_WAIT_MS = 250;
+let bindAttempts = 0;
+
+// `announce` is registered once, not passed to each listen() — a listen
+// callback is just a one-off 'listening' listener, and retrying with one would
+// stack up a fresh copy per attempt (Node starts warning at ten).
+server.on('listening', announce);
+const bind = () => server.listen(PORT, HOST);
+
+server.on('error', (err) => {
+  if (err.code !== 'EADDRINUSE') throw err;
+  if (++bindAttempts < BIND_ATTEMPTS) {
+    setTimeout(bind, BIND_WAIT_MS);
+    return;
+  }
+  console.error(`
+Port ${PORT} is still in use after ${((BIND_ATTEMPTS * BIND_WAIT_MS) / 1000).toFixed(1)}s.
+Another copy of this server is already running — find it and stop it:
+
+  PowerShell   Get-NetTCPConnection -LocalPort ${PORT} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+  bash         lsof -ti tcp:${PORT} | xargs kill
+
+Or run this one somewhere else with PORT=3002 npm run dev.
+`);
+  process.exit(1);
+});
+
 // Bring a JSON data folder into the database before serving a single request,
 // so nothing ever reads the half-imported state.
 importJson()
@@ -274,34 +339,36 @@ importJson()
           (result.foldedIntoCampaign ? ', folding the pre-campaign data into "Imported Campaign"' : '')
       );
     }
-    server.listen(PORT, HOST, () => {
-      console.log(`rpg-manager server on http://localhost:${PORT}`);
-      console.log(`  database: ${store.DB_FILE}`);
-      console.log(`  write gate: ${gateEnabled ? 'ON (admin password required)' : 'OFF (dev mode)'}`);
-      console.log(
-        HOST === '127.0.0.1'
-          ? '  bound to: localhost only (a tunnel still works; set HOST=0.0.0.0 for LAN)'
-          : `  bound to: ${HOST} — reachable from other machines on this network`
-      );
-      console.log(
-        TRUST_PROXY
-          ? `  trust proxy: ${TRUST_PROXY} — client addresses read from X-Forwarded-For`
-          : '  trust proxy: off (set TRUST_PROXY=1 behind Render or a tunnel, or rate limits see one address)'
-      );
-      console.log(
-        signupIsOpen
-          ? '  signup: OPEN — anyone who reaches this server can register (set SIGNUP_CODE to close it)'
-          : '  signup: requires SIGNUP_CODE'
-      );
-      console.log(
-        hasClientBuild
-          ? `  app: serving client/dist — open http://localhost:${PORT}`
-          : '  app: API only (no client build — run `npm run build` to serve the UI)'
-      );
-    });
+    bind();
   })
   .catch((err) => {
     console.error('Import failed — refusing to start rather than serving half-moved data:');
     console.error(err);
     process.exit(1);
   });
+
+function announce() {
+  console.log(`rpg-manager server on http://localhost:${PORT}`);
+  console.log(`  database: ${store.DB_FILE}`);
+  console.log(`  write gate: ${gateEnabled ? 'ON (admin password required)' : 'OFF (dev mode)'}`);
+  console.log(
+    HOST === '127.0.0.1'
+      ? '  bound to: localhost only (a tunnel still works; set HOST=0.0.0.0 for LAN)'
+      : `  bound to: ${HOST} — reachable from other machines on this network`
+  );
+  console.log(
+    TRUST_PROXY
+      ? `  trust proxy: ${TRUST_PROXY} — client addresses read from X-Forwarded-For`
+      : '  trust proxy: off (set TRUST_PROXY=1 behind Render or a tunnel, or rate limits see one address)'
+  );
+  console.log(
+    signupIsOpen
+      ? '  signup: OPEN — anyone who reaches this server can register (set SIGNUP_CODE to close it)'
+      : '  signup: requires SIGNUP_CODE'
+  );
+  console.log(
+    hasClientBuild
+      ? `  app: serving client/dist — open http://localhost:${PORT}`
+      : '  app: API only (no client build — run `npm run build` to serve the UI)'
+  );
+}

@@ -203,14 +203,15 @@ export const api = {
   createSheet: (data) => post(table('/sheets'), data),
   updateSheet: (id, data) => put(table(`/sheets/${id}`), data),
   deleteSheet: (id) => del(table(`/sheets/${id}`)),
-  // Separate from updateSheet on purpose: changing who may edit a sheet is a
-  // DM act, and it must not be expressible as part of editing the sheet.
-  setSheetAccess: (id, access) => put(table(`/sheets/${id}/access`), { access }),
+  // Note: the server still has PUT /sheets/:id/access, deliberately separate
+  // from updateSheet — changing who may edit a sheet is a DM act and must not
+  // be expressible as part of editing one. Nothing in the client calls it since
+  // the per-sheet access panel was removed, so the wrapper went with it.
 
   listChat: () => get(table('/chat')),
   sendChat: (text) => post(table('/chat'), { text }),
-  rollDice: ({ count, sides, modifier, advantage, label }) =>
-    post(table('/chat/roll'), { count, sides, modifier, advantage, label }),
+  rollDice: ({ count, sides, modifier, advantage, label, secret }) =>
+    post(table('/chat/roll'), { count, sides, modifier, advantage, label, secret }),
 
   // The list comes back already filtered by role — a player is never sent an
   // unshared note, so there is nothing here for the UI to have to hide.

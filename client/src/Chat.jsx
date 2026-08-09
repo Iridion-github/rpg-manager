@@ -103,10 +103,17 @@ export default function Chat({ actor, offline }) {
 
       <div className="chat-log" ref={listRef} onScroll={onScroll}>
         {messages.map((m) => (
-          <div key={m.id} className={`chat-msg${m.role === 'dm' ? ' from-gm' : ''}`}>
+          <div
+            key={m.id}
+            className={`chat-msg${m.role === 'dm' ? ' from-gm' : ''}${m.secret ? ' secret' : ''}`}
+          >
             <div className="chat-meta">
               <strong>{m.author}</strong>
               <span>{time(m.at)}</span>
+              {/* Anyone reading this line is either the DM or the person who
+                  rolled it — the server never sends it to anybody else. Saying
+                  so is what stops it being read as a public result. */}
+              {m.secret && <span className="badge secret-badge">DM only</span>}
             </div>
             {m.kind === 'roll' && m.roll ? <RollResult roll={m.roll} /> : <p>{m.text}</p>}
           </div>

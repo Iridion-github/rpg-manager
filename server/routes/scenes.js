@@ -59,10 +59,19 @@ function sanitizeScene(body = {}) {
   };
 }
 
+const HEX = /^#[0-9a-f]{6}$/i;
+const hexOr = (value, fallback) => (HEX.test(String(value)) ? String(value) : fallback);
+
 function sanitizeToken(body = {}, existing = {}) {
   const {
     label = existing.label ?? 'Token',
     color = existing.color ?? '#58a6ff',
+    // Null means "whatever the stylesheet draws" — the dark ring every token
+    // had before this was a choice. Kept nullable so old tokens don't have to
+    // be migrated into an explicit colour they never picked.
+    borderColor = existing.borderColor ?? null,
+    // A token's face. Empty means it shows its name instead.
+    imageUrl = existing.imageUrl ?? '',
     x = existing.x ?? 0,
     y = existing.y ?? 0,
     size = existing.size ?? 1,
@@ -71,7 +80,9 @@ function sanitizeToken(body = {}, existing = {}) {
   } = body;
   return {
     label: String(label).slice(0, 60),
-    color: /^#[0-9a-f]{6}$/i.test(String(color)) ? String(color) : '#58a6ff',
+    color: hexOr(color, '#58a6ff'),
+    borderColor: borderColor === null ? null : hexOr(borderColor, null),
+    imageUrl: String(imageUrl).slice(0, 500),
     x: num(x, 0),
     y: num(y, 0),
     size: clamp(num(size, 1), 0.5, 10),

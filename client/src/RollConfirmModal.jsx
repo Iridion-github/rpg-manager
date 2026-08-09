@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { notation } from './dice.js';
 
 /**
@@ -6,11 +7,14 @@ import { notation } from './dice.js';
  * a result landing in the chat.
  *
  * Takes one or more prepared rolls (an attack has two: to hit and damage) and
- * confirms them together. Cancelling does nothing at all: no request, no
- * message. Advantage is offered only where it means something.
+ * confirms them together, under one set of options — a secret attack whose
+ * damage everyone could see would give the game away. Cancelling does nothing
+ * at all: no request, no message. Advantage is offered only where it means
+ * something.
  */
 export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfirm, onClose }) {
   const [advantage, setAdvantage] = useState(false);
+  const [secret, setSecret] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,7 +31,7 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
     setBusy(true);
     setError('');
     try {
-      await onConfirm(advantage);
+      await onConfirm({ advantage, secret });
       onClose();
     } catch (e) {
       setError(e.message);
@@ -35,7 +39,11 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
     }
   }
 
-  return (
+  // Into <body>, not where it was called from: the sheet this was clicked on
+  // lives inside the floating window, and that window is a query container —
+  // layout containment would make it the containing block for our fixed
+  // backdrop and pin the dialog inside the sheet instead of over the page.
+  return createPortal(
     <div
       className="modal-backdrop"
       onMouseDown={(e) => {
@@ -73,6 +81,11 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
           </label>
         )}
 
+        <label className="check">
+          <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
+          DM only (the rest of the table won't see this roll)
+        </label>
+
         {error && <p className="error">{error}</p>}
 
         <div className="modal-actions">
@@ -84,6 +97,7 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

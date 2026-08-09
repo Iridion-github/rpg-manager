@@ -2,22 +2,52 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
+import FloatingWindow from './FloatingWindow.jsx';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 // Same reasoning as the character sheets: typing a paragraph is one save, not
 // one save per keystroke.
 const SAVE_DEBOUNCE_MS = 400;
 
 /**
+ * Note windows sit in their own band above the character sheets' (which run
+ * from 40) rather than sharing one.
+ *
+ * Neither component can see the other's windows, so a shared range would let a
+ * note and a sheet hold the same z — and clicking the one behind could not
+ * bring it forward. A band each is predictable and never traps a window; the
+ * cost is that a sheet can't be raised over a note. Both stay under the map's
+ * context menu (450) and the dialogs (500).
+ */
+const WIN_Z_BASE = 402;
+const WIN_Z_CEILING = 440;
+
+/**
  * Notes (DM) and handouts (everyone else) — the same records, seen from two
  * sides. The server sends a player only the notes marked shared, so this
  * component never has to decide what to hide: it renders what it was given.
+ *
+ * Mounted for as long as the campaign is, not for as long as its tab is shown:
+ * a note popped out into a window has to survive a trip to the map. `showList`
+ * is what the tab actually switches — off, this renders nothing but the open
+ * windows, and keeps saving and syncing in the background.
  */
-export default function Notes({ canEdit, offline, campaignId, onOfflineData }) {
+export default function Notes({
+  canEdit,
+  offline,
+  campaignId,
+  onOfflineData,
+  showList = true,
+}) {
   const [notes, setNotes] = useState([]);
   const [openId, setOpenId] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(0); // in-flight + queued writes
-  const [confirmDelete, setConfirmDelete] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  // Notes popped out into their own windows, back to front. Same shape as the
+  // character sheets': the order is the stacking order, and asking for one
+  // that's already up brings it forward.
+  const [windowIds, setWindowIds] = useState([]);
 
   // Edits waiting to be written, keyed by note id, plus their debounce timers.
   // Refs, not state: changing them must not re-render, and a refresh landing
@@ -28,6 +58,14 @@ export default function Notes({ canEdit, offline, campaignId, onOfflineData }) {
 
   const readOnly = !canEdit || offline;
   const open = notes.find((n) => n.id === openId) || null;
+
+  // Skipping any id whose note has gone — deleted here, or unshared by the DM
+  // and withdrawn from a player over the socket.
+  const openWindows = windowIds.map((id) => notes.find((n) => n.id === id)).filter(Boolean);
+  const confirmNote = notes.find((n) => n.id === confirmDeleteId) || null;
+
+  const openWindow = (id) => setWindowIds((prev) => [...prev.filter((x) => x !== id), id]);
+  const closeWindow = (id) => setWindowIds((prev) => prev.filter((x) => x !== id));
 
   const refresh = useCallback(async () => {
     try {
@@ -147,19 +185,25 @@ export default function Notes({ canEdit, offline, campaignId, onOfflineData }) {
     timers.current.delete(id);
     if (pending.current.delete(id)) setSaving((n) => n - 1);
     setNotes((cur) => cur.filter((n) => n.id !== id));
-    setConfirmDelete('');
     if (openId === id) setOpenId('');
+    closeWindow(id);
     try {
       await api.deleteNote(id);
     } catch (e) {
       setError(e.message);
       setNotes(prev); // put it back
+      throw e; // and let the dialog that asked say so, rather than closing
     }
   }
 
   const edit = (patch) => queueSave({ ...open, ...patch });
 
+  // The list, with any popped-out notes floating above it. The windows are its
+  // siblings rather than its children: they outlive the tab, so they can't hang
+  // off a list that isn't being rendered.
   return (
+    <>
+      {showList && (
     <div className="notes-view">
       <div className="sheet-toolbar">
         <h2 className="notes-title">{canEdit ? 'Notes & handouts' : 'Handouts'}</h2>
@@ -204,63 +248,139 @@ export default function Notes({ canEdit, offline, campaignId, onOfflineData }) {
         <div className="note-pane">
           {!open && notes.length > 0 && <p className="hint">Pick a note to read it.</p>}
 
-          {open && readOnly && (
-            <article className="note-read">
-              <h3>{open.title || 'Untitled note'}</h3>
-              {/* Whitespace is preserved in CSS, so the DM's line breaks and
-                  paragraphs survive without a markdown renderer. */}
-              <p className="note-body">{open.body || 'This handout is empty.'}</p>
-            </article>
-          )}
-
-          {open && !readOnly && (
-            <div className="note-edit">
-              <input
-                className="note-title-input"
-                value={open.title}
-                maxLength={120}
-                placeholder="Title"
-                onChange={(e) => edit({ title: e.target.value })}
-              />
-
-              <div className="note-controls">
-                <label className="note-share" title="Shared notes are readable by every player">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(open.shared)}
-                    onChange={(e) =>
-                      queueSave({ ...open, shared: e.target.checked }, { immediate: true })
-                    }
-                  />
-                  Share with players
-                </label>
-                <div className="spacer" />
-                {confirmDelete === open.id ? (
-                  <>
-                    <span className="hint">Delete for good?</span>
-                    <button className="del" onClick={() => removeNote(open.id)}>
-                      Yes, delete
-                    </button>
-                    <button onClick={() => setConfirmDelete('')}>Keep</button>
-                  </>
-                ) : (
-                  <button className="del" onClick={() => setConfirmDelete(open.id)}>
-                    Delete note
-                  </button>
-                )}
-              </div>
-
-              <textarea
-                className="note-body-input"
-                value={open.body}
-                maxLength={20000}
-                placeholder="Prep, secrets, the text of a letter the party just found…"
-                onChange={(e) => edit({ body: e.target.value })}
-              />
-            </div>
+          {open && (
+            <NoteView
+              note={open}
+              readOnly={readOnly}
+              onEdit={edit}
+              onShare={(shared) => queueSave({ ...open, shared }, { immediate: true })}
+              onDelete={() => setConfirmDeleteId(open.id)}
+              // Only offered from the pane. Inside a window it would be a
+              // button to open the window you are already looking at.
+              onPopOut={() => openWindow(open.id)}
+              popOutLabel={windowIds.includes(open.id) ? 'Bring window forward' : 'Open in window'}
+            />
           )}
         </div>
       </div>
+    </div>
+      )}
+
+      {/* One window per popped-out note, painted in the order they were last
+          reached for — the same arrangement the character sheets use. */}
+      {openWindows.map((note, i) => (
+        <FloatingWindow
+          key={note.id}
+          title={note.title || 'Untitled note'}
+          storageKey={`rpg:note-window:${note.id}`}
+          zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
+          cascade={i}
+          isTop={i === openWindows.length - 1}
+          defaultSize={{ w: 560, h: 520 }}
+          onFocus={() => openWindow(note.id)}
+          onClose={() => closeWindow(note.id)}
+          controls={
+            <>
+              {readOnly && <span className="badge role anon">read-only</span>}
+              <div className="spacer" />
+              {!readOnly && (
+                <button className="del" onClick={() => setConfirmDeleteId(note.id)}>
+                  Delete note
+                </button>
+              )}
+            </>
+          }
+        >
+          <NoteView
+            note={note}
+            readOnly={readOnly}
+            onEdit={(patch) => queueSave({ ...note, ...patch })}
+            onShare={(shared) => queueSave({ ...note, shared }, { immediate: true })}
+            // Delete lives in the window's own header, where every other
+            // window keeps it, rather than twice in the same frame.
+            inWindow
+          />
+        </FloatingWindow>
+      ))}
+
+      {confirmNote && (
+        <ConfirmDeleteModal
+          name={confirmNote.title || 'Untitled note'}
+          description={
+            confirmNote.shared
+              ? 'This note is shared, so it disappears from your players’ handouts too. It can’t be undone.'
+              : 'This deletes the note for good. It can’t be undone.'
+          }
+          confirmLabel="Delete note"
+          onConfirm={() => removeNote(confirmNote.id)}
+          onClose={() => setConfirmDeleteId('')}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * One note, read or edited — the same thing whether it's in the side pane or
+ * floating in a window of its own, so both render this rather than each
+ * growing its own copy that drifts from the other.
+ */
+function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutLabel, inWindow }) {
+  if (readOnly) {
+    return (
+      <article className="note-read">
+        <h3>{note.title || 'Untitled note'}</h3>
+        {/* Whitespace is preserved in CSS, so the DM's line breaks and
+            paragraphs survive without a markdown renderer. */}
+        <p className="note-body">{note.body || 'This handout is empty.'}</p>
+        {onPopOut && (
+          <button className="linky" onClick={onPopOut}>
+            ⧉ {popOutLabel}
+          </button>
+        )}
+      </article>
+    );
+  }
+
+  return (
+    <div className="note-edit">
+      <input
+        className="note-title-input"
+        value={note.title}
+        maxLength={120}
+        placeholder="Title"
+        onChange={(e) => onEdit({ title: e.target.value })}
+      />
+
+      <div className="note-controls">
+        <label className="note-share" title="Shared notes are readable by every player">
+          <input
+            type="checkbox"
+            checked={Boolean(note.shared)}
+            onChange={(e) => onShare(e.target.checked)}
+          />
+          Share with players
+        </label>
+        <div className="spacer" />
+        {onPopOut && (
+          <button onClick={onPopOut} title="Open this note in a window you can move and resize">
+            ⧉ {popOutLabel}
+          </button>
+        )}
+        {!inWindow && (
+          <button className="del" onClick={onDelete}>
+            Delete note
+          </button>
+        )}
+      </div>
+
+      <textarea
+        className="note-body-input"
+        value={note.body}
+        maxLength={20000}
+        placeholder="Prep, secrets, the text of a letter the party just found…"
+        onChange={(e) => onEdit({ body: e.target.value })}
+      />
     </div>
   );
 }

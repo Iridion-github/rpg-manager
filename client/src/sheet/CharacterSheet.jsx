@@ -89,14 +89,16 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
     });
   };
 
-  // Posting a roll puts it in the chat, where everyone at the table sees it.
-  // Each roll carries its own log label, so what appears never depends on how
-  // many rolls happened to be in the batch.
-  async function runRolls(advantage) {
+  // Posting a roll puts it in the chat — for the whole table, or for the DM
+  // alone. Each roll carries its own log label, so what appears never depends
+  // on how many rolls happened to be in the batch; `secret` applies to all of
+  // them, since half a hidden attack is not hidden.
+  async function runRolls({ advantage, secret }) {
     for (const r of confirming.rolls) {
       await api.rollDice({
         ...r.spec,
         advantage: advantage && r.advantage,
+        secret,
         label: characterRollLabel(sheet.name, r.logLabel),
       });
     }

@@ -16,6 +16,14 @@ const GRID_SAVE_MS = 400;
 const ZOOM_MIN = 0.4;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
+// Grid bounds, shared by its slider and the wheel for the same reason.
+const GRID_MIN = 16;
+const GRID_MAX = 240;
+// Per wheel notch. The slider steps by one pixel, which is the precision you
+// want when lining cells up to a drawn map but a long way to travel by wheel;
+// four is fine enough to land on and coarse enough to cross the range.
+const GRID_WHEEL_STEP = 4;
+
 // Roughly one mouse-wheel notch. Trackpads emit many small deltas instead, so we
 // accumulate and only step once this much has gone by — otherwise a light
 // two-finger flick would rocket through the whole zoom range.
@@ -67,6 +75,9 @@ export default function Tabletop({ actor, players, offline }) {
   // a local value while the GM is actually dragging, so another GM's change
   // isn't masked by a stale draft.
   const [gridDraft, setGridDraft] = useState(null);
+  // Which bar the wheel drives while the cursor is over the map. Zoom to begin
+  // with: it's the one everybody reaches for, and the one a player has at all.
+  const [wheelTarget, setWheelTarget] = useState('zoom');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // Where other people's tokens are *right now*, mid-drag. Never persisted.
@@ -263,6 +274,9 @@ export default function Tabletop({ actor, players, offline }) {
   // Absent means on, matching the server: scenes made before the toggle existed
   // had a grid.
   const gridOn = scene?.gridOn !== false;
+  // The grid bar is the GM's, and only while they can write. Everyone else has
+  // zoom and nothing to choose between, so the wheel stays on it for them.
+  const canTuneGrid = isDm && !offline;
   const mapW = scene?.width || 1200;
   const mapH = scene?.height || 840;
   const cellPx = gridSize * zoom;
@@ -351,10 +365,11 @@ export default function Tabletop({ actor, players, offline }) {
     }
   }
 
-  // --- scroll to zoom ---
-  // The wheel drives the zoom bar rather than the scrollbars. Registered
-  // natively because React attaches wheel listeners as *passive*, where
-  // preventDefault() is ignored and the page would scroll anyway.
+  // --- scroll to adjust ---
+  // The wheel drives one of the bars in the scene bar rather than the
+  // scrollbars — whichever is selected there. Registered natively because React
+  // attaches wheel listeners as *passive*, where preventDefault() is ignored and
+  // the page would scroll anyway.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -373,7 +388,14 @@ export default function Tabletop({ actor, players, offline }) {
       if (!notches) return;
       wheelAcc.current -= notches * WHEEL_NOTCH;
 
-      // Scrolling down (positive delta) zooms out.
+      // Scrolling down (positive delta) means less of whatever is selected —
+      // zoomed further out, or smaller cells.
+      if (wheelTarget === 'grid' && canTuneGrid) {
+        const next = clamp(gridSize - notches * GRID_WHEEL_STEP, GRID_MIN, GRID_MAX);
+        if (next !== gridSize) onGridSlide(next);
+        return;
+      }
+
       const next = clamp(round1(zoom - notches * ZOOM_STEP), ZOOM_MIN, ZOOM_MAX);
       if (next === zoom) return;
 
@@ -395,7 +417,9 @@ export default function Tabletop({ actor, players, offline }) {
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [zoom, selectedId]);
+    // `scene` is in here because onGridSlide saves it alongside the new size;
+    // a stale one would write back an old scene.
+  }, [zoom, selectedId, wheelTarget, canTuneGrid, gridSize, scene]);
 
   // Re-pin the anchor point after the zoom has been laid out.
   useLayoutEffect(() => {
@@ -729,16 +753,22 @@ export default function Tabletop({ actor, players, offline }) {
    * belongs in front of the person still looking at the form rather than in the
    * page-level banner behind it. Throwing is how it gets there.
    */
-  async function submitToken({ label, color, size }) {
+  async function submitToken({ label, color, borderColor, size, imageUrl }) {
     if (!scene || !tokenForm) return;
 
-    // Editing sends only these three fields. The server merges them onto the
-    // stored token (routes/scenes.js), so where it stands and who owns it
+    // Editing sends only what the form asked about. The server merges them onto
+    // the stored token (routes/scenes.js), so where it stands and who owns it
     // survive an edit rather than being silently reset to the form's idea of
     // them. It also refuses a size that would grow the token into a neighbour,
     // which surfaces in the modal.
     if (tokenForm.token) {
-      const updated = await api.updateToken(scene.id, tokenForm.token.id, { label, color, size });
+      const updated = await api.updateToken(scene.id, tokenForm.token.id, {
+        label,
+        color,
+        borderColor,
+        size,
+        imageUrl,
+      });
       setScenes((prev) =>
         prev.map((s) =>
           s.id === scene.id
@@ -752,7 +782,9 @@ export default function Tabletop({ actor, players, offline }) {
     const token = await api.addToken(scene.id, {
       label,
       color,
+      borderColor,
       size,
+      imageUrl,
       ownerId: null,
       x: tokenForm.x,
       y: tokenForm.y,
@@ -795,47 +827,76 @@ export default function Tabletop({ actor, players, offline }) {
           ))}
         </select>
 
-        <label className="zoom">
-          Zoom
+        {/* A div, not a label: the name is a button that picks what the wheel
+            drives, and inside a label every click on it would also be a click
+            on the control next to it. */}
+        <div className={`zoom${wheelTarget === 'zoom' ? ' wheel-target' : ''}`}>
+          <button
+            type="button"
+            className="wheel-pick"
+            aria-pressed={wheelTarget === 'zoom'}
+            onClick={() => setWheelTarget('zoom')}
+            title="Scroll over the map to zoom"
+          >
+            Zoom
+          </button>
           <input
             type="range"
             min={ZOOM_MIN}
             max={ZOOM_MAX}
             step={ZOOM_STEP}
             value={zoom}
+            aria-label="Zoom"
             onChange={(e) => setZoom(Number(e.target.value))}
+            // Taking hold of a bar is as much a way of choosing it as clicking
+            // its name — you've said which one you're working on either way.
+            onPointerDown={() => setWheelTarget('zoom')}
             title="Scroll over the map to zoom"
           />
           <small>{Math.round(zoom * 100)}%</small>
-        </label>
+        </div>
 
         {isDm && !offline && (
           <>
             {/* Grid ratio: how much of the map one cell covers. The map does
                 not change size — only the number of cells over it does. */}
-            <label className="zoom grid-ratio">
+            <div className={`zoom grid-ratio${wheelTarget === 'grid' ? ' wheel-target' : ''}`}>
               <input
                 type="checkbox"
                 checked={gridOn}
                 onChange={(e) => patchScene({ gridOn: e.target.checked })}
                 title="Show the grid and snap tokens to it"
+                aria-label="Show the grid and snap tokens to it"
               />
-              Grid
+              {/* The word used to be the checkbox's label. It picks the wheel
+                  now, so the checkbox carries its own aria-label instead —
+                  otherwise choosing what to scroll would flick the grid off. */}
+              <button
+                type="button"
+                className="wheel-pick"
+                aria-pressed={wheelTarget === 'grid'}
+                onClick={() => setWheelTarget('grid')}
+                title="Scroll over the map to resize the cells"
+              >
+                Grid
+              </button>
               {/* The slider stays live with the grid off: cell size is still
                   the scale tokens are measured in, even when no cells are
                   drawn. Only the readout changes, since there are no rows and
                   columns to count. */}
               <input
                 type="range"
-                min="16"
-                max="240"
+                min={GRID_MIN}
+                max={GRID_MAX}
                 step="1"
                 value={gridSize}
+                aria-label="Cell size"
                 onChange={(e) => onGridSlide(Number(e.target.value))}
+                onPointerDown={() => setWheelTarget('grid')}
                 title={gridOn ? 'Cell size relative to the map' : 'Token scale relative to the map'}
               />
               <small>{gridOn ? `${cols}×${rows}` : `${gridSize}px`}</small>
-            </label>
+            </div>
 
             <input
               className="scene-name"
@@ -959,7 +1020,14 @@ export default function Tabletop({ actor, players, offline }) {
                   top: pos.y * cellPx,
                   width: token.size * cellPx,
                   height: token.size * cellPx,
-                  background: token.color,
+                  // A picture replaces the fill, not just the name — cover so a
+                  // portrait of any shape fills the circle without distorting.
+                  background: token.imageUrl
+                    ? `center / cover no-repeat url(${JSON.stringify(token.imageUrl)})`
+                    : token.color,
+                  // Left off entirely when unset, so the stylesheet's dark ring
+                  // stays the default rather than being overridden with it.
+                  ...(token.borderColor ? { borderColor: token.borderColor } : {}),
                 }}
                 onPointerDown={(e) => onPointerDown(e, token)}
                 title={
@@ -970,7 +1038,9 @@ export default function Tabletop({ actor, players, offline }) {
                       : token.label
                 }
               >
-                <span className="token-label">{token.label}</span>
+                {/* The picture stands in for the name. Printing both would put
+                    text over a face at the size a token actually is. */}
+                {!token.imageUrl && <span className="token-label">{token.label}</span>}
               </div>
             );
           })}

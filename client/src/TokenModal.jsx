@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { api } from './api.js';
 
 /**
  * "What token?" — the step between choosing Create token on the map and a
@@ -8,7 +9,7 @@ import { useEffect, useState } from 'react';
  * decided by where the right-click happened, or by where the token already
  * stands. Offering coordinates to type would be a worse way to say the same
  * thing. Everything here is what the map can't tell us — what it's called, what
- * colour it is, how much room it takes.
+ * it looks like, how much room it takes.
  *
  * Pass `token` to edit it; leave it out to create a new one.
  */
@@ -18,13 +19,24 @@ import { useEffect, useState } from 'react';
 const SIZE_MIN = 0.5;
 const SIZE_MAX = 10;
 
+// What the stylesheet draws when no border colour has been chosen. Offered as
+// the starting point when someone turns the ring on, so the first thing they
+// see is roughly what was already there.
+const DEFAULT_BORDER = '#0d1017';
+
 export default function TokenModal({ token, onSubmit, onClose }) {
   const editing = Boolean(token);
   const [label, setLabel] = useState(token?.label ?? 'NPC');
   const [color, setColor] = useState(token?.color ?? '#e5534b');
+  // Null is a real value here, not a missing one: it means "leave the ring as
+  // the stylesheet draws it" rather than any particular colour.
+  const [borderColor, setBorderColor] = useState(token?.borderColor ?? null);
+  const [imageUrl, setImageUrl] = useState(token?.imageUrl ?? '');
   const [size, setSize] = useState(token?.size ?? 1);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const fileRef = useRef(null);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -34,16 +46,41 @@ export default function TokenModal({ token, onSubmit, onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  /**
+   * Put the chosen file on the server and keep the URL it comes back with.
+   *
+   * Uploaded on pick rather than on save, so the preview below is the real
+   * image at its real address — not a blob URL that would have to be swapped
+   * for the true one later. The cost is an orphaned file if the form is then
+   * cancelled, which is a few kilobytes on the host's own disk.
+   */
+  async function pickImage(file) {
+    if (!file) return;
+    setUploading(true);
+    setError('');
+    try {
+      const { url } = await api.uploadImage(file);
+      setImageUrl(url);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+      // Clear the input, or choosing the same file twice in a row is silent.
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || uploading) return;
     setBusy(true);
     setError('');
     try {
       // An unnamed token is still a token — fall back rather than refuse, since
       // the name is the least important thing about a blob you're about to drag
-      // somewhere.
-      await onSubmit({ label: label.trim() || 'Token', color, size });
+      // somewhere. It's still worth having with a picture on: it's what the
+      // tooltip says, and what the chat calls it.
+      await onSubmit({ label: label.trim() || 'Token', color, borderColor, size, imageUrl });
       onClose();
     } catch (err) {
       setError(err.message);
@@ -59,7 +96,7 @@ export default function TokenModal({ token, onSubmit, onClose }) {
       }}
     >
       <form
-        className="modal"
+        className="modal token-form"
         role="dialog"
         aria-modal="true"
         aria-label={editing ? 'Edit token' : 'Create token'}
@@ -91,6 +128,69 @@ export default function TokenModal({ token, onSubmit, onClose }) {
           </span>
         </label>
 
+        {/* Not a label: the checkbox and the colour well are two controls, and
+            one label can only speak for the first of them. */}
+        <div className="token-field">
+          <span>Border</span>
+          <span className="token-colour">
+            <input
+              type="checkbox"
+              checked={borderColor !== null}
+              onChange={(e) => setBorderColor(e.target.checked ? DEFAULT_BORDER : null)}
+              aria-label="Give this token a coloured border"
+            />
+            {borderColor === null ? (
+              <small>Default dark ring</small>
+            ) : (
+              <>
+                <input
+                  type="color"
+                  value={borderColor}
+                  aria-label="Border colour"
+                  onChange={(e) => setBorderColor(e.target.value)}
+                />
+                <code>{borderColor}</code>
+              </>
+            )}
+          </span>
+        </div>
+
+        <div className="token-field">
+          <span>Picture</span>
+          <span className="token-image">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploading}
+              onChange={(e) => pickImage(e.target.files?.[0])}
+            />
+            {uploading && <small>Uploading…</small>}
+            {/* Removing it puts the name back — the picture stands in for the
+                name rather than sitting alongside it. */}
+            {imageUrl && !uploading && (
+              <button type="button" className="linky" onClick={() => setImageUrl('')}>
+                Remove
+              </button>
+            )}
+          </span>
+        </div>
+
+        {/* The three appearance choices only mean something together, so show
+            the token itself rather than asking anyone to picture it. */}
+        <div className="token-field">
+          <span>Preview</span>
+          <span
+            className="token-preview"
+            style={{
+              background: imageUrl ? `center / cover no-repeat url(${JSON.stringify(imageUrl)})` : color,
+              ...(borderColor ? { borderColor } : {}),
+            }}
+          >
+            {!imageUrl && <span className="token-label">{label.trim() || 'Token'}</span>}
+          </span>
+        </div>
+
         <label className="token-field">
           Size
           <span className="token-size">
@@ -114,7 +214,7 @@ export default function TokenModal({ token, onSubmit, onClose }) {
           <button type="button" className="linky" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" disabled={busy}>
+          <button type="submit" disabled={busy || uploading}>
             {busy ? 'Saving…' : editing ? 'Save' : 'Create'}
           </button>
         </div>

@@ -3,18 +3,51 @@ import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
 import CharacterSheet from './sheet/CharacterSheet.jsx';
+import FloatingWindow from './FloatingWindow.jsx';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import { abilityMod, blankSheet, signed } from './sheet/rules.js';
 
 // How long we let edits settle before writing them to the server. Typing a
 // sentence in a notes field is one save, not one save per keystroke.
 const SAVE_DEBOUNCE_MS = 400;
 
-export default function CharacterSheets({ actor, players, offline, campaignId, onOfflineData }) {
+// Open sheets stack from here, one step each. The ceiling matters: without it a
+// long enough stack would climb over the map's context menu and the dice
+// dialogs, which have to stay on top. See the bands noted in styles.css.
+const WIN_Z_BASE = 40;
+const WIN_Z_CEILING = 400;
+
+/**
+ * The characters at a table: a roster of cards, and one sheet open in a window
+ * floating above everything.
+ *
+ * Mounted for as long as the campaign is, not for as long as its tab is shown —
+ * an open sheet has to survive a trip to the map. `showRoster` is what the tab
+ * actually switches: off, this renders nothing but the open window (and keeps
+ * saving, syncing and caching in the background).
+ */
+export default function CharacterSheets({
+  actor,
+  players,
+  offline,
+  campaignId,
+  onOfflineData,
+  showRoster = true,
+}) {
   const [sheets, setSheets] = useState([]);
-  const [openId, setOpenId] = useState('');
+  // Every sheet currently open, back to front — the last is the one on top.
+  // An array rather than a set because the order *is* the stacking order, and
+  // re-opening one that's already up is how you bring it forward.
+  const [openIds, setOpenIds] = useState([]);
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(0); // in-flight + queued writes
-  const [accessOpen, setAccessOpen] = useState(false);
+  // Which sheets have a write in flight or queued, by id. Per sheet, not a
+  // count: with several windows open, only the one being typed into should say
+  // it's saving.
+  const [savingIds, setSavingIds] = useState(() => new Set());
+  // The sheet whose deletion is being confirmed. One at a time, however many
+  // windows are open — two of these on screen would be a way to answer the
+  // wrong one.
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
 
   // Edits waiting to be written, keyed by sheet id, plus their debounce timers.
   // Refs, not state: changing them must not re-render, and the socket handler
@@ -23,7 +56,29 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
   const timers = useRef(new Map());
 
   const isDm = actor?.role === 'dm';
-  const open = sheets.find((s) => s.id === openId) || null;
+
+  // The open sheets, in stacking order, skipping any id whose sheet has since
+  // gone — deleted here, or revoked by the DM and withdrawn over the socket.
+  const openSheets = openIds
+    .map((id) => sheets.find((s) => s.id === id))
+    .filter(Boolean);
+
+  // Null once it's gone — a sheet deleted from under us takes its own dialog
+  // down rather than leaving one asking about a character that no longer is.
+  const confirmSheet = sheets.find((s) => s.id === confirmDeleteId) || null;
+
+  // Bring it to the front if it's already up, otherwise put it there.
+  const openSheet = (id) => setOpenIds((prev) => [...prev.filter((x) => x !== id), id]);
+  const closeSheet = (id) => setOpenIds((prev) => prev.filter((x) => x !== id));
+
+  const markSaving = (id, busy) =>
+    setSavingIds((prev) => {
+      if (busy === prev.has(id)) return prev; // nothing to say
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   // Permission is per sheet, and the DM here may be a player at the next
   // table along. The server has already filtered the list to what we may see,
@@ -32,7 +87,7 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
   // render.
   const canEditSheet = (sheet) =>
     Boolean(sheet) && (isDm || sheet.access?.[actor?.userId] === 'edit');
-  const readOnly = offline || !canEditSheet(open);
+  const readOnlyFor = (sheet) => offline || !canEditSheet(sheet);
 
   const refresh = useCallback(async () => {
     try {
@@ -63,7 +118,7 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
         setError(e.message);
         refresh();
       } finally {
-        setSaving((n) => n - 1);
+        markSaving(id, false);
       }
     },
     [refresh]
@@ -73,7 +128,7 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
   const queueSave = useCallback(
     (next) => {
       setSheets((prev) => prev.map((s) => (s.id === next.id ? next : s)));
-      if (!pending.current.has(next.id)) setSaving((n) => n + 1);
+      markSaving(next.id, true);
       pending.current.set(next.id, next);
       clearTimeout(timers.current.get(next.id));
       timers.current.set(next.id, setTimeout(() => flush(next.id), SAVE_DEBOUNCE_MS));
@@ -141,33 +196,12 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
     if (!canManage) return;
     try {
       // Not optimistic: only the server can mint the record's id. It arrives
-      // visible to nobody but the DM until they hand it out below.
+      // visible to the DM alone.
       const record = await api.createSheet({ ...blankSheet(), name: 'New Character' });
       setSheets((prev) => [...prev, record]);
-      setOpenId(record.id);
-      setAccessOpen(true); // the next question is always "whose is it?"
+      openSheet(record.id);
     } catch (e) {
       setError(e.message);
-    }
-  }
-
-  // Access changes save at once rather than on the typing debounce — it's a
-  // decision, not a keystroke, and it changes what other people can see.
-  async function setAccess(sheetId, userId, level) {
-    const sheet = sheets.find((s) => s.id === sheetId);
-    if (!sheet || !canManage) return;
-    const next = { ...(sheet.access || {}) };
-    if (level === 'none') delete next[userId];
-    else next[userId] = level;
-
-    const prev = sheets;
-    setSheets((cur) => cur.map((s) => (s.id === sheetId ? { ...s, access: next } : s)));
-    try {
-      await api.setSheetAccess(sheetId, next);
-      setError('');
-    } catch (e) {
-      setError(e.message);
-      setSheets(prev); // put it back
     }
   }
 
@@ -176,102 +210,150 @@ export default function CharacterSheets({ actor, players, offline, campaignId, o
     const prev = sheets;
     clearTimeout(timers.current.get(id));
     timers.current.delete(id);
-    if (pending.current.delete(id)) setSaving((n) => n - 1);
+    pending.current.delete(id);
+    markSaving(id, false);
     setSheets((cur) => cur.filter((s) => s.id !== id));
-    if (openId === id) setOpenId('');
+    closeSheet(id);
     try {
       await api.deleteSheet(id);
     } catch (e) {
       setError(e.message);
       setSheets(prev); // put it back
+      throw e; // and let the dialog that asked say so, rather than closing
     }
   }
 
-  // --- the open sheet ---
-  if (open) {
-    return (
-      <div className="sheets-view open">
-        <div className="sheet-toolbar">
-          <button className="linky" onClick={() => setOpenId('')}>
-            ← All characters
-          </button>
-          {saving > 0 && <span className="badge saving">saving…</span>}
-          {readOnly && <span className="badge role anon">read-only</span>}
-          <div className="spacer" />
-          {canManage && (
-            <button
-              className={accessOpen ? 'active' : ''}
-              onClick={() => setAccessOpen((v) => !v)}
-            >
-              👥 Who can see this
-            </button>
-          )}
-          {canManage && (
-            <button className="del" onClick={() => removeSheet(open.id)}>
-              Delete character
-            </button>
-          )}
-        </div>
-
-        {canManage && accessOpen && (
-          <AccessPanel sheet={open} players={players} onChange={setAccess} />
-        )}
-
-        {error && <p className="error">{error}</p>}
-        <CharacterSheet sheet={open} onChange={queueSave} readOnly={readOnly} />
-      </div>
-    );
-  }
-
-  // --- the roster of characters ---
+  // --- the roster, with the open sheet floating above it ---
+  //
+  // The roster is never replaced, and the window is its sibling rather than its
+  // child: the sheet floats over whatever tab you're on, so it can't hang off a
+  // list that isn't being rendered.
   return (
-    <div className="sheets-view">
-      <div className="sheet-toolbar">
-        {saving > 0 && <span className="badge saving">saving…</span>}
-        <div className="spacer" />
-        {canManage && <button onClick={addSheet}>+ New character</button>}
-      </div>
+    <>
+      {showRoster && (
+        <div className="sheets-view">
+          <div className="sheet-toolbar">
+            {/* Each open sheet says whether *it* is saving, in its own header.
+                This is for the ones that aren't open. */}
+            {[...savingIds].some((id) => !openIds.includes(id)) && (
+              <span className="badge saving">saving…</span>
+            )}
+          </div>
 
-      {error && <p className="error">{error}</p>}
+          {/* Kept here rather than repeated in every window: with several up,
+              one message would become several copies of itself. This sits at
+              the top left, the same column as the create tile, which is the
+              part of the page a centred window doesn't cover. */}
+          {error && <p className="error">{error}</p>}
 
-      <ul className="sheet-cards">
-        {sheets.map((s) => (
-          <li key={s.id}>
-            <button className="sheet-card" onClick={() => setOpenId(s.id)}>
-              <strong>{s.name || 'Unnamed'}</strong>
-              <span>
-                {[s.race, s.class && `${s.class} ${s.level ?? 1}`].filter(Boolean).join(' · ') ||
-                  'No class yet'}
-              </span>
-              <div className="card-stats">
-                <span>
-                  HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
-                </span>
-                <span>AC {s.armorClass ?? 10}</span>
-                <span>
-                  {/* A quick read on the character without opening them up. */}
-                  STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
-                  {signed(abilityMod(s.abilities?.dex))} CON{' '}
-                  {signed(abilityMod(s.abilities?.con))}
-                </span>
-              </div>
-              {/* Only the GM learns anything from this line: a player is
-                  looking at a list of sheets they can already open. */}
-              {isDm && <span className="card-access">{accessSummary(s, players)}</span>}
-            </button>
-          </li>
-        ))}
-        {sheets.length === 0 && (
-          <li className="empty">
-            {offline
-              ? 'No cached characters yet.'
-              : isDm
-                ? 'No characters yet.'
-                : "No characters yet — your GM hasn't given you one."}
-          </li>
-        )}
-      </ul>
-    </div>
+          <ul className="sheet-cards">
+            {/* First in the grid, not last, and not up in the toolbar: an open
+                sheet floats over this page, and anything pushed to the right of
+                a toolbar ends up underneath it. The top-left cell is the one
+                place a centred window can't cover, so the way to make another
+                character is always in reach — however many there already are,
+                and whichever one is currently open. */}
+            {canManage && (
+              <li>
+                <button className="sheet-card new" onClick={addSheet}>
+                  <strong>+ New character</strong>
+                  <span>Starts as yours alone until you hand it out</span>
+                </button>
+              </li>
+            )}
+            {sheets.map((s) => (
+              <li key={s.id}>
+                {/* Clicking one already open brings its window to the front
+                    rather than doing nothing — the card is how you find a sheet
+                    you've lost behind another. */}
+                <button
+                  className={`sheet-card${openIds.includes(s.id) ? ' open' : ''}`}
+                  onClick={() => openSheet(s.id)}
+                >
+                  <strong>{s.name || 'Unnamed'}</strong>
+                  <span>
+                    {[s.race, s.class && `${s.class} ${s.level ?? 1}`]
+                      .filter(Boolean)
+                      .join(' · ') || 'No class yet'}
+                  </span>
+                  <div className="card-stats">
+                    <span>
+                      HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
+                    </span>
+                    <span>AC {s.armorClass ?? 10}</span>
+                    <span>
+                      {/* A quick read on the character without opening them up. */}
+                      STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
+                      {signed(abilityMod(s.abilities?.dex))} CON{' '}
+                      {signed(abilityMod(s.abilities?.con))}
+                    </span>
+                  </div>
+                  {/* Only the GM learns anything from this line: a player is
+                      looking at a list of sheets they can already open. */}
+                  {isDm && <span className="card-access">{accessSummary(s, players)}</span>}
+                </button>
+              </li>
+            ))}
+            {/* Only where there's no create tile to say it better. Telling a GM
+                with an empty roster "no characters yet" next to the button that
+                makes one is just describing what they can already see. */}
+            {sheets.length === 0 && !canManage && (
+              <li className="empty">
+                {offline
+                  ? 'No cached characters yet.'
+                  : "No characters yet — your GM hasn't given you one."}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* One window per open sheet, painted in the order they were last
+          reached for. Each remembers its own box under its own key, so a
+          character you always keep in the corner opens back in that corner
+          instead of on top of whatever else you have up. */}
+      {openSheets.map((sheet, i) => {
+        const readOnly = readOnlyFor(sheet);
+        return (
+          <FloatingWindow
+            key={sheet.id}
+            title={sheet.name || 'Unnamed'}
+            storageKey={`rpg:sheet-window:${sheet.id}`}
+            zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
+            cascade={i}
+            isTop={i === openSheets.length - 1}
+            onFocus={() => openSheet(sheet.id)}
+            onClose={() => closeSheet(sheet.id)}
+            controls={
+              <>
+                {savingIds.has(sheet.id) && <span className="badge saving">saving…</span>}
+                {readOnly && <span className="badge role anon">read-only</span>}
+                <div className="spacer" />
+                {canManage && (
+                  <button className="del" onClick={() => setConfirmDeleteId(sheet.id)}>
+                    Delete character
+                  </button>
+                )}
+              </>
+            }
+          >
+            <CharacterSheet sheet={sheet} onChange={queueSave} readOnly={readOnly} />
+          </FloatingWindow>
+        );
+      })}
+
+      {/* Named with the same fallback the window title uses, so what you're
+          asked to type is what you can see above the sheet. */}
+      {confirmSheet && (
+        <ConfirmDeleteModal
+          name={confirmSheet.name || 'Unnamed'}
+          byName
+          description="This removes the sheet for everyone at the table, including the player it belongs to. It can't be undone."
+          onConfirm={() => removeSheet(confirmSheet.id)}
+          onClose={() => setConfirmDeleteId('')}
+        />
+      )}
+    </>
   );
 }
 
@@ -290,38 +372,3 @@ function accessSummary(sheet, players) {
     .join(' · ');
 }
 
-/**
- * The GM's per-sheet access control. Three states per player, because that's
- * the actual question: nothing, read it, or change it. The GM isn't listed —
- * they can always do everything, and a control that can't be switched off is
- * just a thing to wonder about.
- */
-function AccessPanel({ sheet, players, onChange }) {
-  return (
-    <div className="access-panel">
-      <p className="hint">
-        You always see every sheet. Choose what each player gets — anyone not
-        listed here can't open this character at all.
-      </p>
-      {players.length === 0 && (
-        <p className="empty">No players yet. Add them in the Players tab first.</p>
-      )}
-      <ul className="access-list">
-        {players.map((p) => (
-          <li key={p.id}>
-            <span className="swatch" style={{ background: p.color }} />
-            <strong>{p.name}</strong>
-            <select
-              value={sheet.access?.[p.id] || 'none'}
-              onChange={(e) => onChange(sheet.id, p.id, e.target.value)}
-            >
-              <option value="none">No access</option>
-              <option value="view">Can view</option>
-              <option value="edit">Can edit</option>
-            </select>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}

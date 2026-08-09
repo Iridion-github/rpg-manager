@@ -354,38 +354,56 @@ export default function App() {
         )}
         {activeTab === 'people' && isAdmin && <Roster onUsersChanged={loadCampaigns} />}
 
-        {/* key={campaignId} throws away every bit of state when the campaign
-            changes, so a view can't briefly show the previous table's data
-            while its own is still in flight. */}
+        {/* The campaign id in each key throws away every bit of state when the
+            campaign changes, so a view can't briefly show the previous table's
+            data while its own is still in flight.
+
+            Each is prefixed with its own name because two of these views can be
+            mounted at once (the characters one outlives its tab, below) and two
+            siblings sharing a key makes React duplicate and drop nodes rather
+            than reconcile them. Same reason the sidebar's player is keyed
+            `music-…`. Keep the prefixes even where a view is currently
+            exclusive — the next one to escape its tab shouldn't have to
+            rediscover this. */}
         {insideCampaign && activeTab === 'tabletop' && (
           <Tabletop
-            key={campaignId}
+            key={`tabletop-${campaignId}`}
             actor={{ ...actor, role }}
             players={members}
             offline={offline}
           />
         )}
-        {insideCampaign && activeTab === 'sheets' && (
+        {/* Mounted for the whole campaign, not just its tab. An open character
+            sheet floats over the app in a window of its own, and you're meant
+            to be able to read it while looking at the map — so the tab only
+            decides whether the *roster* is on screen. Closing the campaign
+            unmounts this, which is what shuts an open sheet. */}
+        {insideCampaign && (
           <CharacterSheets
-            key={campaignId}
+            key={`sheets-${campaignId}`}
             actor={{ ...actor, role }}
             players={members}
             offline={offline}
             campaignId={campaignId}
             onOfflineData={setLastSynced}
+            showRoster={activeTab === 'sheets'}
           />
         )}
-        {insideCampaign && activeTab === 'notes' && (
+        {/* Mounted for the whole campaign for the same reason as the sheets: a
+            note popped out into a window floats over the app, and closing the
+            campaign — not switching tabs — is what takes it away. */}
+        {insideCampaign && (
           <Notes
-            key={campaignId}
+            key={`notes-${campaignId}`}
             canEdit={isDm}
             offline={offline}
             campaignId={campaignId}
             onOfflineData={setLastSynced}
+            showList={activeTab === 'notes'}
           />
         )}
         {insideCampaign && activeTab === 'music' && isDm && (
-          <Music key={campaignId} canControl={isDm} offline={offline} />
+          <Music key={`music-${campaignId}`} canControl={isDm} offline={offline} />
         )}
       </div>
 
@@ -394,7 +412,7 @@ export default function App() {
           unmounted on every tab switch, and an unmounted player is silence. */}
       {insideCampaign && (
         <div className="sidebar">
-          <Chat key={campaignId} actor={{ ...actor, role }} offline={offline} />
+          <Chat key={`chat-${campaignId}`} actor={{ ...actor, role }} offline={offline} />
           <MusicPlayer key={`music-${campaignId}`} canControl={isDm} />
         </div>
       )}

@@ -178,7 +178,11 @@ async function mutate(collection, id, mutator, { createIfMissing = null } = {}) 
     }
     if (!updated) return null;
 
-    return write(collection, { ...updated, id, updatedAt: now() });
+    // createdAt leads so a mutator that returns a fresh record — rather than
+    // spreading the one it was handed — keeps the original birthday instead of
+    // writing NULL into a NOT NULL column. It's before the spread, not after,
+    // so a mutator that genuinely means to set one still wins.
+    return write(collection, { createdAt: current.createdAt, ...updated, id, updatedAt: now() });
   });
   return run();
 }
