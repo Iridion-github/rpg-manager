@@ -326,7 +326,12 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
       <div className="sheet-col">
         <div className="combat-row">
           <Num label="Armor Class" value={sheet.armorClass} onChange={set('armorClass')} readOnly={readOnly} />
-          <Stat label="Initiative" value={signed(initiative(sheet))} hint="DEX modifier + bonus" />
+          <Stat
+            label="Initiative"
+            value={signed(initiative(sheet))}
+            hint="DEX modifier + bonus"
+            onClick={() => askCheck('Initiative', initiative(sheet))}
+          />
           <Text label="Speed" value={sheet.speed} onChange={set('speed')} readOnly={readOnly} />
         </div>
 

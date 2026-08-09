@@ -62,11 +62,23 @@ export function Select({ label, value, onChange, readOnly, options, blank = '—
 }
 
 // A boxed, derived number — the things the paper sheet makes you work out.
-export function Stat({ label, value, hint }) {
+/**
+ * A derived number in a box. Pass `onClick` and the *caption* becomes the
+ * button, not the box — same shape as the skills list, where the name rolls and
+ * the number beside it is just a number. A whole-box button would swallow the
+ * value along with it.
+ */
+export function Stat({ label, value, hint, onClick }) {
   return (
     <div className="stat-box" title={hint}>
       <b>{value}</b>
-      <span>{label}</span>
+      {onClick ? (
+        <button type="button" className="rollable stat-roll" title={`Roll ${label}`} onClick={onClick}>
+          {label}
+        </button>
+      ) : (
+        <span>{label}</span>
+      )}
     </div>
   );
 }

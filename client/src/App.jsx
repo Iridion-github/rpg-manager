@@ -261,9 +261,14 @@ export default function App() {
               ))}
             </select>
           )}
-          <button className="linky" onClick={signOut}>
-            Log out
-          </button>
+          {/* Only outside a campaign. At a table the header is for the table,
+              and leaving is a two-step move — close the campaign, then log
+              out — rather than one click sitting next to the scene controls. */}
+          {!insideCampaign && (
+            <button className="linky" onClick={signOut}>
+              Log out
+            </button>
+          )}
         </header>
 
         {offline && (
