@@ -188,13 +188,42 @@ async function userForSession(token) {
 
 const destroySession = (token) => (token ? store.remove(SESSIONS, token) : Promise.resolve(false));
 
-// Drop every session belonging to a user — used when their account is deleted
-// or their credentials rotated, so a token issued earlier stops working.
-async function destroySessionsFor(userId) {
+/**
+ * Drop every session belonging to a user — used when their account is deleted,
+ * their credentials rotated, or their password changed, so a token issued
+ * earlier stops working.
+ *
+ * `except` keeps one alive, which is what a password change wants: the point of
+ * changing it is usually that somebody else has a session, and logging yourself
+ * out of the browser you are sitting at while doing it is a poor reward.
+ */
+async function destroySessionsFor(userId, { except } = {}) {
   const sessions = await store.list(SESSIONS);
   for (const s of sessions) {
-    if (s.userId === userId) await store.remove(SESSIONS, s.id);
+    if (s.userId === userId && s.id !== except) await store.remove(SESSIONS, s.id);
   }
+}
+
+/**
+ * Forget sessions that have already expired.
+ *
+ * They are refused on use either way — userForSession checks the date — so this
+ * is housekeeping rather than a control: without it the table only ever grows,
+ * and every one of those rows is a token that was valid once. Run at startup
+ * and daily after that; a server that lives for months would otherwise carry
+ * every session it ever issued.
+ */
+async function sweepExpiredSessions() {
+  const now = Date.now();
+  const sessions = await store.list(SESSIONS);
+  let dropped = 0;
+  for (const s of sessions) {
+    if (Date.parse(s.expiresAt || '') < now) {
+      await store.remove(SESSIONS, s.id);
+      dropped += 1;
+    }
+  }
+  return dropped;
 }
 
 /**
@@ -328,4 +357,5 @@ module.exports = {
   createSession,
   destroySession,
   destroySessionsFor,
+  sweepExpiredSessions,
 };

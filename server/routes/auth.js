@@ -36,6 +36,7 @@ const {
   findUserByEmail,
   createSession,
   destroySession,
+  destroySessionsFor,
   ensureAdminUser,
   credsFromRequest,
   publicUser,
@@ -225,6 +226,11 @@ router.post('/password', async (req, res, next) => {
     limits.login.clear(key);
 
     await store.update(USERS, user.id, { passwordHash: await hashPassword(next_) });
+    // Everywhere else is signed out. Changing a password usually means someone
+    // else has one of these, and a new password that leaves their session alive
+    // has not taken the account back. The browser doing the asking keeps its
+    // own, so this isn't self-defeating.
+    await destroySessionsFor(user.id, { except: credsFromRequest(req).session });
     res.status(204).end();
   } catch (err) {
     next(err);

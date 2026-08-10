@@ -22,6 +22,7 @@ const fsp = require('node:fs/promises');
 const multer = require('multer');
 
 const store = require('../store');
+const limits = require('../rateLimit');
 const { requireUser } = require('../auth');
 
 const router = express.Router();
@@ -41,6 +42,8 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_BYTES, files: 1 },
   fileFilter: (req, file, cb) => {
+    // A first pass only. `file.mimetype` is the browser's claim about its own
+    // upload, not a fact — sniffBytes below is what actually decides.
     if (!ALLOWED.has(file.mimetype)) {
       return cb(new Error(`Unsupported image type: ${file.mimetype}`));
     }
@@ -48,7 +51,40 @@ const upload = multer({
   },
 });
 
+/**
+ * What this file actually is, read from its first bytes.
+ *
+ * The declared type is worth nothing on its own: anyone can post a script, a
+ * page, or a zip and label it image/png. It would then sit on this origin under
+ * a name we chose, and the only thing standing between that and a script
+ * running in someone's session would be the browser declining to sniff it.
+ * Deciding here means the file never lands at all.
+ *
+ * Four signatures, because four types are allowed. WEBP is a RIFF container, so
+ * it needs the tag twelve bytes in as well.
+ */
+function sniffBytes(buf) {
+  if (!buf || buf.length < 12) return null;
+  const startsWith = (...bytes) => bytes.every((b, i) => buf[i] === b);
+
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif'; // GIF8
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) && // RIFF
+    buf.toString('latin1', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
 router.post('/', requireUser, (req, res, next) => {
+  // Charged before the body is read, so a caller who is over their quota costs
+  // nothing but the refusal — no 20 MB held in memory to be thrown away.
+  const wait = limits.uploads.take(limits.bucketOf(req));
+  if (wait) return limits.refuse(res, wait);
+
   upload.single('image')(req, res, async (err) => {
     if (err) {
       const tooBig = err.code === 'LIMIT_FILE_SIZE';
@@ -58,9 +94,18 @@ router.post('/', requireUser, (req, res, next) => {
     }
     if (!req.file) return res.status(400).json({ error: 'No image uploaded (field name: "image")' });
 
+    // The bytes decide, and the extension is taken from what they say rather
+    // than from what the upload claimed — so a PNG announced as a JPEG is
+    // simply stored as a PNG, and anything that is not an image at all is
+    // refused before it touches the disk.
+    const actual = sniffBytes(req.file.buffer);
+    if (!actual) {
+      return res.status(400).json({ error: 'That file is not a PNG, JPEG, WEBP or GIF.' });
+    }
+
     try {
       await fsp.mkdir(UPLOAD_DIR, { recursive: true });
-      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ALLOWED.get(req.file.mimetype)}`;
+      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ALLOWED.get(actual)}`;
       // Same temp-then-rename dance as the JSON store: a half-written image
       // should never be reachable at its final URL.
       const finalPath = path.join(UPLOAD_DIR, name);

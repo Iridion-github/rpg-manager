@@ -4,11 +4,18 @@ const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const express = require('express');
-const cors = require('cors');
+const { allowedOrigins, corsPolicy, securityHeaders } = require('./security');
+const limits = require('./rateLimit');
 const { Server } = require('socket.io');
 
 const store = require('./store');
-const { gateEnabled, signupIsOpen, attachActor, resolveActor } = require('./auth');
+const {
+  gateEnabled,
+  signupIsOpen,
+  attachActor,
+  resolveActor,
+  sweepExpiredSessions,
+} = require('./auth');
 const { attachCampaign, isCampaignId, roleIn, touchActivity, CAMPAIGNS } = require('./campaigns');
 const { importJson } = require('./importJson');
 const adminRouter = require('./routes/admin');
@@ -57,12 +64,28 @@ const app = express();
 const TRUST_PROXY = process.env.TRUST_PROXY || '';
 if (TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
 
-app.use(cors());
+const CORS_ORIGINS = allowedOrigins({ gateEnabled });
+
+app.use(securityHeaders);
+app.use(corsPolicy(CORS_ORIGINS));
 app.use(express.json({ limit: '2mb' }));
 app.use(attachActor); // every request knows who it is
 
+// A ceiling over the whole API, spent per account where there is one. After
+// attachActor so it knows whose bucket to charge, and scoped to /api so that
+// loading the page's own assets can never be what runs someone out of quota.
+app.use('/api', (req, res, next) => {
+  const wait = limits.api.take(limits.bucketOf(req));
+  return wait ? limits.refuse(res, wait) : next();
+});
+
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+// The same allowlist the HTTP side uses. Socket.IO's handshake is a real
+// cross-origin request, so leaving this open would reopen the door the policy
+// above just shut.
+const io = new Server(server, {
+  cors: { origin: CORS_ORIGINS.length ? CORS_ORIGINS : false },
+});
 app.set('io', io); // routes reach io via req.app.get('io')
 
 // Sockets authenticate once at handshake; the resolved actor rides along on the
@@ -353,6 +376,17 @@ importJson()
       );
     }
     bind();
+
+    // Housekeeping, not a control — an expired token is refused on use either
+    // way. Once at startup and daily after that, so a long-lived server stops
+    // accumulating every session it has ever issued. unref() so it can never be
+    // the reason the process won't exit.
+    const sweep = () =>
+      sweepExpiredSessions()
+        .then((n) => n && console.log(`swept ${n} expired session(s)`))
+        .catch((err) => console.error('session sweep failed:', err.message));
+    sweep();
+    setInterval(sweep, 24 * 60 * 60_000).unref();
   })
   .catch((err) => {
     console.error('Import failed — refusing to start rather than serving half-moved data:');

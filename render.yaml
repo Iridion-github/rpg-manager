@@ -56,3 +56,8 @@ services:
       # people holding the code. Strongly recommended on a public hostname.
       - key: SIGNUP_CODE
         sync: false
+      # Cross-origin callers, comma-separated. Deliberately absent: Render
+      # serves the UI and the API from one hostname, so nothing here needs CORS
+      # at all. Only set it if you put the client somewhere else.
+      # - key: ALLOWED_ORIGINS
+      #   value: https://your-other-host.example

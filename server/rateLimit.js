@@ -80,6 +80,66 @@ const login = createLimiter({ max: 10, windowMs: 15 * 60_000, name: 'login' });
 const signup = createLimiter({ max: 10, windowMs: 60 * 60_000, name: 'signup' });
 
 /**
+ * A ceiling on *all* requests, not just the ones that failed.
+ *
+ * The limiters above defend secrets — they only count wrong answers, because a
+ * thousand correct logins are not an attack. This counts everything, because
+ * the thing it defends is the machine: a script that never guesses wrong can
+ * still fill a disk with uploads or keep the process pinned.
+ *
+ * A fixed window rather than a sliding one. It lets through up to twice the
+ * quota across a boundary, which for a ceiling this loose does not matter, and
+ * it costs one integer per caller instead of a list of timestamps.
+ */
+function createThrottle({ max, windowMs, name }) {
+  const hits = new Map(); // key -> { count, windowStart }
+
+  const sweep = setInterval(() => {
+    const cutoff = Date.now() - windowMs;
+    for (const [key, entry] of hits) if (entry.windowStart < cutoff) hits.delete(key);
+  }, SWEEP_MS);
+  sweep.unref();
+
+  return {
+    name,
+    /** Spend one. Returns seconds to wait, or 0 if there was room. */
+    take(key) {
+      const now = Date.now();
+      const entry = hits.get(key);
+      if (!entry || now - entry.windowStart > windowMs) {
+        hits.set(key, { count: 1, windowStart: now });
+        return 0;
+      }
+      entry.count += 1;
+      if (entry.count <= max) return 0;
+      return Math.ceil((entry.windowStart + windowMs - now) / 1000);
+    },
+  };
+}
+
+/**
+ * Generous on purpose. A table in full flow — dropping tokens, rolling dice,
+ * typing in chat — is a handful of writes a second at worst, and this sits an
+ * order of magnitude above that. It is here to stop a script, not to pace a
+ * game, and the failure it prevents (one player's browser locking the table
+ * out) is worse than the one it allows.
+ */
+const api = createThrottle({ max: 600, windowMs: 60_000, name: 'api' });
+
+// Uploads are the expensive write: 20 MB each, onto a disk you are paying for.
+const uploads = createThrottle({ max: 40, windowMs: 60 * 60_000, name: 'uploads' });
+
+/**
+ * Which bucket a request counts against.
+ *
+ * The account first, the address second. A household behind one address is one
+ * bucket if you go by address alone, and four friends at one table would spend
+ * each other's quota; signed in, everybody carries their own.
+ */
+const bucketOf = (req) =>
+  req.actor && req.actor.globalRole !== 'anon' ? `user:${req.actor.userId}` : `ip:${addressOf(req)}`;
+
+/**
  * Who is asking?
  *
  * Behind a proxy — Render's router, or a Cloudflare Tunnel — every request
@@ -98,4 +158,14 @@ function refuse(res, seconds) {
   });
 }
 
-module.exports = { createLimiter, login, signup, addressOf, refuse };
+module.exports = {
+  createLimiter,
+  createThrottle,
+  login,
+  signup,
+  api,
+  uploads,
+  bucketOf,
+  addressOf,
+  refuse,
+};

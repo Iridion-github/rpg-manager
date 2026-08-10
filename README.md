@@ -574,6 +574,57 @@ puts the whole table in one bucket and one person's typo locks out everybody.
 off because the opposite mistake is worse — trusting a forwarding header nobody
 set lets a caller claim any address it likes.
 
+### Rate ceilings
+Separately from the guessing counters above, every `/api` call is charged to a
+bucket: your account when you're signed in, your address when you aren't. 600 a
+minute, which is an order of magnitude above what a table in full flow produces
+and low enough to stop a script. Uploads get their own, far tighter ceiling — 40
+an hour — because they are the one write that costs disk you're paying for.
+
+Per account rather than per address on purpose: four friends behind one router
+are one address, and an address-only ceiling would have them spending each
+other's quota.
+
+### Browser-facing headers
+Every response carries `Content-Security-Policy`, `X-Content-Type-Options:
+nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a
+`Permissions-Policy` turning off camera/mic/geolocation/payment, and — over TLS
+only — HSTS. They're written out in `server/security.js` rather than pulled from
+a package, because the YouTube player rules out any off-the-shelf policy and a
+header you can read is one you can argue with.
+
+The policy allows inline **styles** (every token on the map is positioned with a
+style attribute) but not inline **scripts**, and reaches off-origin only for the
+YouTube player. Session tokens live in `localStorage`, so the thing that would
+hurt most is script injection — that's what the script half of this is for.
+
+### Cross-origin access
+`ALLOWED_ORIGINS` is an allowlist, and empty is the right answer for a published
+server: the app is served from the same origin as its API, and same-origin
+requests never consult CORS. It exists for the split dev setup, where the client
+runs on 5173 and the API on 3001 — those are allowed automatically when the
+write gate is off. `*` is not reachable, deliberately: with the gate open an
+unauthenticated caller *is* the admin, so a wildcard would turn any page you
+happened to visit into a remote control for your own machine.
+
+### Uploads
+The type is decided by reading the file's first bytes, not by believing the
+`Content-Type` the browser sent. Anyone can label a script `image/png`; it would
+then sit on this origin under a name we chose, and only the browser's good
+manners would stand between that and script running in someone's session. PNG,
+JPEG, WEBP and GIF signatures are checked, the extension comes from what the
+bytes say, and the filename is generated. 20 MB a file, 40 an hour.
+
+### Before you publish
+- Set `ADMIN_PASSWORD` — long and unique. It's the master key: the admin can
+  read every campaign and download the whole database.
+- Set `SIGNUP_CODE` unless you actually want strangers registering.
+- Set `TRUST_PROXY=1` behind Render or a tunnel, or the rate limits see one
+  address for everybody.
+- Leave `ALLOWED_ORIGINS` unset unless you're serving the UI from a different
+  hostname than the API.
+- `npm audit` in both `server/` and `client/` — clean as of the last check.
+
 ## Backups
 A mounted disk survives restarts, not mistakes — a bad import or a campaign
 deleted in the wrong tab is still gone. `GET /api/admin/backup` (admin only)
@@ -660,6 +711,7 @@ configuration rather than anything stored on the account.
 | `PORT` | `3001` | Server port |
 | `HOST` | `127.0.0.1` | Interface to bind. Localhost by default; `0.0.0.0` for LAN |
 | `TRUST_PROXY` | *(off)* | Proxies in front of the app. `1` behind Render or a tunnel |
+| `ALLOWED_ORIGINS` | *(none in production, localhost in dev)* | Comma-separated origins allowed to call the API cross-origin. Unset is correct when the UI and API share a hostname |
 | `VITE_API_TARGET` | `http://localhost:3001` | Backend the dev client proxies to |
 | `CLIENT_DIST` | `client/dist` | Built UI to serve in production |
 
