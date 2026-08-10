@@ -23,6 +23,7 @@ const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
 const { registerTokenDrag, roomFor } = require('./tokenDrag');
+const { announcePresence } = require('./realtime');
 const { registerSceneSignals } = require('./sceneSignals');
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -83,6 +84,11 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
   socket.emit('hello', { message: 'connected to rpg-manager', actor: socket.data.actor });
 
+  // Arriving, leaving and moving between tables are the three things that
+  // change who is shown as online or present, so each of them says so.
+  announcePresence(io);
+  socket.on('disconnect', () => announcePresence(io));
+
   /**
    * "I'm looking at this campaign now."
    *
@@ -97,7 +103,13 @@ io.on('connection', (socket) => {
       socket.data.campaignId = null;
       socket.data.drag = null; // a drag doesn't survive leaving the table
 
-      if (!isCampaignId(campaignId)) return ack?.({ ok: true, campaignId: null });
+      // Closing a campaign comes through here too, as an enter with nothing to
+      // enter — and leaving the table is exactly the kind of move the people
+      // still in it should see.
+      if (!isCampaignId(campaignId)) {
+        announcePresence(io);
+        return ack?.({ ok: true, campaignId: null });
+      }
 
       const campaign = await store.get(CAMPAIGNS, campaignId);
       // Through roleIn, not the members map directly: this is the one gate that
@@ -116,6 +128,7 @@ io.on('connection', (socket) => {
       // disk write.
       if (role === 'dm') await touchActivity(campaignId, campaign);
 
+      announcePresence(io);
       ack?.({ ok: true, campaignId, role });
     } catch (err) {
       ack?.({ ok: false, error: 'Could not open that campaign.' });

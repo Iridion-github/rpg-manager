@@ -62,6 +62,34 @@ function sanitizeScene(body = {}) {
 const HEX = /^#[0-9a-f]{6}$/i;
 const hexOr = (value, fallback) => (HEX.test(String(value)) ? String(value) : fallback);
 
+/**
+ * A whole-number stat the DM may simply not have filled in.
+ *
+ * Null rather than 0, because on a token those say different things: 0 hit
+ * points is a creature that has just dropped, null is one nobody is counting.
+ * An empty string arrives from a cleared form field and means the same as null.
+ */
+function statOrNull(value, lo, hi) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? clamp(Math.round(n), lo, hi) : null;
+}
+
+/**
+ * Current and total hit points, decided together.
+ *
+ * Current only means something measured against a total — it's what draws the
+ * bar — so a token without a total has no hit points at all rather than a
+ * number floating free. Given a total but no current, it starts at full: that's
+ * the state a creature is in when it walks onto the map.
+ */
+function hitPoints(maxHp, hp) {
+  const max = statOrNull(maxHp, 0, 9999);
+  if (max === null) return { maxHp: null, hp: null };
+  const current = statOrNull(hp, 0, max);
+  return { maxHp: max, hp: current === null ? max : current };
+}
+
 function sanitizeToken(body = {}, existing = {}) {
   const {
     label = existing.label ?? 'Token',
@@ -72,6 +100,11 @@ function sanitizeToken(body = {}, existing = {}) {
     borderColor = existing.borderColor ?? null,
     // A token's face. Empty means it shows its name instead.
     imageUrl = existing.imageUrl ?? '',
+    // What the tooltip reads out. Everyone sees initiative; the hit points are
+    // the DM's business, and the client only shows them to them.
+    initiative = existing.initiative ?? null,
+    maxHp = existing.maxHp ?? null,
+    hp = existing.hp ?? null,
     x = existing.x ?? 0,
     y = existing.y ?? 0,
     size = existing.size ?? 1,
@@ -83,6 +116,10 @@ function sanitizeToken(body = {}, existing = {}) {
     color: hexOr(color, '#58a6ff'),
     borderColor: borderColor === null ? null : hexOr(borderColor, null),
     imageUrl: String(imageUrl).slice(0, 500),
+    // Wide enough for a d20 plus any modifier a table can produce, and for the
+    // dexterity contest that follows a tie.
+    initiative: statOrNull(initiative, -99, 999),
+    ...hitPoints(maxHp, hp),
     x: num(x, 0),
     y: num(y, 0),
     size: clamp(num(size, 1), 0.5, 10),
@@ -303,6 +340,108 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
     if (!scene) return res.status(404).json({ error: 'Not found' });
     announce(req, 'token:move', scene);
     res.json(scene.tokens.find((t) => t.id === req.params.tokenId));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Turn mode ----
+
+/**
+ * The tokens that take a turn, in the order they take them.
+ *
+ * Highest initiative first, and *only* tokens that have one — a door or a pile
+ * of crates stands on the board without being in the fight. Ties keep the order
+ * they already stand in, which is the order they were added and therefore the
+ * same list for everyone looking at it.
+ *
+ * The client sorts its own copy by this exact rule to draw the list. If one of
+ * the two ever changes, the other has to change with it, or the DM's Next would
+ * step somewhere other than where the highlight is.
+ */
+function turnOrder(scene) {
+  return (scene.tokens || [])
+    .filter((t) => t.initiative !== null && t.initiative !== undefined)
+    .sort((a, b) => b.initiative - a.initiative);
+}
+
+/**
+ * Whose turn it is after this one. Wrapping past the end is the next round.
+ *
+ * A token that has since been deleted — or had its initiative cleared, which
+ * takes it out of the fight just as surely — is no longer in the order, so
+ * there is no "next" from it. Starting again from the top beats refusing.
+ */
+function nextInOrder(scene) {
+  const order = turnOrder(scene);
+  if (!order.length) return null;
+  const i = order.findIndex((t) => t.id === scene.turnTokenId);
+  return order[i < 0 ? 0 : (i + 1) % order.length].id;
+}
+
+/**
+ * Turn mode belongs to the scene, so it is one shared fact rather than
+ * something each client decides for itself: the tracker everyone sees is the
+ * same tracker, and a player who reloads mid-fight rejoins it where it stands.
+ *
+ * Deliberately not part of sanitizeScene — an ordinary scene edit (a rename, a
+ * new map) has no business ending combat, and a stale client PUT can't.
+ */
+router.put('/:id/turn', requireDm, async (req, res, next) => {
+  try {
+    const on = req.body?.on !== false;
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => ({
+      ...current,
+      turnMode: on,
+      // Starting puts the highest initiative up first. Stopping forgets whose
+      // turn it was, so the next fight doesn't open in the middle of the last.
+      turnTokenId: on ? (turnOrder(current)[0]?.id ?? null) : null,
+    }));
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'update', scene);
+    res.json(scene);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Hand the turn to a particular token, rather than to whoever is next.
+ *
+ * The order is what a fight *usually* follows, not a rule it can't depart from:
+ * someone readies an action, a creature is surprised, initiative gets rerolled
+ * mid-round. This is the DM saying "it's yours now" and skipping the argument.
+ *
+ * Only a token already in the order may take it. One without an initiative
+ * isn't in the fight, and giving it the turn would highlight a row that isn't
+ * in the list and leave Next with nowhere to step from.
+ */
+router.put('/:id/turn/current', requireDm, async (req, res, next) => {
+  try {
+    const wanted = String(req.body?.tokenId || '');
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      if (!current.turnMode) throw new HttpError(409, 'Turn mode is not on.');
+      const token = turnOrder(current).find((t) => t.id === wanted);
+      if (!token) throw new HttpError(409, 'That token is not in the turn order.');
+      return { ...current, turnTokenId: token.id };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'update', scene);
+    res.json(scene);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:id/turn/next', requireDm, async (req, res, next) => {
+  try {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      if (!current.turnMode) throw new HttpError(409, 'Turn mode is not on.');
+      return { ...current, turnTokenId: nextInOrder(current) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'update', scene);
+    res.json(scene);
   } catch (err) {
     next(err);
   }

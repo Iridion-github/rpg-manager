@@ -17,6 +17,10 @@ export default function ConfirmDeleteModal({
   description,
   byName = false,
   confirmLabel = 'Confirm deletion',
+  // Not everything this asks about is being destroyed — removing someone from a
+  // campaign leaves the person untouched — so the heading can be overridden
+  // rather than promising a deletion that isn't going to happen.
+  title,
   onConfirm,
   onClose,
 }) {
@@ -67,11 +71,11 @@ export default function ConfirmDeleteModal({
         className="modal confirm-delete"
         role="dialog"
         aria-modal="true"
-        aria-label={`Delete ${name}`}
+        aria-label={title || `Delete ${name}`}
         onSubmit={confirm}
       >
         <div className="modal-head">
-          <h2>Delete {name}?</h2>
+          <h2>{title || `Delete ${name}?`}</h2>
           <button type="button" className="linky" onClick={onClose} aria-label="Close">
             ✕
           </button>

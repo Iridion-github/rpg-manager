@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Text, Num, Area, Select, Stat } from './fields.jsx';
+import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
 import DiceModal from '../DiceModal.jsx';
 import RollConfirmModal from '../RollConfirmModal.jsx';
 import { api } from '../api.js';
@@ -193,6 +194,11 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
     });
   const removeAttack = (id) =>
     onChange({ ...sheet, attacks: attacks.filter((a) => a.id !== id) });
+
+  // Even a single row asks first. It's a line you typed, there is no undo on a
+  // sheet, and the ✕ sits at the end of a row of fields you were just editing.
+  const [confirmAttackId, setConfirmAttackId] = useState('');
+  const confirmAttack = attacks.find((a) => a.id === confirmAttackId) || null;
 
   // Death saves are three boxes each — clicking the nth sets the count to n,
   // clicking the one that's already the highest clears it back down.
@@ -439,7 +445,11 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                   </td>
                   <td>
                     {!readOnly && (
-                      <button className="del" onClick={() => removeAttack(a.id)}>
+                      <button
+                        className="del"
+                        onClick={() => setConfirmAttackId(a.id)}
+                        title={a.name ? `Remove ${a.name}` : 'Remove this attack'}
+                      >
                         ✕
                       </button>
                     )}
@@ -495,6 +505,16 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
         <Area label="Features & traits" value={sheet.featuresAndTraits} onChange={set('featuresAndTraits')} readOnly={readOnly} rows={12} />
         <Area label="Notes" value={sheet.notes} onChange={set('notes')} readOnly={readOnly} rows={5} />
       </div>
+
+      {confirmAttack && (
+        <ConfirmDeleteModal
+          name={confirmAttack.name || 'this attack'}
+          description="This removes the row from the sheet."
+          confirmLabel="Remove attack"
+          onConfirm={() => removeAttack(confirmAttack.id)}
+          onClose={() => setConfirmAttackId('')}
+        />
+      )}
     </div>
   );
 }
@@ -564,6 +584,10 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
       spellcasting: { ...casting, spells: spells.filter((s) => s.id !== id) },
     });
 
+  // Same reasoning as the attack rows: one click, no undo.
+  const [confirmSpellId, setConfirmSpellId] = useState('');
+  const confirmSpell = spells.find((s) => s.id === confirmSpellId) || null;
+
   return (
     <div className="spells-page">
       <div className="box inline-stats">
@@ -612,7 +636,11 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
                     onChange={(e) => setSpell(s.id, 'name', e.target.value)}
                   />
                   {!readOnly && (
-                    <button className="del" onClick={() => removeSpell(s.id)}>
+                    <button
+                      className="del"
+                      onClick={() => setConfirmSpellId(s.id)}
+                      title={s.name ? `Remove ${s.name}` : 'Remove this spell'}
+                    >
                       ✕
                     </button>
                   )}
@@ -627,6 +655,16 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
           );
         })}
       </div>
+
+      {confirmSpell && (
+        <ConfirmDeleteModal
+          name={confirmSpell.name || 'this spell'}
+          description="This removes the spell from the sheet."
+          confirmLabel="Remove spell"
+          onConfirm={() => removeSpell(confirmSpell.id)}
+          onClose={() => setConfirmSpellId('')}
+        />
+      )}
     </div>
   );
 }

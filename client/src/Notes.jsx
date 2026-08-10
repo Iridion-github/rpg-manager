@@ -284,9 +284,15 @@ export default function Notes({
               {readOnly && <span className="badge role anon">read-only</span>}
               <div className="spacer" />
               {!readOnly && (
-                <button className="del" onClick={() => setConfirmDeleteId(note.id)}>
-                  Delete note
-                </button>
+                <>
+                  <ShareToggle
+                    note={note}
+                    onShare={(shared) => queueSave({ ...note, shared }, { immediate: true })}
+                  />
+                  <button className="del" onClick={() => setConfirmDeleteId(note.id)}>
+                    Delete note
+                  </button>
+                </>
               )}
             </>
           }
@@ -325,6 +331,32 @@ export default function Notes({
  * floating in a window of its own, so both render this rather than each
  * growing its own copy that drifts from the other.
  */
+/**
+ * The one switch that decides who else can read this.
+ *
+ * A button rather than a checkbox because it is an action with a consequence at
+ * the table — a handout appearing in front of the players — and because what it
+ * says should be what happens when you press it. Its label is the next state,
+ * not the current one; the colour carries the current one.
+ */
+function ShareToggle({ note, onShare }) {
+  const shared = Boolean(note.shared);
+  return (
+    <button
+      className={`note-share-toggle${shared ? ' on' : ''}`}
+      onClick={() => onShare(!shared)}
+      title={
+        shared
+          ? 'Every player can read this. Press to take it back.'
+          : 'Only you can see this. Press to hand it to the players, read-only.'
+      }
+      aria-pressed={shared}
+    >
+      {shared ? 'Hide note' : 'Share note'}
+    </button>
+  );
+}
+
 function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutLabel, inWindow }) {
   if (readOnly) {
     return (
@@ -353,24 +385,21 @@ function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutL
       />
 
       <div className="note-controls">
-        <label className="note-share" title="Shared notes are readable by every player">
-          <input
-            type="checkbox"
-            checked={Boolean(note.shared)}
-            onChange={(e) => onShare(e.target.checked)}
-          />
-          Share with players
-        </label>
         <div className="spacer" />
         {onPopOut && (
           <button onClick={onPopOut} title="Open this note in a window you can move and resize">
             ⧉ {popOutLabel}
           </button>
         )}
+        {/* In a window this pair lives in the window's own header instead, so
+            neither of them appears twice in the same frame. */}
         {!inWindow && (
-          <button className="del" onClick={onDelete}>
-            Delete note
-          </button>
+          <>
+            <ShareToggle note={note} onShare={onShare} />
+            <button className="del" onClick={onDelete}>
+              Delete note
+            </button>
+          </>
         )}
       </div>
 

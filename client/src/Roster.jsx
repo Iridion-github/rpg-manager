@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 /**
  * The people this server knows about — admin only.
@@ -15,7 +16,8 @@ export default function Roster({ onUsersChanged }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
-  const [backingUp, setBackingUp] = useState(false);
+  // The person a confirmation dialog is currently asking about.
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +45,9 @@ export default function Roster({ onUsersChanged }) {
     }
   }
 
+  // From the live list, so a dialog can't outlive the person it asks about.
+  const confirmPerson = rows.find((u) => u.id === confirmDeleteId) || null;
+
   const inviteLink = (key) =>
     `${window.location.origin}${window.location.pathname}?key=${encodeURIComponent(key)}`;
 
@@ -68,11 +73,19 @@ export default function Roster({ onUsersChanged }) {
     });
   };
 
-  const remove = (id) =>
-    guard(async () => {
+  // Thrown as well as shown: the dialog asking about it stays open and says so
+  // rather than closing as though the person had been removed.
+  async function remove(id) {
+    setError('');
+    try {
       await api.deleteUser(id);
       setRows((prev) => prev.filter((u) => u.id !== id));
-    });
+      onUsersChanged?.();
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
 
   const rotate = (id) =>
     guard(async () => {
@@ -89,31 +102,6 @@ export default function Roster({ onUsersChanged }) {
       </p>
 
       {error && <p className="error">{error}</p>}
-
-      {/* A mounted disk survives restarts, not mistakes. This pulls the whole
-          server down as one file you can keep somewhere else. */}
-      <div className="backup-row">
-        <button
-          onClick={async () => {
-            setBackingUp(true);
-            try {
-              await api.downloadBackup();
-              setError('');
-            } catch (e) {
-              setError(e.message);
-            } finally {
-              setBackingUp(false);
-            }
-          }}
-          disabled={backingUp}
-        >
-          {backingUp ? 'Preparing…' : '⭳ Download backup'}
-        </button>
-        <small>
-          A consistent snapshot of the entire database — everyone, every
-          campaign. Taken while the server keeps running.
-        </small>
-      </div>
 
       <form className="new-player" onSubmit={add}>
         <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -137,7 +125,12 @@ export default function Roster({ onUsersChanged }) {
             {/* The admin account has no delete: removing it would leave a server
                 whose password authenticates as nobody. */}
             {u.globalRole !== 'admin' && (
-              <button className="del" onClick={() => remove(u.id)} disabled={busy}>
+              <button
+                className="del"
+                onClick={() => setConfirmDeleteId(u.id)}
+                disabled={busy}
+                title={`Remove ${u.name}`}
+              >
                 ✕
               </button>
             )}
@@ -145,6 +138,21 @@ export default function Roster({ onUsersChanged }) {
         ))}
         {rows.length === 0 && <li className="empty">Nobody yet.</li>}
       </ul>
+
+      {/* By name: this is a person, not a thing they own. Their invite link
+          stops working and their place at every table goes with them, and with
+          a column of identical ✕ buttons the mistake to guard against is
+          removing the wrong one. */}
+      {confirmPerson && (
+        <ConfirmDeleteModal
+          name={confirmPerson.name}
+          byName
+          description="This removes them from the server entirely: their invite link stops working and they leave every campaign they were part of. It can't be undone."
+          confirmLabel="Remove person"
+          onConfirm={() => remove(confirmPerson.id)}
+          onClose={() => setConfirmDeleteId('')}
+        />
+      )}
     </div>
   );
 }

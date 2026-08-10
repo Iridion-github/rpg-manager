@@ -76,4 +76,40 @@ function notifyUser(req, userId, event, payload) {
   }
 }
 
-module.exports = { broadcast, broadcastPerActor, notifyUser };
+/**
+ * Who is connected, and who is at this table right now.
+ *
+ * Three states, and the sockets already hold all of them: no connection is
+ * offline, a connection looking elsewhere is online, and a connection that has
+ * announced this campaign is present. Nothing is stored — presence is a fact
+ * about live connections, and a stored copy would survive a crash as a lie.
+ *
+ * Present beats online when someone has two tabs open: one on the map and one
+ * on the campaign directory is still a person sitting at this table.
+ */
+function presenceIn(io, campaignId) {
+  const status = new Map();
+  if (!io) return status;
+  for (const socket of io.of('/').sockets.values()) {
+    const userId = socket.data.actor?.userId;
+    if (!userId) continue;
+    if (socket.data.campaignId === campaignId) status.set(userId, 'present');
+    else if (!status.has(userId)) status.set(userId, 'online');
+  }
+  return status;
+}
+
+/**
+ * Presence moved. Sent to everyone, with nothing in it.
+ *
+ * Any player list on screen is stale the moment someone connects, disconnects
+ * or walks into a different campaign, and the ones who need to know are spread
+ * across every table this person belongs to. An empty nudge lets each client
+ * ask for the list it is allowed to see, rather than this having to work out
+ * who may hear what.
+ */
+function announcePresence(io) {
+  if (io) io.emit('presence:changed');
+}
+
+module.exports = { broadcast, broadcastPerActor, notifyUser, presenceIn, announcePresence };

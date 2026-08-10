@@ -24,6 +24,9 @@ const SIZE_MAX = 10;
 // see is roughly what was already there.
 const DEFAULT_BORDER = '#0d1017';
 
+// An untouched stat field is null, not zero. The server reads it the same way.
+const blankToNull = (v) => (String(v).trim() === '' ? null : Number(v));
+
 export default function TokenModal({ token, onSubmit, onClose }) {
   const editing = Boolean(token);
   const [label, setLabel] = useState(token?.label ?? 'NPC');
@@ -33,6 +36,12 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   const [borderColor, setBorderColor] = useState(token?.borderColor ?? null);
   const [imageUrl, setImageUrl] = useState(token?.imageUrl ?? '');
   const [size, setSize] = useState(token?.size ?? 1);
+  // Kept as the strings the inputs hold rather than as numbers: blank is a
+  // meaningful answer here — "not tracking this" — and Number('') is 0, which
+  // would quietly turn an empty box into a token with no hit points left.
+  const [initiative, setInitiative] = useState(token?.initiative ?? '');
+  const [hp, setHp] = useState(token?.hp ?? '');
+  const [maxHp, setMaxHp] = useState(token?.maxHp ?? '');
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -80,7 +89,16 @@ export default function TokenModal({ token, onSubmit, onClose }) {
       // the name is the least important thing about a blob you're about to drag
       // somewhere. It's still worth having with a picture on: it's what the
       // tooltip says, and what the chat calls it.
-      await onSubmit({ label: label.trim() || 'Token', color, borderColor, size, imageUrl });
+      await onSubmit({
+        label: label.trim() || 'Token',
+        color,
+        borderColor,
+        size,
+        imageUrl,
+        initiative: blankToNull(initiative),
+        hp: blankToNull(hp),
+        maxHp: blankToNull(maxHp),
+      });
       onClose();
     } catch (err) {
       setError(err.message);
@@ -119,6 +137,44 @@ export default function TokenModal({ token, onSubmit, onClose }) {
             placeholder="NPC"
           />
         </label>
+
+        {/* Left blank on the tokens nobody rolls for — scenery, a door, a pile
+            of crates. An empty stat prints no line in the tooltip at all. */}
+        <label className="token-field">
+          Initiative
+          <span className="token-stat">
+            <input
+              type="number"
+              value={initiative}
+              onChange={(e) => setInitiative(e.target.value)}
+              placeholder="—"
+            />
+          </span>
+        </label>
+
+        {/* Two controls, so not a <label>: it can only speak for the first. */}
+        <div className="token-field">
+          <span>Hit points</span>
+          <span className="token-stat">
+            <input
+              type="number"
+              min={0}
+              value={hp}
+              onChange={(e) => setHp(e.target.value)}
+              placeholder="—"
+              aria-label="Current hit points"
+            />
+            <small>out of</small>
+            <input
+              type="number"
+              min={0}
+              value={maxHp}
+              onChange={(e) => setMaxHp(e.target.value)}
+              placeholder="—"
+              aria-label="Total hit points"
+            />
+          </span>
+        </div>
 
         <label className="token-field">
           Colour

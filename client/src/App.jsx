@@ -14,6 +14,7 @@ import CharacterSheets from './CharacterSheets.jsx';
 import Roster from './Roster.jsx';
 import Campaigns from './Campaigns.jsx';
 import Notes from './Notes.jsx';
+import Players from './Players.jsx';
 import Music from './Music.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
@@ -202,7 +203,7 @@ export default function App() {
    * than correcting it in an effect means there's no frame where a stale tab is
    * still on screen with nothing in it.
    */
-  const tableTabs = ['tabletop', 'sheets', 'notes', 'music'];
+  const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'players'];
   const shellTabs = ['campaigns', 'people'];
 
   function resolveTab(wanted) {
@@ -313,6 +314,15 @@ export default function App() {
                   Music
                 </button>
               )}
+              {/* Last, and for everyone: who is at this table is not the DM's
+                  private information — the members endpoint has always been
+                  readable by any member. */}
+              <button
+                className={activeTab === 'players' ? 'active' : ''}
+                onClick={() => setTab('players')}
+              >
+                Players
+              </button>
               <button className="linky leave" onClick={() => openCampaign(null)}>
                 Close campaign
               </button>
@@ -404,6 +414,15 @@ export default function App() {
         )}
         {insideCampaign && activeTab === 'music' && isDm && (
           <Music key={`music-${campaignId}`} canControl={isDm} offline={offline} />
+        )}
+        {insideCampaign && activeTab === 'players' && (
+          <Players
+            key={`players-${campaignId}`}
+            campaignId={campaignId}
+            actor={actor}
+            isDm={isDm}
+            offline={offline}
+          />
         )}
       </div>
 

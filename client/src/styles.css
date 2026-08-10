@@ -37,7 +37,8 @@ body {
    than being laid out here. */
 .sheets-view,
 .notes-view,
-.roster {
+.roster,
+.players-view {
   max-width: 900px;
 }
 
@@ -105,6 +106,7 @@ h1 {
 
 input:disabled,
 textarea:disabled,
+select:disabled,
 button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -121,9 +123,167 @@ button {
   font: inherit;
 }
 
+/* Selects, drawn by us rather than by the browser.
+
+   They take the same box as the text inputs above — same fill, border, radius
+   and padding — because that is what they are: a field you answer, sitting in
+   rows beside the others. `appearance: none` drops the platform's own control,
+   which is why the chevron below has to be supplied by hand.
+
+   The arrow is an inline SVG in a data URI rather than a pseudo-element: a
+   select can't carry ::after, and a wrapper around every one of them would be a
+   lot of markup for one triangle. Its colour is baked into the URI (%238b90a0
+   is #8b90a0), so it has to be repeated in the disabled and hover states if it
+   is ever to differ there — right now it deliberately doesn't. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #1e222b;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b90a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.55rem center;
+  background-size: 0.62rem;
+  color: #e7e9ee;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  /* Room on the right for the chevron, so a long option name stops short of it
+     rather than running underneath. */
+  padding: 0.4rem 1.75rem 0.4rem 0.55rem;
+  font: inherit;
+  cursor: pointer;
+  /* Or a select with one long option stretches its whole row. */
+  max-width: 100%;
+}
+
+select:hover:not(:disabled) {
+  border-color: #39415a;
+}
+
+select:focus-visible {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+/* Without the block below this list is drawn by the platform and can't be
+   styled beyond its colours, which take their cue from color-scheme: dark on
+   :root. This is the floor, for browsers that stop here. */
+select option {
+  background: #1e222b;
+  color: #e7e9ee;
+}
+
+/* The open list, for browsers that will let us draw it.
+
+   `appearance: base-select` swaps the platform's popup for one that lives in
+   the page, which is what makes the panel below stylable at all — before it,
+   the dropdown was an OS window and CSS ended at the closed control. Chrome
+   135+ today; anywhere else every declaration in here is invalid and dropped,
+   leaving the appearance:none control above exactly as it was.
+
+   It also brings its own UA box, so the parts of ours that matter are restated
+   rather than assumed. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    background-color: #1e222b;
+    /* The drawn-on chevron goes: base-select provides a real ::picker-icon,
+       and keeping both would give every select two arrows. */
+    background-image: none;
+    border: 1px solid #2c3140;
+    border-radius: 6px;
+    padding: 0.4rem 0.55rem;
+    gap: 0.6rem;
+  }
+
+  /* The same chevron the fallback draws, so the control looks identical either
+     side of the @supports line — base-select's own mark is a filled triangle. */
+  select::picker-icon {
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b90a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    color: #8b90a0;
+    transition: transform 0.15s ease;
+  }
+
+  /* Points at the list while the list is showing. */
+  select:open::picker-icon {
+    transform: rotate(180deg);
+  }
+
+  select:open {
+    border-color: #58a6ff;
+  }
+
+  /* The panel itself: the same card the right-click menus are drawn on, so a
+     list of options and a list of actions look like they come from one app. */
+  ::picker(select) {
+    background: #171b24;
+    border: 1px solid #2b3242;
+    border-radius: 8px;
+    padding: 0.25rem;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+    /* Clear of the control rather than sitting on its edge. */
+    margin-top: 0.3rem;
+    opacity: 0;
+    transition:
+      opacity 0.12s ease,
+      overlay 0.12s allow-discrete,
+      display 0.12s allow-discrete;
+  }
+
+  ::picker(select):popover-open {
+    opacity: 1;
+  }
+
+  /* Without a starting style the fade has nothing to fade *from* — the panel
+     would appear at full opacity and only animate on the way out. */
+  @starting-style {
+    ::picker(select):popover-open {
+      opacity: 0;
+    }
+  }
+
+  option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    color: #d6dbe6;
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  option:hover,
+  option:focus {
+    background: #24304a;
+    outline: none;
+  }
+
+  option:checked {
+    color: #e7e9ee;
+  }
+
+  /* The tick beside the current choice. Accent-coloured, and holding its space
+     on the others so the labels line up in one column rather than stepping
+     right when a row happens to be the selected one. */
+  option::checkmark {
+    color: #58a6ff;
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* Buttons run a notch smaller than the body text they sit among. The rule above
+   gives every control the same padding; a button is chrome rather than content,
+   so it does not need to match the text inputs it stands next to. */
 button {
   cursor: pointer;
   background: #2b3350;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
 }
 
 button:hover {
@@ -253,7 +413,7 @@ button.linky:hover {
   border-bottom: 2px solid transparent;
   border-radius: 0;
   color: #8b90a0;
-  padding: 0.5rem 0.9rem;
+  padding: 0.45rem 0.8rem;
 }
 
 .tabs button:hover {
@@ -349,13 +509,15 @@ button.linky:hover {
   max-width: 11rem;
 }
 
+/* A label wrapping a hidden file input, so it has to carry the button metrics
+   itself — keep these in step with the base button rule. */
 .upload {
   background: #2b3350;
   border: 1px solid #2c3140;
   border-radius: 6px;
-  padding: 0.4rem 0.55rem;
+  padding: 0.3rem 0.5rem;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .upload:hover {
@@ -405,6 +567,117 @@ button.linky:hover {
   /* A right-drag pans the view; without this the browser starts selecting. */
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* The map and the things pinned on top of it. Only a positioning context —
+   every rule that decides how tall the map is still speaks to the scroller. */
+.map-area {
+  position: relative;
+  display: flex;
+  min-height: 0;
+}
+
+.app.map .map-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.map-area > .surface-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --- the map's own tools panel --- */
+.map-tools {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  /* Over the map and its tokens, under the right-click menu that can open on
+     top of it (450) and under any floating window. */
+  z-index: 6;
+  min-width: 11rem;
+  background: #171b24e6;
+  border: 1px solid #2b3242;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  /* The map behind it is a drag surface; the panel is not part of it. */
+  user-select: none;
+}
+
+.map-tools-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.3rem 0.35rem 0.6rem;
+  border-bottom: 1px solid #262b38;
+  font-size: 0.8rem;
+  color: #9aa0b2;
+}
+
+.map-tools-head strong {
+  flex: 1;
+  color: #d6dbe6;
+  font-weight: 600;
+}
+
+/* Same drawn glyph as a floating window's fold button, and sized to match it. */
+.map-tools-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  flex: none;
+}
+
+.map-tools-head svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: square;
+}
+
+.map-tools-body {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.45rem;
+}
+
+.map-tools-body button {
+  width: 100%;
+}
+
+.map-tools-body small {
+  color: #8b90a0;
+  font-size: 0.75rem;
+}
+
+/* Rolled up: a square and the one button that brings the panel back. */
+.map-tools-min {
+  min-width: 0;
+  padding: 0;
+}
+
+.map-tools-min button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: #d6dbe6;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.map-tools-min button:hover {
+  background: #24304a;
 }
 
 .surface-scroll.panning {
@@ -579,6 +852,18 @@ button.linky:hover {
 }
 
 /* Hovering a square that's already taken — this drop will be refused. */
+/* Hovering a row in the turn tracker lights its token up on the map. Placed
+   after the dashed remote-drag ring so it wins that one — while you are
+   pointing at something, that is the thing you want to be able to find — and
+   before .blocked, which is more urgent than either. Drawn as an outline rather
+   than a border so it can't disturb the token's size or argue with the border
+   colour the DM chose for it. */
+.token.spotlit {
+  outline: 4px solid #ffd479;
+  outline-offset: 2px;
+  z-index: 4;
+}
+
 .token.blocked {
   outline: 3px solid #ff6b6b;
   outline-offset: 2px;
@@ -595,6 +880,295 @@ button.linky:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* --- who is at this table --- */
+.player-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.player-rows li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+}
+
+/* Your own row, marked the same way the campaign list marks yours. */
+.player-rows li.me {
+  border-left: 3px solid #58a6ff;
+}
+
+.player-rows li.me,
+.player-rows li {
+  cursor: default;
+}
+
+.player-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-name .you {
+  color: #8b90a0;
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+/* Fixed width so the dots line up down the column rather than wandering with
+   the length of each word beside them. */
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+  width: 6.5rem;
+  font-size: 0.82rem;
+  color: #8b90a0;
+}
+
+.status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #4a5163;
+  flex: none;
+}
+
+/* Green for present, amber for signed in elsewhere, grey for gone — the same
+   three colours the connection badge in the header already uses. */
+.status.present {
+  color: #6ee787;
+}
+
+.status.present .status-dot {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.7);
+}
+
+.status.online {
+  color: #f0c674;
+}
+
+.status.online .status-dot {
+  background: #d9a441;
+}
+
+.player-seen {
+  flex: none;
+  width: 11rem;
+  text-align: right;
+  color: #8b90a0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+  /* The timestamp is the first thing to go: it's the least urgent column and
+     the widest. */
+  .player-seen {
+    display: none;
+  }
+}
+
+/* --- the turn tracker --- */
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.turn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  /* Rows keep their own height and stack from the top. Without this the grid
+     shares the leftover space out between them, and a fight between two
+     creatures draws two rows half a window tall each. */
+  align-content: start;
+  /* The list scrolls, the Next button below it does not — a long fight
+     shouldn't push the control the DM needs off the bottom of the window. */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.turn-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  /* Right-clicking a row opens its menu — no plain click does anything. */
+  cursor: context-menu;
+  user-select: none;
+}
+
+.turn-list li:hover {
+  border-color: #2f3d5e;
+}
+
+/* Whose turn it is. A band down the side rather than a wash over the row, so
+   it stays obvious at a glance without fighting the token colours beside it. */
+.turn-list li.active {
+  background: #1d2740;
+  border-color: #2f3d5e;
+  border-left-color: #58a6ff;
+}
+
+.turn-list li.active strong {
+  color: #cfe0ff;
+}
+
+.turn-face {
+  box-sizing: border-box;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+}
+
+/* Name over health bar, sharing the middle column between the face and the
+   initiative — so a row grows a second line rather than a third column. */
+.turn-who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.turn-list strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.turn-hp {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.turn-hp .hp-bar {
+  flex: 1;
+  height: 5px;
+}
+
+/* Small enough to read as an annotation on the bar rather than as a second
+   number competing with the initiative on the other side of the row. */
+.turn-hp small {
+  flex: none;
+  color: #8b90a0;
+  font-size: 0.62rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-init {
+  flex: none;
+  min-width: 1.5rem;
+  text-align: right;
+  color: #9aa0b2;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.turns-foot {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+}
+
+/* --- what a token is, on hover --- */
+
+/* Positioned entirely by transform from TokenTooltip, which is why it sits at
+   the origin: the browser never has to reflow it to move it. */
+.token-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* Over the right-click menu's 450, since both can be on screen at once. */
+  z-index: 460;
+  /* It follows the pointer around; catching the pointer itself would mean
+     hovering a token could hide that token. */
+  pointer-events: none;
+  display: grid;
+  gap: 0.3rem;
+  min-width: 8.5rem;
+  max-width: 15rem;
+  padding: 0.45rem 0.6rem;
+  background: #171b24;
+  border: 1px solid #2b3242;
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.token-tip strong {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Label left, value right — so several rows read as a small table. */
+.token-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #9aa0b2;
+}
+
+.token-tip-row b {
+  color: #e7e9ee;
+}
+
+.token-tip small {
+  color: #8b90a0;
+  font-size: 0.72rem;
+}
+
+.token-tip-hp {
+  display: grid;
+  gap: 0.28rem;
+}
+
+/* The track is the wound: red is what's already been taken off, and the green
+   fill on top is what the creature has left. */
+.hp-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #b3413b;
+  overflow: hidden;
+}
+
+.hp-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #3fb950;
+  transition: width 0.15s ease-out;
 }
 
 .tabletop-empty {
@@ -1471,15 +2045,13 @@ button.linky:hover {
   white-space: nowrap;
 }
 
+/* Only its place in the row — this one used to restate the whole control's
+   appearance, which is now the shared `select` rule's job. Widened from 9rem
+   when that rule took a gutter on the right for the chevron: "Not at this
+   table" is the longest thing it has to say and no longer fitted. */
 .access-list select {
   flex: none;
-  width: 9rem;
-  background: #1e222b;
-  color: #e7e9ee;
-  border: 1px solid #2c3140;
-  border-radius: 6px;
-  padding: 0.3rem 0.4rem;
-  font: inherit;
+  width: 10.5rem;
 }
 
 .card-access {
@@ -1571,12 +2143,17 @@ button.linky:hover {
   flex-wrap: wrap;
 }
 
-.note-share {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: #9aa0b2;
+/* Green while the note is out with the players — the same "on" pair the
+   connection badge and the shared flag in the list already use, so the three
+   ways the app says "this is live" agree with each other. */
+.note-share-toggle.on {
+  background: #16351f;
+  border-color: #2f6b3e;
+  color: #6ee787;
+}
+
+.note-share-toggle.on:hover {
+  background: #1d4a2a;
 }
 
 .note-body-input {
@@ -2123,6 +2700,24 @@ button.linky:hover {
   min-width: 0;
 }
 
+/* Numbers are short — a field as wide as its column would say the opposite. */
+.token-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.token-stat input {
+  width: 4.5rem;
+  box-sizing: border-box;
+}
+
+.token-stat small {
+  color: #8b90a0;
+  white-space: nowrap;
+}
+
 .token-colour input[type='checkbox'] {
   accent-color: #58a6ff;
   cursor: pointer;
@@ -2492,21 +3087,3 @@ button.linky:hover {
   font-size: 1rem;
 }
 
-/* --- admin backup --- */
-.backup-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin: 1rem 0;
-  padding: 0.6rem 0.7rem;
-  background: #1a1d25;
-  border: 1px solid #2c3140;
-  border-radius: 8px;
-}
-
-.backup-row small {
-  color: #8b90a0;
-  flex: 1;
-  min-width: 12rem;
-}

@@ -47,6 +47,17 @@ const router = express.Router();
 
 const cleanName = (v) => String(v || '').trim();
 
+/**
+ * When they last signed in, for the campaign's player list.
+ *
+ * Written on the way past a successful login rather than tracked per request:
+ * this answers "when were you last here", which is a different question from
+ * "are you here now" — presence answers that, and it comes from the live
+ * sockets rather than from anything stored.
+ */
+const markLogin = (userId) =>
+  store.update(USERS, userId, { lastLoginAt: new Date().toISOString() });
+
 // What the client needs to know about itself after a successful sign-in.
 const sessionPayload = (user, session) => ({
   token: session.token,
@@ -150,6 +161,7 @@ router.post('/login', async (req, res, next) => {
       }
       const admin = await ensureAdminUser();
       const session = await createSession(admin.id);
+      await markLogin(admin.id);
       keys.forEach((k) => limits.login.clear(k));
       return res.json(sessionPayload(admin, session));
     }
@@ -163,6 +175,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const session = await createSession(user.id);
+    await markLogin(user.id);
     keys.forEach((k) => limits.login.clear(k));
     res.json(sessionPayload(user, session));
   } catch (err) {

@@ -150,30 +150,6 @@ export const api = {
   status: () => get('/api/status'),
   whoami: () => get('/api/auth/me'),
 
-  /**
-   * Download a full database snapshot (admin only).
-   *
-   * A plain <a href> can't carry the session header, so this fetches the file
-   * and hands the browser a blob instead.
-   */
-  downloadBackup: async () => {
-    const res = await fetch('/api/admin/backup', { headers: authHeaders() });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || `Backup failed (${res.status})`);
-    }
-    const blob = await res.blob();
-    const name =
-      /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] ||
-      'rpg-manager-backup.db';
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = name;
-    link.click();
-    URL.revokeObjectURL(url);
-  },
-
   // --- signing in ---
   authConfig: () => get('/api/auth/config'),
   register: (data) => post('/api/auth/register', data),
@@ -240,6 +216,10 @@ export const api = {
   moveToken: (sceneId, tokenId, x, y) =>
     put(table(`/scenes/${sceneId}/tokens/${tokenId}/position`), { x, y }),
   deleteToken: (sceneId, tokenId) => del(table(`/scenes/${sceneId}/tokens/${tokenId}`)),
+
+  setTurnMode: (sceneId, on) => put(table(`/scenes/${sceneId}/turn`), { on }),
+  nextTurn: (sceneId) => put(table(`/scenes/${sceneId}/turn/next`), {}),
+  giveTurn: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/turn/current`), { tokenId }),
 
   // Campaign-independent: a map image is the same image at any table.
   listMaps: () => get('/api/maps'),

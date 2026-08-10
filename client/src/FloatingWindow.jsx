@@ -21,8 +21,11 @@ import { createPortal } from 'react-dom';
 const GRIPS = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
 
 // Below this a character sheet stops being readable and turns into a puzzle.
+// Only the default, though — a window whose content is a short list rather than
+// a sheet says so with `minSize` and is allowed to be much smaller.
 const MIN_W = 380;
 const MIN_H = 260;
+const DEFAULT_MIN = { w: MIN_W, h: MIN_H };
 
 // Rolled up, the window is a title bar and nothing else, so it answers to a
 // different floor: wide enough for a name, and only as tall as its own header.
@@ -63,33 +66,37 @@ const hasSavedRect = (storageKey) => Boolean(storageKey && savedRect(storageKey)
 // Where it opens: where you last left it, or centred the first time — offset by
 // its place in the stack, since windows that have never been moved would
 // otherwise all land on the same spot and look like one window.
-function firstRect(storageKey, size, cascade) {
+function firstRect(storageKey, size, cascade, min) {
   const saved = storageKey && savedRect(storageKey);
-  if (saved) return fit(saved);
+  if (saved) return fit(saved, min.w, min.h);
   const w = Math.min(size.w, window.innerWidth);
   const h = Math.min(size.h, window.innerHeight);
   const step = cascade * CASCADE_STEP;
-  return fit({
-    w,
-    h,
-    x: (window.innerWidth - w) / 2 + step,
-    y: (window.innerHeight - h) / 2 + step,
-  });
+  return fit(
+    {
+      w,
+      h,
+      x: (window.innerWidth - w) / 2 + step,
+      y: (window.innerHeight - h) / 2 + step,
+    },
+    min.w,
+    min.h
+  );
 }
 
 // Dragging the north or west side moves the corner you *aren't* holding, so the
 // opposite side stays put. The upper clamps are what stop a stretch running off
 // the screen — the edge you're pulling can't pass the viewport it started in.
-function stretch(from, mode, dx, dy) {
+function stretch(from, mode, dx, dy, min) {
   let { x, y, w, h } = from;
-  if (mode.includes('e')) w = clamp(from.w + dx, MIN_W, window.innerWidth - from.x);
-  if (mode.includes('s')) h = clamp(from.h + dy, MIN_H, window.innerHeight - from.y);
+  if (mode.includes('e')) w = clamp(from.w + dx, min.w, window.innerWidth - from.x);
+  if (mode.includes('s')) h = clamp(from.h + dy, min.h, window.innerHeight - from.y);
   if (mode.includes('w')) {
-    w = clamp(from.w - dx, MIN_W, from.x + from.w);
+    w = clamp(from.w - dx, min.w, from.x + from.w);
     x = from.x + from.w - w;
   }
   if (mode.includes('n')) {
-    h = clamp(from.h - dy, MIN_H, from.y + from.h);
+    h = clamp(from.h - dy, min.h, from.y + from.h);
     y = from.y + from.h - h;
   }
   return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
@@ -102,6 +109,9 @@ export default function FloatingWindow({
   onClose,
   storageKey,
   defaultSize = { w: 1040, h: 760 },
+  // How small this one may be pulled. The default suits a character sheet; a
+  // window holding a short list can ask for far less and still be usable.
+  minSize = DEFAULT_MIN,
   // Where this one sits in a stack of them: `zIndex` paints it, `cascade`
   // places it the first time, and `isTop` decides who answers the Escape key —
   // one keypress should close the window in front, not every one at once.
@@ -110,7 +120,7 @@ export default function FloatingWindow({
   isTop = true,
   onFocus,
 }) {
-  const [rect, setRect] = useState(() => firstRect(storageKey, defaultSize, cascade));
+  const [rect, setRect] = useState(() => firstRect(storageKey, defaultSize, cascade, minSize));
   // Whether this window has ever been dragged or resized. Only then is its box
   // a preference worth remembering: saving the opening position too would make
   // every window "already placed", and a cascade of untouched windows would
@@ -137,8 +147,11 @@ export default function FloatingWindow({
   // While rolled up the window is allowed to be far smaller than a sheet needs,
   // and every clamp — dragging, a browser resize — has to agree, or the next one
   // to run would quietly unroll it.
-  const minW = minimized ? MINI_W : MIN_W;
-  const minH = minimized ? rect.h : MIN_H;
+  // The folded bar is MINI_W wide — unless the window's own minimum is narrower
+  // than that, in which case folding it must not *widen* it.
+  const foldW = Math.min(MINI_W, Math.max(rect.w, minSize.w));
+  const minW = minimized ? foldW : minSize.w;
+  const minH = minimized ? rect.h : minSize.h;
 
   /**
    * Roll the window up to its title bar, and back down again.
@@ -154,14 +167,14 @@ export default function FloatingWindow({
    */
   function toggleRollUp() {
     if (minimized) {
-      setRect(fit(openRect));
+      setRect(fit(openRect, minSize.w, minSize.h));
       setRolledUpSize(null);
       return;
     }
     const border = winRef.current.offsetHeight - winRef.current.clientHeight;
     const h = Math.round(headRef.current.getBoundingClientRect().height + border);
     setRolledUpSize({ w: rect.w, h: rect.h });
-    setRect(fit({ ...rect, w: MINI_W, h }, MINI_W, h));
+    setRect(fit({ ...rect, w: foldW, h }, foldW, h));
   }
 
   // Settle the rolled-up height against the header as it ends up, not as it was
@@ -172,7 +185,9 @@ export default function FloatingWindow({
     if (!minimized) return;
     const border = winRef.current.offsetHeight - winRef.current.clientHeight;
     const h = Math.round(headRef.current.getBoundingClientRect().height + border);
-    setRect((r) => (r.h === h ? r : fit({ ...r, h }, MINI_W, h)));
+    setRect((r) =>
+      r.h === h ? r : fit({ ...r, h }, Math.min(MINI_W, Math.max(r.w, minSize.w)), h)
+    );
   }, [minimized]);
 
   function begin(next) {
@@ -201,7 +216,7 @@ export default function FloatingWindow({
       setRect(
         mode === 'move'
           ? fit({ ...g.from, x: g.from.x + dx, y: g.from.y + dy }, minW, minH)
-          : stretch(g.from, mode, dx, dy)
+          : stretch(g.from, mode, dx, dy, minSize)
       );
     };
     const stop = () => {
@@ -248,7 +263,7 @@ export default function FloatingWindow({
       // in front of this one.
       if (!isTop) return;
       if (document.querySelector('.modal-backdrop')) return;
-      onClose();
+      onClose?.();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -298,9 +313,14 @@ export default function FloatingWindow({
             )}
           </svg>
         </button>
-        <button type="button" className="linky win-close" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
+        {/* A window nobody may close renders no way to close it, rather than a
+            button that quietly does nothing. The turn tracker is one: it stands
+            until the DM ends the fight. */}
+        {onClose && (
+          <button type="button" className="linky win-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Kept out of the tree entirely rather than merely clipped: a rolled-up

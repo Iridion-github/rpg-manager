@@ -16,7 +16,7 @@
 
 const express = require('express');
 const store = require('../store');
-const { notifyUser } = require('../realtime');
+const { notifyUser, presenceIn } = require('../realtime');
 const { requireUser, USERS, publicUser } = require('../auth');
 const {
   CAMPAIGNS,
@@ -68,10 +68,16 @@ router.get('/:id/members', requireUser, async (req, res, next) => {
       return res.status(404).json({ error: 'No such campaign' });
     }
     const users = await store.list(USERS);
+    // Presence is read per request from the live sockets rather than stored, so
+    // it can't outlive the connection it describes. `lastLoginAt` rides along
+    // on the user record and passes through publicUser untouched.
+    const status = presenceIn(req.app.get('io'), req.params.id);
     const members = Object.entries(campaign.members || {})
       .map(([userId, role]) => {
         const user = users.find((u) => u.id === userId);
-        return user ? { ...publicUser(user), role } : null;
+        return user
+          ? { ...publicUser(user), role, status: status.get(userId) || 'offline' }
+          : null;
       })
       .filter(Boolean);
     res.json(members);

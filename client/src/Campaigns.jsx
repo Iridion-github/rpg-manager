@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 /**
  * The campaign directory — the first thing you see on arriving.
@@ -111,20 +112,30 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
     });
   };
 
+  // From the live list, so the dialog can't outlive what it asks about.
+  const confirmCampaign = campaigns.find((c) => c.id === confirmDelete) || null;
+
   const saveDetails = (campaign, patch) =>
     guard(async () => {
       const updated = await api.updateCampaign(campaign.id, { ...campaign, ...patch });
       setCampaigns((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     });
 
-  const remove = (id) =>
-    guard(async () => {
+  // Thrown as well as shown, so the dialog stays open on a failure instead of
+  // closing as though the campaign had gone.
+  async function remove(id) {
+    setError('');
+    try {
       await api.deleteCampaign(id);
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
       setConfirmDelete('');
       setEditing('');
       if (currentId === id) onOpen?.(null);
-    });
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
 
   const setRole = (campaign, userId, role) =>
     guard(async () => {
@@ -279,19 +290,13 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
 
                   <div className="campaign-danger">
                     <div className="spacer" />
-                    {confirmDelete === c.id ? (
-                      <>
-                        <span className="hint">Delete it and everything in it?</span>
-                        <button className="del" onClick={() => remove(c.id)} disabled={busy}>
-                          Yes, delete
-                        </button>
-                        <button onClick={() => setConfirmDelete('')}>Keep</button>
-                      </>
-                    ) : (
-                      <button className="del" onClick={() => setConfirmDelete(c.id)} disabled={busy}>
-                        Delete campaign
-                      </button>
-                    )}
+                    {/* Asked in the same dialog as every other delete in the
+                        app rather than by swapping this row for two buttons —
+                        one place to read "is this the right thing?", and the
+                        same shape of answer wherever you meet it. */}
+                    <button className="del" onClick={() => setConfirmDelete(c.id)} disabled={busy}>
+                      Delete campaign
+                    </button>
                   </div>
                 </div>
               )}
@@ -305,6 +310,19 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
           </p>
         )}
       </div>
+
+      {/* The heaviest delete in the app — scenes, sheets, notes, chat, the lot
+          — so it asks for the name in full. */}
+      {confirmCampaign && (
+        <ConfirmDeleteModal
+          name={confirmCampaign.name}
+          byName
+          description="This deletes the campaign and everything in it — every scene, character sheet, note and message — for everyone at the table. It can't be undone."
+          confirmLabel="Delete campaign"
+          onConfirm={() => remove(confirmCampaign.id)}
+          onClose={() => setConfirmDelete('')}
+        />
+      )}
     </div>
   );
 }

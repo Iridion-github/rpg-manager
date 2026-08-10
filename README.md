@@ -576,9 +576,10 @@ set lets a caller claim any address it likes.
 
 ## Backups
 A mounted disk survives restarts, not mistakes — a bad import or a campaign
-deleted in the wrong tab is still gone. **People → Download backup** (admin
-only) pulls the entire database down as one file, while the server keeps
-running.
+deleted in the wrong tab is still gone. `GET /api/admin/backup` (admin only)
+pulls the entire database down as one file, while the server keeps running.
+There is no button for it in the app; call it with an admin session token, e.g.
+`curl -H "x-session: <token>" -OJ localhost:3001/api/admin/backup`.
 
 It goes through SQLite's online backup API rather than copying the file, and
 that distinction matters: in WAL mode the committed state is spread across the

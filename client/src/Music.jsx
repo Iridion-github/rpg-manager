@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import { socket } from './socket.js';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 /**
  * The campaign's playlist.
@@ -20,6 +21,8 @@ export default function Music({ canControl, offline }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
+  // The track a confirmation dialog is currently asking about.
+  const [confirmDeleteId, setConfirmDeleteId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -93,13 +96,24 @@ export default function Music({ canControl, offline }) {
     }
   }
 
+  // Resolved from the live list rather than captured when the dialog opened, so
+  // a track that vanished in the meantime can't be asked about.
+  const confirmTrack = tracks.find((t) => t.id === confirmDeleteId) || null;
+
   const play = (id) => guard(() => api.playTrack(id));
   const stop = () => guard(() => api.stopMusic());
-  const remove = (id) =>
-    guard(async () => {
+  // Thrown as well as shown, so the confirmation dialog that called this stays
+  // open on a failure rather than closing as though the track had gone.
+  async function remove(id) {
+    setError('');
+    try {
       await api.deleteTrack(id);
       setTracks((prev) => prev.filter((t) => t.id !== id));
-    });
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
 
   return (
     <div className="music-view">
@@ -178,7 +192,12 @@ export default function Music({ canControl, offline }) {
                   <button onClick={() => play(t.id)} disabled={busy} title="Play for everyone">
                     ▶ Play
                   </button>
-                  <button className="del" onClick={() => remove(t.id)} disabled={busy}>
+                  <button
+                    className="del"
+                    onClick={() => setConfirmDeleteId(t.id)}
+                    disabled={busy}
+                    title={`Remove ${t.title}`}
+                  >
                     ✕
                   </button>
                 </>
@@ -192,6 +211,18 @@ export default function Music({ canControl, offline }) {
           </li>
         )}
       </ul>
+
+      {/* Just asks: a track is a title and a link, and adding it back is a
+          paste. Nothing on the far side of this is unrecoverable. */}
+      {confirmTrack && (
+        <ConfirmDeleteModal
+          name={confirmTrack.title || 'this track'}
+          description="This takes the track off the campaign's playlist for everyone. The music itself isn't yours to delete — only the link to it."
+          confirmLabel="Remove track"
+          onConfirm={() => remove(confirmTrack.id)}
+          onClose={() => setConfirmDeleteId('')}
+        />
+      )}
     </div>
   );
 }

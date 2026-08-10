@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
+import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import FloatingWindow from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
+import TokenTooltip from './TokenTooltip.jsx';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
 // frames a pointer actually produces.
@@ -11,6 +14,15 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // How long a grid-slider drag settles before we save it.
 const GRID_SAVE_MS = 400;
+
+// Where this browser remembers whether the map's tools panel is rolled up.
+const TOOLS_MIN_KEY = 'rpg:map-tools-min';
+
+// The turn tracker holds a short list, not a character sheet, so it may be
+// pulled far below the floor a FloatingWindow keeps by default. A constant
+// rather than an inline object: a fresh one each render would be a new prop
+// every time the map moves.
+const TURNS_MIN = { w: 190, h: 120 };
 
 // Zoom bounds shared by the slider and the wheel, so the two can't disagree.
 const ZOOM_MIN = 0.4;
@@ -95,6 +107,22 @@ export default function Tabletop({ actor, players, offline }) {
   // that decided it is closed by the time the modal opens — the choice has to
   // outlive the thing that made it.
   const [tokenForm, setTokenForm] = useState(null);
+  // The token the pointer is resting on, with the element to hang its tooltip
+  // on. The element is kept rather than looked up again because the event that
+  // told us about the hover is holding it already.
+  const [hovered, setHovered] = useState(null);
+  // Whether the tools panel is rolled up to its square. A local preference —
+  // it says nothing about the table, only about how much of this screen its
+  // owner wants the map to have — so it lives in this browser and is read back
+  // on mount, since leaving the tab unmounts the map entirely.
+  const [toolsMin, setToolsMin] = useState(() => localStorage.getItem(TOOLS_MIN_KEY) === '1');
+  // The token whose row in the turn tracker the pointer is over, lit up on the
+  // map so you can find it without reading names. Local to this screen: it says
+  // where *you* are looking, which is nobody else's business.
+  const [spotlight, setSpotlight] = useState(null);
+  // What a confirmation dialog is currently asking about: { kind, id, name }.
+  // One piece of state for both kinds, because only ever one of them is open.
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const surfaceRef = useRef(null);
   const scrollRef = useRef(null);
@@ -551,6 +579,43 @@ export default function Tabletop({ actor, players, offline }) {
     setMenu(null);
   }
 
+  /**
+   * The same pull, aimed at where a token stands rather than where a pointer
+   * was — what a double-click in the turn list does.
+   *
+   * Token coordinates are in cells and the focus wants map pixels, and it wants
+   * the middle of the token rather than its top-left corner: a size-3 giant
+   * centred on its corner sits a cell and a half off the middle of the screen.
+   */
+  // Resolved from the live scene when the item is chosen, not when the menu was
+  // opened — the same care the map's own menu takes, since a token can be
+  // deleted or moved while its menu is sitting there.
+  function focusFromTurnList() {
+    const token = scene?.tokens.find((t) => t.id === menu?.turnTokenId);
+    setMenu(null);
+    focusOnToken(token);
+  }
+
+  // Hands the turn to the token whose row was right-clicked. The server decides
+  // whether that's allowed; all this has to know is which row it was.
+  function giveTurnTo() {
+    const tokenId = menu?.turnTokenId;
+    setMenu(null);
+    if (!scene || !tokenId) return;
+    guard(async () => applyTurn(await api.giveTurn(scene.id, tokenId)));
+  }
+
+  function focusOnToken(token) {
+    if (!scene || !token) return;
+    const half = (token.size || 1) / 2;
+    socket.emit('scene:focus', {
+      sceneId: scene.id,
+      x: (token.x + half) * gridSize,
+      y: (token.y + half) * gridSize,
+      zoom,
+    });
+  }
+
   // Remember where the menu was opened and hand the rest to the modal. The spot
   // is settled here, not there: a token summoned into the top-left corner is one
   // you then have to go and find, and the point of asking for it *here* is that
@@ -571,24 +636,99 @@ export default function Tabletop({ actor, players, offline }) {
   // an edit can't be applied to a token someone deleted in the meantime.
   const menuToken = menu?.tokenId ? scene?.tokens.find((t) => t.id === menu.tokenId) : null;
 
+  // The same for the hovered one: a tooltip left open while its token takes
+  // damage should show the new number, not the one it opened on. A tooltip is
+  // noise during a drag or a pan, and would sit on top of the right-click menu,
+  // so those three states suppress it outright.
+  const hoveredToken =
+    hovered && !drag && !panning && !menu
+      ? scene?.tokens.find((t) => t.id === hovered.id)
+      : null;
+
   function editToken() {
     if (!menuToken) return;
     setTokenForm({ token: menuToken });
     setMenu(null);
   }
 
-  function deleteToken() {
-    const tokenId = menu?.tokenId;
-    if (!tokenId || !scene) return;
+  // Asking first, like every other delete in the app. The menu closes as the
+  // dialog opens — leaving both on screen would be two things asking to be
+  // answered about the same token.
+  function askDeleteToken() {
+    if (!menuToken) return;
+    setConfirmDelete({ kind: 'token', id: menuToken.id, name: menuToken.label || 'Token' });
     setMenu(null);
-    guard(async () => {
+  }
+
+  async function removeToken(tokenId) {
+    setError('');
+    try {
       await api.deleteToken(scene.id, tokenId);
       setScenes((prev) =>
         prev.map((s) =>
           s.id === scene.id ? { ...s, tokens: s.tokens.filter((t) => t.id !== tokenId) } : s
         )
       );
-    });
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
+
+  // --- turn mode ---
+
+  /**
+   * The order everyone reads off the tracker.
+   *
+   * The same rule the server applies when Next decides who acts (routes/
+   * scenes.js `turnOrder`): highest initiative first, and a token without one
+   * isn't in the fight at all. The two are kept in step on purpose — if this
+   * list and that one disagreed, the highlight would land somewhere Next never
+   * goes.
+   */
+  const order = useMemo(
+    () =>
+      (scene?.tokens || [])
+        .filter((t) => t.initiative !== null && t.initiative !== undefined)
+        .sort((a, b) => b.initiative - a.initiative),
+    [scene?.tokens]
+  );
+
+  const turnMode = Boolean(scene?.turnMode);
+
+  // Only while the list it comes from is on screen. Rows can be taken away
+  // under the pointer — the fight ends, the window is folded — and no
+  // mouseleave arrives to say so, which would strand the highlight on the map.
+  const spotlitId = turnMode ? spotlight : null;
+
+  // Folding the panel is remembered per browser, not per visit: leaving the
+  // tab unmounts the map, and a panel that unfolded itself every time you came
+  // back would not be much of a preference.
+  function foldTools(next) {
+    setToolsMin(next);
+    try {
+      localStorage.setItem(TOOLS_MIN_KEY, next ? '1' : '0');
+    } catch {
+      // Private mode, or a full quota. The panel still folds; it just won't
+      // remember doing so, which is not worth an error in front of anyone.
+    }
+  }
+
+  // The server answers with the whole scene; take its turn fields but keep our
+  // own tokens, which may be mid-drag. Same trade the scene edits above make.
+  const applyTurn = (updated) =>
+    setScenes((prev) =>
+      prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
+    );
+
+  function toggleTurnMode() {
+    if (!scene) return;
+    guard(async () => applyTurn(await api.setTurnMode(scene.id, !turnMode)));
+  }
+
+  function advanceTurn() {
+    if (!scene) return;
+    guard(async () => applyTurn(await api.nextTurn(scene.id)));
   }
 
   function onPointerDown(e, token) {
@@ -693,9 +833,12 @@ export default function Tabletop({ actor, players, offline }) {
       setActiveId(created.id);
     });
 
-  const removeScene = () =>
-    guard(async () => {
-      const goneId = scene.id;
+  // Called by the confirmation dialog, so a failure has to be thrown as well as
+  // shown: the dialog stays open and says what happened rather than closing as
+  // though the scene had gone.
+  async function removeScene(goneId) {
+    setError('');
+    try {
       const i = scenes.findIndex((s) => s.id === goneId);
       await api.deleteScene(goneId);
       const remaining = scenes.filter((s) => s.id !== goneId);
@@ -705,7 +848,11 @@ export default function Tabletop({ actor, players, offline }) {
       // which is now whatever used to be second; deleting the last one leaves
       // nothing to land on.
       setActiveId(remaining[Math.max(0, i - 1)]?.id || '');
-    });
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
 
   const patchScene = (changes) =>
     guard(async () => {
@@ -753,7 +900,7 @@ export default function Tabletop({ actor, players, offline }) {
    * belongs in front of the person still looking at the form rather than in the
    * page-level banner behind it. Throwing is how it gets there.
    */
-  async function submitToken({ label, color, borderColor, size, imageUrl }) {
+  async function submitToken({ label, color, borderColor, size, imageUrl, ...stats }) {
     if (!scene || !tokenForm) return;
 
     // Editing sends only what the form asked about. The server merges them onto
@@ -768,6 +915,7 @@ export default function Tabletop({ actor, players, offline }) {
         borderColor,
         size,
         imageUrl,
+        ...stats,
       });
       setScenes((prev) =>
         prev.map((s) =>
@@ -785,6 +933,7 @@ export default function Tabletop({ actor, players, offline }) {
       borderColor,
       size,
       imageUrl,
+      ...stats,
       ownerId: null,
       x: tokenForm.x,
       y: tokenForm.y,
@@ -927,7 +1076,7 @@ export default function Tabletop({ actor, players, offline }) {
             )}
 
             <label className="upload">
-              {scene.imageUrl ? 'Replace map' : 'Upload map'}
+              Upload image
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
@@ -941,7 +1090,13 @@ export default function Tabletop({ actor, players, offline }) {
             <button onClick={newScene} disabled={busy}>
               + Scene
             </button>
-            <button className="del" onClick={removeScene} disabled={busy}>
+            <button
+              className="del"
+              onClick={() =>
+                setConfirmDelete({ kind: 'scene', id: scene.id, name: scene.name || 'this scene' })
+              }
+              disabled={busy}
+            >
               Delete scene
             </button>
           </>
@@ -950,6 +1105,12 @@ export default function Tabletop({ actor, players, offline }) {
 
       {error && <p className="error">{error}</p>}
 
+      {/* Wraps the scroller so the tools panel can be pinned to the map's own
+          top-left corner. Inside the scroller it would be pinned to the *map*
+          and slide away with it; outside this wrapper there is nothing to
+          measure against but the whole column, and the bar above it is a row
+          whose height changes as it wraps. */}
+      <div className="map-area">
       <div
         className={`surface-scroll${panning ? ' panning' : ''}`}
         ref={scrollRef}
@@ -1014,7 +1175,9 @@ export default function Tabletop({ actor, players, offline }) {
                 data-token-id={token.id}
                 className={`token${movable ? ' movable' : ''}${mine ? ' dragging' : ''}${
                   blocked ? ' blocked' : ''
-                }${ghost && !mine ? ' remote' : ''}`}
+                }${ghost && !mine ? ' remote' : ''}${
+                  token.id === spotlitId ? ' spotlit' : ''
+                }`}
                 style={{
                   left: pos.x * cellPx,
                   top: pos.y * cellPx,
@@ -1030,13 +1193,10 @@ export default function Tabletop({ actor, players, offline }) {
                   ...(token.borderColor ? { borderColor: token.borderColor } : {}),
                 }}
                 onPointerDown={(e) => onPointerDown(e, token)}
-                title={
-                  ghost && !mine
-                    ? `${token.label} — being moved by ${ghost.by}`
-                    : movable
-                      ? `${token.label} (drag to move)`
-                      : token.label
-                }
+                // No `title`: the tooltip below says all of this and more, and
+                // the browser's own bubble would surface underneath it.
+                onMouseEnter={(e) => setHovered({ id: token.id, el: e.currentTarget })}
+                onMouseLeave={() => setHovered((h) => (h?.id === token.id ? null : h))}
               >
                 {/* The picture stands in for the name. Printing both would put
                     text over a face at the size a token actually is. */}
@@ -1047,12 +1207,167 @@ export default function Tabletop({ actor, players, offline }) {
         </div>
       </div>
 
+        {/* Floats over the map rather than taking a strip of it. Everyone gets
+            the panel; what's inside it is another question, and for now the
+            only answer is the DM's. */}
+        {toolsMin ? (
+          <div className="map-tools map-tools-min">
+            <button
+              type="button"
+              onClick={() => foldTools(false)}
+              aria-label="Show map tools"
+              title="Map tools"
+            >
+              ☰
+            </button>
+          </div>
+        ) : (
+          <div className="map-tools">
+            <div className="map-tools-head">
+              <strong>Tools</strong>
+              <button
+                type="button"
+                className="linky"
+                onClick={() => foldTools(true)}
+                aria-label="Minimise"
+                title="Minimise"
+              >
+                <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+                  <line x1="0.5" y1="5" x2="9.5" y2="5" />
+                </svg>
+              </button>
+            </div>
+            <div className="map-tools-body">
+              {isDm ? (
+                <button onClick={toggleTurnMode} disabled={busy}>
+                  {turnMode ? 'Exit Turn mode' : 'Enter Turn mode'}
+                </button>
+              ) : (
+                <small>Nothing here for you yet.</small>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* One tracker, shown to the whole table while the fight is on. Only the
+          DM can put it away, and doing so is what ends turn mode — so a player
+          gets no close button rather than one that betrays them. */}
+      {turnMode && (
+        <FloatingWindow
+          title="Turns"
+          storageKey="rpg:turns-window"
+          defaultSize={{ w: 380, h: 420 }}
+          minSize={TURNS_MIN}
+          onClose={isDm ? toggleTurnMode : undefined}
+          // No controls of its own, only the spacer that sends the window's own
+          // two buttons to the far end of the bar — the same way the sheet and
+          // note windows lay their header out.
+          controls={<div className="spacer" />}
+        >
+          <div className="turns">
+            {order.length === 0 ? (
+              <p className="hint">
+                No token on this scene has an initiative score, so there is nobody to put in
+                order yet. Give one a score from its right-click menu.
+              </p>
+            ) : (
+              <ol className="turn-list" onMouseLeave={() => setSpotlight(null)}>
+                {order.map((t) => {
+                  // The same reading of the same two fields the hover tooltip
+                  // makes: no total means nothing to draw, and a stored current
+                  // can outlive a maximum the DM has since lowered.
+                  const total = t.maxHp ?? 0;
+                  const hp = Math.max(0, Math.min(t.hp ?? 0, total));
+                  return (
+                  // A menu of its own rather than an action on the click: the
+                  // list is a thing you read during a fight, and every camera
+                  // at the table swinging across the map is too much to hang on
+                  // brushing against it. Anyone may ask for it, DM or not — it
+                  // is the same Focus the map's own menu offers, and that has
+                  // never been the DM's alone.
+                  <li
+                    key={t.id}
+                    className={t.id === scene.turnTokenId ? 'active' : ''}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setMenu({ clientX: e.clientX, clientY: e.clientY, turnTokenId: t.id });
+                    }}
+                    title={`Right-click for ${t.label}`}
+                    onMouseEnter={() => setSpotlight(t.id)}
+                    onMouseLeave={() => setSpotlight((id) => (id === t.id ? null : id))}
+                  >
+                    {/* The token as it looks on the board, so the list is read
+                        by glancing between the two rather than by name. */}
+                    <span
+                      className="turn-face"
+                      style={{
+                        background: t.imageUrl
+                          ? `center / cover no-repeat url(${JSON.stringify(t.imageUrl)})`
+                          : t.color,
+                        ...(t.borderColor ? { borderColor: t.borderColor } : {}),
+                      }}
+                    />
+                    <span className="turn-who">
+                      <strong>{t.label}</strong>
+                      {/* Hit points stay the DM's to know, exactly as they do in
+                          the hover tooltip — a tracker every player can see is
+                          the last place to print the ogre's remaining health. */}
+                      {isDm && total > 0 && (
+                        <span className="turn-hp">
+                          <span className="hp-bar">
+                            <span className="hp-fill" style={{ width: `${(hp / total) * 100}%` }} />
+                          </span>
+                          <small>
+                            {hp}/{total}
+                          </small>
+                        </span>
+                      )}
+                    </span>
+                    <span className="turn-init">{t.initiative}</span>
+                  </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            {isDm && (
+              <div className="turns-foot">
+                <button onClick={advanceTurn} disabled={busy || order.length === 0}>
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        </FloatingWindow>
+      )}
+
+      {hoveredToken && (
+        <TokenTooltip
+          anchor={hovered.el}
+          token={hoveredToken}
+          showHp={isDm}
+          status={
+            ghosts[hoveredToken.id]
+              ? `Being moved by ${ghosts[hoveredToken.id].by}`
+              : canMove(hoveredToken)
+                ? 'Drag to move'
+                : ''
+          }
+        />
+      )}
+
       {menu && (
         <div className="map-menu" ref={menuRef} style={{ left: menu.clientX, top: menu.clientY }}>
-          {menu.tokenId ? (
+          {menu.turnTokenId ? (
+            <>
+              <button onClick={focusFromTurnList}>Focus</button>
+              {isDm && <button onClick={giveTurnTo}>Give turn</button>}
+            </>
+          ) : menu.tokenId ? (
             <>
               <button onClick={editToken}>Edit</button>
-              <button className="danger" onClick={deleteToken}>
+              <button className="danger" onClick={askDeleteToken}>
                 Delete
               </button>
             </>
@@ -1064,6 +1379,28 @@ export default function Tabletop({ actor, players, offline }) {
             </>
           )}
         </div>
+      )}
+
+      {/* A scene asks for its name to be typed; a token only asks. The scene
+          takes every token on it with it and can't be got back, which is the
+          test the sheet windows already use — a token is a minute's work. */}
+      {confirmDelete && (
+        <ConfirmDeleteModal
+          name={confirmDelete.name}
+          byName={confirmDelete.kind === 'scene'}
+          description={
+            confirmDelete.kind === 'scene'
+              ? 'This deletes the scene, its map and every token standing on it, for everyone at the table. It cannot be undone.'
+              : 'This takes the token off the map for everyone at the table.'
+          }
+          confirmLabel={confirmDelete.kind === 'scene' ? 'Delete scene' : 'Delete token'}
+          onConfirm={() =>
+            confirmDelete.kind === 'scene'
+              ? removeScene(confirmDelete.id)
+              : removeToken(confirmDelete.id)
+          }
+          onClose={() => setConfirmDelete(null)}
+        />
       )}
 
       {tokenForm && (
