@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
+import TokenLibrary from './TokenLibrary.jsx';
 
 /**
  * "What token?" — the step between choosing Create token on the map and a
@@ -43,17 +44,25 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   const [hp, setHp] = useState(token?.hp ?? '');
   const [maxHp, setMaxHp] = useState(token?.maxHp ?? '');
   const [uploading, setUploading] = useState(false);
+  // Whether the library is open over this form. One at a time: the browser is
+  // the whole dialog while it's up, because a grid of tokens needs the room.
+  const [browsing, setBrowsing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // Escape closes the thing in front. With the library open that's the
+      // library — losing a half-filled form because you were done browsing
+      // would be a poor trade.
+      if (browsing) setBrowsing(false);
+      else onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, browsing]);
 
   /**
    * Put the chosen file on the server and keep the URL it comes back with.
@@ -107,6 +116,7 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   }
 
   return (
+    <>
     <div
       className="modal-backdrop"
       onMouseDown={(e) => {
@@ -211,16 +221,16 @@ export default function TokenModal({ token, onSubmit, onClose }) {
           </span>
         </div>
 
+        {/* Two ways to the same field. The library is offered first because it
+            is the answer almost every time — a couple of thousand pictures are
+            already here, and uploading is for the one your table needs that
+            isn't. */}
         <div className="token-field">
           <span>Picture</span>
           <span className="token-image">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              disabled={uploading}
-              onChange={(e) => pickImage(e.target.files?.[0])}
-            />
+            <button type="button" onClick={() => setBrowsing(true)}>
+              Choose from library
+            </button>
             {uploading && <small>Uploading…</small>}
             {/* Removing it puts the name back — the picture stands in for the
                 name rather than sitting alongside it. */}
@@ -229,6 +239,19 @@ export default function TokenModal({ token, onSubmit, onClose }) {
                 Remove
               </button>
             )}
+          </span>
+        </div>
+
+        <div className="token-field">
+          <span>Or upload</span>
+          <span className="token-image">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              disabled={uploading}
+              onChange={(e) => pickImage(e.target.files?.[0])}
+            />
           </span>
         </div>
 
@@ -276,5 +299,34 @@ export default function TokenModal({ token, onSubmit, onClose }) {
         </div>
       </form>
     </div>
+
+    {/* A sibling of the form rather than a child of it: a dialog nested inside
+        a <form> would be markup that only accidentally works, and this needs
+        the whole screen anyway. */}
+    {browsing && (
+      <div
+        className="modal-backdrop token-picker-backdrop"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) setBrowsing(false);
+        }}
+      >
+        <div className="modal token-picker" role="dialog" aria-modal="true" aria-label="Choose a token picture">
+          <div className="modal-head">
+            <h2>Choose a picture</h2>
+            <button type="button" className="linky" onClick={() => setBrowsing(false)} aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <TokenLibrary
+            selectedUrl={imageUrl}
+            onPick={(file) => {
+              setImageUrl(file.url);
+              setBrowsing(false);
+            }}
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }

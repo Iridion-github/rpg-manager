@@ -882,6 +882,225 @@ button.linky:hover {
   white-space: nowrap;
 }
 
+/* --- the token library --- */
+.tokens-view {
+  max-width: 1200px;
+}
+
+.token-library {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.token-library-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.token-search {
+  flex: 1;
+  min-width: 12rem;
+  max-width: 26rem;
+}
+
+.token-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  color: #8b90a0;
+  font-size: 0.85rem;
+}
+
+.token-crumbs .linky {
+  padding: 0.1rem 0.2rem;
+}
+
+/* Scrolls on its own so the search box and the breadcrumbs stay put while two
+   thousand pictures move underneath them. */
+.token-library-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.token-folders {
+  list-style: none;
+  margin: 0 0 0.9rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.4rem;
+}
+
+.token-folders button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  background: #1a1e27;
+  border-color: #262b38;
+  padding: 0.5rem 0.6rem;
+}
+
+.token-folders button:hover {
+  background: #24304a;
+  border-color: #2f3d5e;
+}
+
+.token-folder-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How many pictures are down there, including in sub-folders — the difference
+   between opening a folder hopefully and opening it knowingly. */
+.token-folder-count {
+  flex: none;
+  color: #8b90a0;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.token-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0.45rem 0.35rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  font: inherit;
+  color: #d6dbe6;
+  text-align: center;
+}
+
+/* Only the picker's tiles are pressable; in the tab they are figures. */
+button.token-tile {
+  cursor: pointer;
+}
+
+button.token-tile:hover {
+  background: #24304a;
+  border-color: #2f3d5e;
+}
+
+.token-tile.chosen {
+  border-color: #58a6ff;
+  background: #1d2740;
+}
+
+/* Round, like the token it will become — you are choosing how it will look on
+   the map, so it may as well be shown that way. */
+.token-tile img {
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #10131a;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+}
+
+.token-tile-name {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  /* Two lines, then stop: a wall of full names turns the grid into a wall of
+     text, and the title attribute carries the whole thing anyway. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.token-tile-path {
+  font-size: 0.64rem;
+  color: #8b90a0;
+  overflow-wrap: anywhere;
+}
+
+/* Looking at one token properly. Above the picker's own layer, since the
+   library can be open underneath it in the token modals. */
+.token-view-backdrop {
+  z-index: 540;
+}
+
+/* Half the width it was: the source art is 256px square, and the old size was
+   stretching it nearly three times over. */
+.modal.token-view {
+  width: min(23rem, 94vw);
+  max-height: 92vh;
+  gap: 0.5rem;
+}
+
+.token-view-path {
+  margin: 0;
+  color: #8b90a0;
+  font-size: 0.8rem;
+}
+
+/* Square rather than round — the circle is how it will look on the map, and
+   this is for looking at the art the circle crops away. */
+.token-view-stage {
+  width: 100%;
+  /* Or the border is added to the 100% and the modal grows a scrollbar over
+     two stray pixels. */
+  box-sizing: border-box;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #262b38;
+  border-radius: 10px;
+  background: #10131a;
+}
+
+.token-view-stage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The picker: the library, given most of the screen, over the token form. */
+.token-picker-backdrop {
+  z-index: 520;
+}
+
+/* Both classes, deliberately: the base `.modal` is a 24rem column defined
+   further down this file, and on equal specificity the later rule would win.
+   A grid of artwork needs the opposite of a narrow column. */
+.modal.token-picker {
+  width: min(70rem, 96vw);
+  height: min(46rem, 88vh);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* The library's own body scrolls; the dialog around it should not. */
+  overflow: hidden;
+}
+
+.token-picker .token-library {
+  flex: 1;
+  min-height: 0;
+}
+
 /* --- who is at this table --- */
 .player-rows {
   list-style: none;

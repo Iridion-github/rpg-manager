@@ -29,6 +29,7 @@ const notesRouter = require('./routes/notes');
 const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
+const { router: tokensRouter, TOKENS_DIR } = require('./routes/tokens');
 const { registerTokenDrag, roomFor } = require('./tokenDrag');
 const { announcePresence } = require('./realtime');
 const { registerSceneSignals } = require('./sceneSignals');
@@ -191,6 +192,7 @@ app.use('/api/campaigns/:campaignId/music', attachCampaign, musicRouter);
 // disk, not table data, and a map image is the same image whoever looks at it.
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/maps', mapsRouter);
+app.use('/api/tokens', tokensRouter);
 
 // Uploaded maps are public to anyone who can reach the server — they're just
 // images, and players need to see the map they're standing on.
@@ -198,6 +200,15 @@ app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '1h', index: false, dot
 
 // Built-in maps: drop a file into public/maps and it's immediately selectable.
 app.use('/maps', express.static(MAPS_DIR, { maxAge: '1h', index: false, dotfiles: 'deny' }));
+
+// The token library, same arrangement. Cached hard: these are content-addressed
+// by name in a folder nobody edits in place, so a browser that has one has the
+// one it wants — and a picker showing hundreds of them at once should ask for
+// each exactly once.
+app.use(
+  '/tokens',
+  express.static(TOKENS_DIR, { maxAge: '7d', index: false, dotfiles: 'deny' })
+);
 
 // An unmatched /api path is a client bug, not a page — answer in JSON rather
 // than falling through to the SPA and handing back HTML.

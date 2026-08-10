@@ -15,6 +15,7 @@ import Roster from './Roster.jsx';
 import Campaigns from './Campaigns.jsx';
 import Notes from './Notes.jsx';
 import Players from './Players.jsx';
+import Tokens from './Tokens.jsx';
 import Music from './Music.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
@@ -203,7 +204,7 @@ export default function App() {
    * than correcting it in an effect means there's no frame where a stale tab is
    * still on screen with nothing in it.
    */
-  const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'players'];
+  const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'players'];
   const shellTabs = ['campaigns', 'people'];
 
   function resolveTab(wanted) {
@@ -314,6 +315,15 @@ export default function App() {
                   Music
                 </button>
               )}
+              {/* Everyone: knowing what artwork exists is not the DM's secret,
+                  and a player who has browsed it can ask for the right goblin
+                  by name. */}
+              <button
+                className={activeTab === 'tokens' ? 'active' : ''}
+                onClick={() => setTab('tokens')}
+              >
+                Tokens
+              </button>
               {/* Last, and for everyone: who is at this table is not the DM's
                   private information — the members endpoint has always been
                   readable by any member. */}
@@ -415,6 +425,7 @@ export default function App() {
         {insideCampaign && activeTab === 'music' && isDm && (
           <Music key={`music-${campaignId}`} canControl={isDm} offline={offline} />
         )}
+        {insideCampaign && activeTab === 'tokens' && <Tokens key={`tokens-${campaignId}`} />}
         {insideCampaign && activeTab === 'players' && (
           <Players
             key={`players-${campaignId}`}

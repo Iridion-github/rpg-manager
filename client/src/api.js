@@ -224,6 +224,10 @@ export const api = {
   // Campaign-independent: a map image is the same image at any table.
   listMaps: () => get('/api/maps'),
 
+  // The built-in token artwork. Campaign-independent for the same reason the
+  // maps are: a picture of a goblin is the same picture at any table.
+  listTokens: () => get('/api/tokens'),
+
   uploadImage: (file) => {
     const form = new FormData();
     form.append('image', file);
