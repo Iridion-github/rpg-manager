@@ -830,9 +830,10 @@ button.linky:hover {
   justify-content: center;
   touch-action: none;
   cursor: default;
-  /* Smooths the ~30/s stream of remote drag positions into continuous motion.
-     Disabled while *we* drag, where any easing reads as input lag. */
-  transition: left 0.06s linear, top 0.06s linear;
+  /* No transition here. A token's left/top is its grid position times the cell
+     size, so *zooming* rewrites both on every token at once — and easing that
+     turned a zoom into the whole board sliding into place. See .token.remote,
+     which is the one case the easing was ever for. */
 }
 
 .token.movable {
@@ -842,13 +843,17 @@ button.linky:hover {
 .token.dragging {
   cursor: grabbing;
   z-index: 5;
-  transition: none;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
 }
 
+/* Someone else is dragging this one. Their positions arrive about thirty times
+   a second, which is a stutter without easing between them — so the easing
+   lives here, on the only token that benefits, rather than on all of them. Our
+   own drag is deliberately left un-eased: there, any easing reads as lag. */
 .token.remote {
   outline: 2px dashed #f0c674;
   outline-offset: 2px;
+  transition: left 0.06s linear, top 0.06s linear;
 }
 
 /* Hovering a square that's already taken — this drop will be refused. */
