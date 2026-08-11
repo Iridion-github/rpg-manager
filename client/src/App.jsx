@@ -9,6 +9,7 @@ import {
   setCampaign,
 } from './api.js';
 import { socket, reauthenticate, enterCampaign } from './socket.js';
+import { clear as clearHistory } from './history.js';
 import Tabletop from './Tabletop.jsx';
 import CharacterSheets from './CharacterSheets.jsx';
 import Roster from './Roster.jsx';
@@ -70,6 +71,9 @@ export default function App() {
     setCampaignIdState(next);
     setCampaign(next);
     enterCampaign(next);
+    // What you did at the last table isn't yours to undo at this one — the
+    // entries name scenes and tokens that don't exist here.
+    clearHistory();
   }, []);
 
   const loadIdentity = useCallback(async () => {

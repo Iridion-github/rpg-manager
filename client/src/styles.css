@@ -905,6 +905,26 @@ button.linky:hover {
   background: #24304a;
 }
 
+/* Nothing left to take back, or to put again. Still listed rather than hidden:
+   a menu whose items move around under the cursor is a menu you have to read
+   every time, and where Undo *is* is worth knowing even when it's spent. Placed
+   after the hover rules so it wins over them — a dead item shouldn't light up
+   under the pointer as though it would do something. */
+.map-menu button:disabled,
+.map-menu button:disabled:hover {
+  color: #5b6070;
+  background: transparent;
+  cursor: default;
+}
+
+/* The line between what you can do to the map and what you can do to your own
+   changes to it. */
+.menu-sep {
+  height: 1px;
+  margin: 0.15rem 0.1rem;
+  background: #2b3242;
+}
+
 /* Destructive, and coloured so it isn't chosen by muscle memory. */
 .map-menu button.danger {
   color: #ff9a9a;

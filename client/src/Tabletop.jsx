@@ -6,6 +6,16 @@ import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
 import TokenTooltip from './TokenTooltip.jsx';
 import { initiativeText, turnOrderOf } from './initiative.js';
+import { canRedo, canUndo, redo, subscribe, undo } from './history.js';
+import {
+  matches,
+  pick,
+  recordSceneEdit,
+  recordTokenAdd,
+  recordTokenDelete,
+  recordTokenEdit,
+  recordTokenMove,
+} from './sceneHistory.js';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
 // frames a pointer actually produces.
@@ -60,9 +70,12 @@ const PING_MS = 2400;
 
 // Roughly the menu's own size, used only to stop it opening past the edge of
 // the window. Approximate on purpose — measuring it properly means rendering it
-// somewhere invisible first, for a few pixels nobody will ever notice.
+// somewhere invisible first, for a few pixels nobody will ever notice. Sized
+// for the longest of the three menus, which is the map's own: five items and a
+// rule. The shorter ones open a little further from the bottom edge than they
+// strictly need to, which nobody has ever complained about.
 const MENU_W = 140;
-const MENU_H = 96;
+const MENU_H = 156;
 
 const round1 = (v) => Math.round(v * 10) / 10;
 // Free placement still gets rounded, just far more finely than to a cell —
@@ -163,6 +176,10 @@ export default function Tabletop({ actor, players, offline }) {
   // a layout effect that runs *after* the new zoom is on screen. Without it a
   // focus that doesn't change the zoom would re-render nothing and never scroll.
   const [focusTick, setFocusTick] = useState(0);
+  // Whether there is anything of yours left to take back, or to put again. Held
+  // as state rather than read at render because the stack is a plain module —
+  // it changes without React being told, so it says so instead.
+  const [history, setHistory] = useState(() => ({ undo: canUndo(), redo: canRedo() }));
 
   const isDm = actor?.role === 'dm';
   /**
@@ -205,6 +222,40 @@ export default function Tabletop({ actor, players, offline }) {
     refresh();
     api.listMaps().then(setMaps).catch(() => setMaps([]));
   }, [refresh]);
+
+  // --- undo and redo ---
+  // The stack outlives this component — it's a module, so walking off to the
+  // notes and back doesn't cost you your history — which is exactly why the
+  // buttons have to be told when it changes.
+  useEffect(() => subscribe(() => setHistory({ undo: canUndo(), redo: canRedo() })), []);
+
+  /**
+   * Take back your last action, or put it again.
+   *
+   * Whatever happens, the board is re-read afterwards. On success because the
+   * server broadcast our own change back to everyone but us; on failure because
+   * a failure usually means the board is already not what this client thought.
+   */
+  const runHistory = useCallback(
+    async (direction) => {
+      // Nothing here can be written while the server is unreachable, and the
+      // shell already says as much.
+      if (offline) return;
+      if (!(direction === 'undo' ? canUndo() : canRedo())) return;
+      setError('');
+      try {
+        const entry = direction === 'undo' ? await undo() : await redo();
+        // Look at what moved. An undo that changes a scene you aren't watching
+        // is otherwise a button that appears to do nothing at all.
+        if (entry?.sceneId) setActiveId(entry.sceneId);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        refresh();
+      }
+    },
+    [offline, refresh]
+  );
 
   // A draft belongs to the scene it was made on, and so does a pulse on the map.
   useEffect(() => {
@@ -411,9 +462,12 @@ export default function Tabletop({ actor, players, offline }) {
       grid: canNudgeGrid,
       // Where the grid started, and where it has got to — kept here rather than
       // read back from the draft, so the save at the end can't pick up a value
-      // from a render that hasn't happened yet.
+      // from a render that hasn't happened yet. The start is kept as well as
+      // the running total: it's what Undo puts back.
       offX: gridOffX,
       offY: gridOffY,
+      fromX: gridOffX,
+      fromY: gridOffY,
     };
     setGesture(canNudgeGrid ? 'grid' : 'pan');
   }
@@ -459,7 +513,9 @@ export default function Tabletop({ actor, players, offline }) {
     }
     // Saved when the hand comes off the map rather than once per pixel of
     // travel — the same bargain the cell-size slider makes with its timer.
-    if (p.grid && pannedRef.current) saveGridOffset(p.offX, p.offY);
+    if (p.grid && pannedRef.current) {
+      saveGridOffset(p.offX, p.offY, { gridOffsetX: p.fromX, gridOffsetY: p.fromY });
+    }
   }
 
   // --- scroll to adjust ---
@@ -585,6 +641,32 @@ export default function Tabletop({ actor, players, offline }) {
       window.removeEventListener('wheel', close);
     };
   }, [menu]);
+
+  /**
+   * Ctrl+Z and Ctrl+Shift+Z, the two shortcuts everybody's hands already know.
+   *
+   * Bound while the tabletop is on screen, since everything Undo can reach is
+   * on it. Note that a browser cannot tell the left Shift from the right one
+   * here: a keydown only reports *that* Shift is held, not which, so either
+   * hand redoes.
+   */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (e.key?.toLowerCase() !== 'z') return;
+      // A text box has an undo of its own, and that is the one being asked for.
+      // Taking the keystroke from someone retyping a chat line to instead move
+      // a token behind them would be a poor trade.
+      if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+      // A form over the map is what the keyboard is aimed at, even when the
+      // focus has slipped off its fields.
+      if (tokenForm || confirmDelete) return;
+      e.preventDefault();
+      runHistory(e.shiftKey ? 'redo' : 'undo');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [runHistory, tokenForm, confirmDelete]);
 
   function onContextMenu(e) {
     // Windows fires contextmenu on mouse-*up*, so a pan that finishes over a
@@ -731,6 +813,9 @@ export default function Tabletop({ actor, players, offline }) {
 
   async function removeToken(tokenId) {
     setError('');
+    // Kept before it goes: putting it back means sending the whole token, and
+    // in a moment there'll be nowhere left to read it from.
+    const token = scene.tokens.find((t) => t.id === tokenId);
     try {
       await api.deleteToken(scene.id, tokenId);
       setScenes((prev) =>
@@ -738,6 +823,7 @@ export default function Tabletop({ actor, players, offline }) {
           s.id === scene.id ? { ...s, tokens: s.tokens.filter((t) => t.id !== tokenId) } : s
         )
       );
+      if (token) recordTokenDelete({ sceneId: scene.id, token });
     } catch (e) {
       setError(e.message);
       throw e;
@@ -877,6 +963,13 @@ export default function Tabletop({ actor, players, offline }) {
     );
     try {
       await api.moveToken(scene.id, tokenId, x, y);
+      recordTokenMove({
+        sceneId: scene.id,
+        tokenId,
+        label: scene.tokens.find((t) => t.id === tokenId)?.label,
+        from: { x: d.fromX, y: d.fromY },
+        to: { x, y },
+      });
     } catch (e) {
       // 409 means someone claimed the square between our check and our write.
       // Same outcome as our own check: the move just doesn't happen, quietly.
@@ -928,8 +1021,18 @@ export default function Tabletop({ actor, players, offline }) {
 
   const patchScene = (changes) =>
     guard(async () => {
+      const fields = Object.keys(changes);
+      // Read off the scene as this screen reads it, defaults filled in — an
+      // older scene may never have stored a grid offset or a gridOn flag, and
+      // "put back what was there" has to mean the value that was in force, not
+      // the gap where it wasn't written down.
+      const before = pick({ ...scene, gridOn, gridSize, gridOffsetX: gridOffX, gridOffsetY: gridOffY }, fields);
       const updated = await api.updateScene(scene.id, { ...scene, ...changes });
       setScenes((prev) => prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s)));
+      // A name field blurred without being touched is not an action, and an
+      // undo that does nothing is worse than no undo at all.
+      const after = pick(updated, fields);
+      if (!matches(after, before)) recordSceneEdit({ sceneId: updated.id, before, after });
     });
 
   // Adopt a map: take the image's own dimensions as the scene's size, so the
@@ -953,11 +1056,16 @@ export default function Tabletop({ actor, players, offline }) {
     setGridDraft(value);
     clearTimeout(gridTimer.current);
     gridTimer.current = setTimeout(async () => {
+      // What the scene said before this settle — one entry per time the hand
+      // comes to rest, rather than one per pixel of slider travel.
+      const before = { gridSize: scene.gridSize ?? 70 };
       try {
         const updated = await api.updateScene(scene.id, { ...scene, gridSize: value });
         setScenes((prev) =>
           prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
         );
+        const after = { gridSize: updated.gridSize };
+        if (!matches(after, before)) recordSceneEdit({ sceneId: updated.id, before, after });
         setGridDraft(null); // back to following the scene
       } catch (e) {
         setError(e.message);
@@ -967,7 +1075,7 @@ export default function Tabletop({ actor, players, offline }) {
 
   // Where the drag left the grid. No timer: a nudge ends when the button comes
   // up, which is a moment the slider never gets.
-  async function saveGridOffset(x, y) {
+  async function saveGridOffset(x, y, before) {
     try {
       const updated = await api.updateScene(scene.id, {
         ...scene,
@@ -980,6 +1088,10 @@ export default function Tabletop({ actor, players, offline }) {
       setScenes((prev) =>
         prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
       );
+      // One entry for the whole drag: where the grid sat when the button went
+      // down, and where it sat when it came up.
+      const after = pick(updated, ['gridOffsetX', 'gridOffsetY']);
+      if (!matches(after, before)) recordSceneEdit({ sceneId: updated.id, before, after });
       setOffsetDraft(null); // back to following the scene
     } catch (e) {
       setError(e.message);
@@ -1002,14 +1114,8 @@ export default function Tabletop({ actor, players, offline }) {
     // them. It also refuses a size that would grow the token into a neighbour,
     // which surfaces in the modal.
     if (tokenForm.token) {
-      const updated = await api.updateToken(scene.id, tokenForm.token.id, {
-        label,
-        color,
-        borderColor,
-        size,
-        imageUrl,
-        ...stats,
-      });
+      const asked = { label, color, borderColor, size, imageUrl, ...stats };
+      const updated = await api.updateToken(scene.id, tokenForm.token.id, asked);
       setScenes((prev) =>
         prev.map((s) =>
           s.id === scene.id
@@ -1017,6 +1123,18 @@ export default function Tabletop({ actor, players, offline }) {
             : s
         )
       );
+      // Only the fields the form asked about, and read back off the server's
+      // answer rather than off the form: it settles some of them itself — hit
+      // points from a total, an initiative from its die and modifier — and an
+      // undo has to put back what was stored, not what was typed.
+      const fields = Object.keys(asked);
+      recordTokenEdit({
+        sceneId: scene.id,
+        tokenId: updated.id,
+        label: updated.label,
+        before: pick(tokenForm.token, fields),
+        after: pick(updated, fields),
+      });
       return;
     }
 
@@ -1034,6 +1152,9 @@ export default function Tabletop({ actor, players, offline }) {
     setScenes((prev) =>
       prev.map((s) => (s.id === scene.id ? { ...s, tokens: [...s.tokens, token] } : s))
     );
+    // The server's copy, not the form's: it may have slid the token to the next
+    // free cell, and that's where undo has to know it went.
+    recordTokenAdd({ sceneId: scene.id, token });
   }
 
 
@@ -1485,6 +1606,32 @@ export default function Tabletop({ actor, players, offline }) {
               <button onClick={ping}>Ping</button>
               <button onClick={focusEveryone}>Focus</button>
               {isDm && <button onClick={openTokenModal}>Create token</button>}
+              {/* Below the line: not things to do to the map, but things to do
+                  to what you have already done to it. Everyone has these — a
+                  player who has moved a token has something to take back — and
+                  they reach only your own work, since your own is all this
+                  browser ever wrote down. */}
+              <div className="menu-sep" />
+              <button
+                disabled={!history.undo}
+                onClick={() => {
+                  setMenu(null);
+                  runHistory('undo');
+                }}
+                title="Take back your last change (Ctrl+Z)"
+              >
+                Undo
+              </button>
+              <button
+                disabled={!history.redo}
+                onClick={() => {
+                  setMenu(null);
+                  runHistory('redo');
+                }}
+                title="Put back what you just took back (Ctrl+Shift+Z)"
+              >
+                Redo
+              </button>
             </>
           )}
         </div>

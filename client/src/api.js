@@ -227,6 +227,9 @@ export const api = {
   deleteTrack: (id) => del(table(`/music/${id}`)),
 
   listScenes: () => get(table('/scenes')),
+  // One scene, read fresh. Undo asks for this before reversing anything: the
+  // board it is about to change may not be the board it was recorded on.
+  getScene: (id) => get(table(`/scenes/${id}`)),
   createScene: (data) => post(table('/scenes'), data),
   updateScene: (id, data) => put(table(`/scenes/${id}`), data),
   deleteScene: (id) => del(table(`/scenes/${id}`)),
