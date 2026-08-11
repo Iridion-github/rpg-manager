@@ -149,9 +149,24 @@ export default function App() {
       loadIdentity();
       loadCampaigns();
     };
+    /**
+     * A dropped socket is a reason to *ask* whether the server is there, not an
+     * answer in itself.
+     *
+     * The two are different questions and they used to share a flag. A busy
+     * connection — a tunnel carrying a few hundred token thumbnails — starves
+     * the WebSocket's heartbeat long before it troubles an HTTP request, and
+     * calling that "unreachable" emptied the whole app into its read-only cache
+     * while every request was still going through perfectly well.
+     *
+     * So: live updates have stopped, say so, and go and find out about the rest.
+     * `loadIdentity` is one small GET that answers it honestly — it sets
+     * reachable either way, so a server that really has gone still lands in the
+     * cached view a moment later.
+     */
     const onDisconnect = () => {
       setConnected(false);
-      setReachable(false);
+      loadIdentity();
     };
     const onCampaigns = () => {
       loadCampaigns();

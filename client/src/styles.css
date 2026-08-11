@@ -1717,6 +1717,49 @@ button.token-tile:hover {
   flex: none;
 }
 
+/* --- waiting for the token library ---
+   The only screen in the app with a big enough answer behind it to be worth
+   drawing a wait for. Beside the text rather than over the page: nothing else
+   is blocked, so nothing else should look blocked. */
+.library-loading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem 0;
+  max-width: 46rem;
+}
+
+.library-loading .hint {
+  margin: 0.25rem 0 0;
+}
+
+.spinner {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  border: 2px solid #2c3140;
+  border-top-color: #58a6ff;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Someone who has asked not to be shown motion gets a mark that simply sits
+   there — it still says "something is happening here", which is the whole job. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: #58a6ff;
+    border-right-color: #58a6ff;
+  }
+}
+
 /* --- character sheets --- */
 .sheet-toolbar {
   display: flex;

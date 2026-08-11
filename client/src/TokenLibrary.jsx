@@ -110,7 +110,32 @@ export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
 
   const crumbs = path ? path.split('/') : [];
 
-  if (loading) return <p className="hint">Loading the token library…</p>;
+  /**
+   * The wait, said out loud.
+   *
+   * Deliberately not a blocking overlay. This is the one screen in the app with
+   * a genuinely large answer behind it — a couple of thousand pictures to list
+   * — and everything else on the page keeps working while it arrives: the map,
+   * the chat, the sheets. Taking the whole app away to report on one tab's
+   * loading would be a bigger interruption than the loading is.
+   *
+   * `role="status"` so a screen reader hears it without being dragged here.
+   */
+  if (loading) {
+    return (
+      <div className="library-loading" role="status">
+        <span className="spinner" aria-hidden="true" />
+        <div>
+          <strong>Loading the token library…</strong>
+          <p className="hint">
+            There are a couple of thousand pictures in here. The list is fetched once and
+            remembered for the rest of your visit, so this wait happens on the first look
+            and not again.
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (error) return <p className="error">{error}</p>;
   if (!files.length) {
     return <p className="hint">{emptyHint || 'No token artwork found in public/tokens.'}</p>;

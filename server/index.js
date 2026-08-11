@@ -5,6 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const express = require('express');
 const { allowedOrigins, corsPolicy, securityHeaders } = require('./security');
+const compression = require('compression');
 const limits = require('./rateLimit');
 const { Server } = require('socket.io');
 
@@ -72,6 +73,38 @@ const CORS_ORIGINS = allowedOrigins({ gateEnabled });
 
 app.use(securityHeaders);
 app.use(corsPolicy(CORS_ORIGINS));
+
+/**
+ * Gzip the text on the way out.
+ *
+ * Worth it for one link in particular. Behind a tunnel, cloudflared forwards
+ * the browser's Accept-Encoding to this server, so without this the *origin to
+ * Cloudflare* hop — the narrow one, the one that starves the WebSocket when the
+ * token library is opened — carries every byte uncompressed. The library's
+ * listing is 232kB of very repetitive JSON and goes to 28kB; the client bundle
+ * goes to a third.
+ *
+ * Two things it deliberately does not touch.
+ *
+ * Artwork: `compression.filter` skips image types, and rightly — a .webp comes
+ * out of gzip *larger* than it went in. The 34MB of token pictures is most of
+ * this server's traffic and none of it is helped by any of this.
+ *
+ * Anything under /api/auth: compressing a response that carries both a secret
+ * and text the caller chose is the shape BREACH attacks read secrets out of,
+ * by watching how the length moves. The sign-in reply carries a session token
+ * beside a username the caller typed, which is exactly that shape. It is a
+ * small, awkward attack and this is a private table — but the responses in
+ * question are a few hundred bytes, so declining to compress them costs
+ * nothing at all, and then the question doesn't need answering.
+ */
+app.use(
+  compression({
+    filter: (req, res) =>
+      req.path.startsWith('/api/auth') ? false : compression.filter(req, res),
+  })
+);
+
 app.use(express.json({ limit: '2mb' }));
 app.use(attachActor); // every request knows who it is
 
