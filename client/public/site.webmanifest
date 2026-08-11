@@ -1,0 +1,13 @@
+{
+  "name": "RPG Manager",
+  "short_name": "RPG Manager",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#10131a",
+  "background_color": "#10131a"
+}

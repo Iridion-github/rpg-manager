@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RPG Manager</title>
+
+    <!-- One vector die, wherever a browser wants an icon: the tab, the bookmark
+         list, the history entry, a shortcut on the desktop. SVG rather than a
+         pile of PNGs because it is the same drawing at every size, and the
+         browser picks the size it needs. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Safari's pinned-tab icon is a silhouette: it takes the shape and paints
+         it in this colour itself. -->
+    <link rel="mask-icon" href="/favicon.svg" color="#58a6ff" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- The colour a browser tints its own chrome with where it does that at
+         all — the same near-black the app is built on. -->
+    <meta name="theme-color" content="#10131a" />
   </head>
   <body>
     <div id="root"></div>

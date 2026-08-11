@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Twenty-sided die">
+  <title>RPG Manager</title>
+  <!--
+    A d20 seen face-on: an icosahedron in that orientation has a hexagonal
+    silhouette, one triangle facing you in the middle, and three edges running
+    from its corners out to alternating corners of the hexagon. That is the
+    whole drawing — three shapes, no shading, no number.
+
+    Deliberately no "20" on the face. At the size this is actually used, sixteen
+    pixels in a tab strip, two digits inside the middle triangle would be four
+    pixels tall and would read as a smudge; the silhouette is what makes a d20
+    recognisable at a glance anyway.
+
+    Vector, so one file serves the tab, the bookmark and the installed-app icon
+    at every size. Strokes are heavy relative to the 64-unit box for the same
+    reason — a hairline here disappears entirely at tab size.
+  -->
+  <g stroke="#0d1017" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- The body. Its own dark outline is what keeps it legible against a
+         light tab strip and a dark one alike. -->
+    <polygon points="32,3 57.1,17.5 57.1,46.5 32,61 6.9,46.5 6.9,17.5" fill="#58a6ff" />
+    <!-- The face turned towards you, lit a shade brighter than the body. -->
+    <polygon points="32,17.5 19.4,39.3 44.6,39.3" fill="#8cc2ff" />
+    <!-- The three edges leading away from that face to the corners behind it. -->
+    <path d="M32 17.5V3" fill="none" />
+    <path d="M19.4 39.3 6.9 46.5" fill="none" />
+    <path d="M44.6 39.3 57.1 46.5" fill="none" />
+  </g>
+</svg>
