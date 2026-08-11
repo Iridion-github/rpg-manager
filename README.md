@@ -111,9 +111,9 @@ doesn't reopen the one you had last: that would drop you inside a table on
 arrival, and the directory you're meant to land on is reached by a tab that only
 exists while you're outside one.
 
-If a campaign closes under you — you're removed from it, or your key is rotated
-— whatever you were looking at falls back to the directory rather than emptying
-out where it stands.
+If a campaign closes under you — you're removed from it, or your account is
+deleted — whatever you were looking at falls back to the directory rather than
+emptying out where it stands.
 
 ## Roles
 
@@ -123,16 +123,16 @@ Roles come in two layers, and keeping them apart is the point.
 
 | Global role | How you get it | What it means |
 | --- | --- | --- |
-| **Admin** | log in as `admin` with `ADMIN_PASSWORD` | Can create people, and acts as DM at every table |
-| **User** | register, or open an invite link | Can browse the directory and start campaigns |
+| **Admin** | log in as `admin` with `ADMIN_PASSWORD` | Acts as DM at every table, and can remove people |
+| **User** | register | Can browse the directory and start campaigns |
 | **Spectator** | nothing | No identity — you get the sign-in screen |
 
 ### Accounts
 Register with a username and password, log in, log out. Passwords are hashed
 with **scrypt** — a real key-derivation function from Node's standard library,
 deliberately slow and memory-hard, so a stolen `users.json` can't be run through
-a wordlist at speed. No plaintext is ever stored, and neither password hashes
-nor invite keys appear in any API response.
+a wordlist at speed. No plaintext is ever stored, and password hashes never
+appear in any API response.
 
 Logging in mints a **session token**, held in localStorage and sent as
 `x-session`. Logging out destroys it *server-side*, so a copy that leaked
@@ -144,14 +144,78 @@ with `ADMIN_PASSWORD`. That password stays server configuration rather than
 being copied into the user file at first login — two places to change it, one of
 them silently winning, is how you end up locked out.
 
-Invite links still work. They're the older credential and remain valid, so
-nothing you've already handed out breaks; the server prefers a session when both
-are present.
+**Invite links are gone.** A key in a URL signed you in by being opened, which
+meant a credential that never expired, sitting in bookmarks, browser history and
+whatever chat it was pasted into. Registration with a signup code does the same
+job without any of that, so the whole path — the `?key=` link, the `x-user-key`
+header, key rotation — has been removed, and any key still stored on an account
+is swept away the next time the server starts. Old links now land on the sign-in
+screen.
 
 **Registration is open unless you set `SIGNUP_CODE`.** Open is the right default
 on your own machine and the wrong one on a hostname a stranger can find, so the
 startup banner says which you're running. With a code set, the sign-in screen
-asks for it.
+asks for it — and asks for nothing else: knowing the code is already proof of an
+invitation, so an email address becomes optional. An open server has been told
+nothing about who is registering, and still asks for one.
+
+### My account, and the two ways to change a credential
+Signed in, the **My account** tab shows what the server holds about you. Your
+shown name changes on the spot. A password or an email address needs more,
+because both are how you get back in:
+
+| | always needed | then one of |
+|---|---|---|
+| Password | the current password | the signup code, **or** a link sent to your address |
+| Email | — | the signup code, **or** a link sent to the address you're *leaving* |
+
+Until the link is opened, nothing has changed — so somebody who finds an
+unlocked browser can start either of these, and the person who owns the mailbox
+simply never finishes it. The warning for an address change deliberately goes to
+the old address: the person losing it is the one who gets to agree.
+
+An account with no address on file has only the code. That's the same bargain it
+made when it registered without one.
+
+### Sending mail
+Nothing is sent unless you configure SMTP, and you don't need an account with
+anyone — any mailbox you already have will do, usually with an app password:
+
+| variable | meaning |
+|---|---|
+| `SMTP_PASS` | the mailbox password — an *app password* at Gmail. **The only one that must stay out of the repo** |
+| `SITE_EMAIL` | the address to send from and log in as. Has a default in `server/mailer.js`, since an address isn't a secret — set this only to run from a different mailbox |
+| `SMTP_HOST` | the submission server; inferred for `@gmail.com`, required otherwise |
+| `SMTP_PORT` | `587` (default) or `465` |
+| `SMTP_SECURE` | override the guess (`465` is TLS from the first byte) |
+| `SMTP_USER` / `MAIL_FROM` | only when the login and the sender aren't `SITE_EMAIL` — a relay sending on behalf of an address it doesn't own |
+| `PUBLIC_URL` | what the links point at, e.g. `https://table.example.com` |
+
+For an ordinary mailbox that's **one variable**: `SMTP_PASS`. The address lives
+in `server/mailer.js` because it isn't a secret — it goes out on the front of
+every letter — and the password never joins it there. Keeping the two apart
+means there's no config file sitting next to the address inviting a credential
+to be pasted in beside it.
+
+**Gmail specifically**: the account's own password will not work — Google
+requires an *app password*, which only becomes available once 2-Step
+Verification is on. Create one at `myaccount.google.com/apppasswords` and use
+those 16 characters as `SMTP_PASS`.
+
+Half-configured says which half: a mailbox with a login and no password counts
+as **not** configured rather than being attempted, because trying anyway turns
+every password change into an authentication failure — worse than the outbox it
+would otherwise have fallen back to. The startup banner names what's missing.
+
+Leave `PUBLIC_URL` unset and links are built from the address the request
+arrived on, which behind a quick tunnel is the tunnel's own hostname — so they
+work without being reconfigured every time it restarts. Set it when the hostname
+is stable.
+
+**With no SMTP configured the flow still works**: the letter is written to
+`data/outbox.log` and the server log instead of being sent, the screen says so
+rather than claiming an email is on its way, and whoever runs the server can
+fetch the link from there. The startup banner says which of the two you're in.
 
 ### Testing the roles
 This is what accounts buy you beyond tidiness: log out, log in as somebody else,
@@ -204,12 +268,12 @@ ADMIN_PASSWORD=your-secret npm start             # bash
 ### Inviting people
 Two separate steps, because they answer two different questions.
 
-**Getting someone onto the server** is the admin's job: the **Users** tab, add
-a friend, *Copy invite link*. The link looks like `https://your-tunnel/?key=…`;
-their browser claims the key and remembers it, so they land as themselves every
-time. Nobody self-registers — an open registration endpoint on a tunnel-exposed
-machine would let anyone who found the URL mint an identity. If a link leaks,
-**Rotate key** invalidates it without disturbing anything that person owns.
+**Getting someone onto the server** is theirs to do: send them the URL and your
+`SIGNUP_CODE`, and they register with a username and password of their own. The
+code is what stops an open registration endpoint on a tunnel-exposed machine
+being an invitation to anyone who finds the URL. The **Users** tab lists who has
+registered, and lets the admin rename or remove them — it doesn't mint accounts
+and doesn't hand out credentials.
 
 **Getting them to your table** is the DM's job: **Campaigns → Members**, and
 pick Player or DM for each person. Being on the server gets you nothing on its
@@ -492,10 +556,12 @@ $env:ADMIN_PASSWORD='your-secret'; npm run online
 
 That builds the client, starts the server, and opens a tunnel beside it. Look
 for the `https://something-random.trycloudflare.com` URL in the output — that's
-your table. Send it to your friends with their invite links.
+your table. Send it to your friends along with the signup code.
 
-The catch: the URL is new every time you start it, so invite links you sent
-yesterday point nowhere today. Fine for a one-off session, annoying as a habit.
+The catch: the URL is new every time you start it, so the address you sent
+yesterday points nowhere today. Fine for a one-off session, annoying as a habit
+— and worth knowing if you rely on emailed confirmation links, which is why
+`PUBLIC_URL` is best left unset with a quick tunnel.
 
 ### Named tunnel — a hostname that survives a restart
 Worth it if you own a domain on Cloudflare and want to send one link forever.
@@ -514,9 +580,9 @@ credentials file.
 ### Before you send the link
 - **`ADMIN_PASSWORD` is set** to something you didn't reuse elsewhere. The server
   won't start without it, so this is hard to get wrong.
-- **Each friend has their own invite link** from the Users tab. Anyone without
-  one lands as a spectator, which is the right outcome for a stranger who finds
-  the URL.
+- **`SIGNUP_CODE` is set**, and your friends have it. Anyone without it can't
+  register, and lands as a spectator — which is the right outcome for a stranger
+  who finds the URL.
 - **The table is only up while the tunnel is.** Close it and the site is gone —
   that's the design, not a failure. Friends who've loaded it keep a read-only
   cached view.
@@ -678,9 +744,9 @@ start, including the pre-campaign flat layout: `players.json` becomes users, and
 loose `sheets/scenes/chat/notes.json` are folded into a campaign called
 **Imported Campaign** with the admin as DM and everyone else as players.
 
-Ids and timestamps are carried across unchanged, so token ownership, per-sheet
-access grants and invite links all keep working — a campaign doesn't claim it
-was created today because you changed database engines. The source files are
+Ids and timestamps are carried across unchanged, so token ownership and
+per-sheet access grants keep working — a campaign doesn't claim it was created
+today because you changed database engines. The source files are
 renamed `*.imported` rather than deleted, and if the import throws, the server
 refuses to start rather than serve half-moved data.
 

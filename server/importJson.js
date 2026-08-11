@@ -33,7 +33,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const store = require('./store');
-const { newUserKey, colorFor, ADMIN_USERNAME } = require('./auth');
+const { colorFor, ADMIN_USERNAME } = require('./auth');
 
 // Collections that belong to a campaign. Finding one of these loose at the top
 // level is what identifies the pre-campaign layout.
@@ -143,7 +143,6 @@ async function importJson() {
         name: 'Admin',
         username: ADMIN_USERNAME,
         color: colorFor(users.length),
-        key: newUserKey(),
         globalRole: 'admin',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

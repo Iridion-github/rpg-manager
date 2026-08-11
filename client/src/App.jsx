@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  api,
-  getGmPassword,
-  getPlayerKey,
-  setGmPassword,
-  setPlayerKey,
-  setSession,
-  setCampaign,
-} from './api.js';
+import { api, setGmPassword, setSession, setCampaign } from './api.js';
 import { socket, reauthenticate, enterCampaign } from './socket.js';
 import { clear as clearHistory } from './history.js';
 import Tabletop from './Tabletop.jsx';
+import Account from './Account.jsx';
+import ConfirmChange from './ConfirmChange.jsx';
 import CharacterSheets from './CharacterSheets.jsx';
 import Roster from './Roster.jsx';
 import Campaigns from './Campaigns.jsx';
@@ -21,9 +15,6 @@ import Music from './Music.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
 import Auth from './Auth.jsx';
-
-// Note: an invite link's ?key=… is claimed inside api.js at import time, which
-// is early enough for the socket handshake to carry it.
 
 const ANON = { globalRole: 'anon', userId: null, name: '' };
 
@@ -48,6 +39,23 @@ export default function App() {
   // The campaign directory is the front door — you choose a table before you
   // can be at one.
   const [tab, setTab] = useState('campaigns');
+  // What this server offers an account screen: a signup code to type instead of
+  // answering a letter, and whether it can send one at all.
+  const [authConfig, setAuthConfig] = useState({});
+  /**
+   * A confirmation token from a link in an email, taken out of the address bar
+   * at once — the same care api.js takes with an invite key, and for the same
+   * reasons: it shouldn't be bookmarked, shared in a screenshot, or left where
+   * a reload would spend it twice.
+   */
+  const [confirmToken, setConfirmToken] = useState(() => {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('confirm');
+    if (!token) return '';
+    url.searchParams.delete('confirm');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    return token;
+  });
 
   const offline = !reachable;
   const authed = actor.globalRole !== 'anon';
@@ -118,6 +126,13 @@ export default function App() {
     loadIdentity();
   }, [loadIdentity]);
 
+  // Read once: what a server offers an account is set when it starts, not while
+  // it runs. A failure leaves the empty object, and the account screen then
+  // offers the safest reading of it — no code, no mail.
+  useEffect(() => {
+    api.authConfig().then(setAuthConfig).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (authed) loadCampaigns();
     else setCampaigns([]);
@@ -170,10 +185,9 @@ export default function App() {
     // forgotten here. Failing that (offline), still clear this browser.
     await api.logout().catch(() => {});
     setSession('');
-    // The pre-login credentials go too, or an old invite key in this browser
-    // would quietly sign you straight back in as somebody.
+    // The admin password goes too, or a browser holding it would quietly sign
+    // you straight back in as the admin.
     setGmPassword('');
-    setPlayerKey('');
     openCampaign(null);
     setActor(ANON);
     setTab('campaigns');
@@ -209,7 +223,7 @@ export default function App() {
    * still on screen with nothing in it.
    */
   const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'players'];
-  const shellTabs = ['campaigns', 'users'];
+  const shellTabs = ['campaigns', 'users', 'account'];
 
   function resolveTab(wanted) {
     if (!insideCampaign) return tableTabs.includes(wanted) ? 'campaigns' : wanted;
@@ -224,6 +238,27 @@ export default function App() {
 
   // Don't decide anything until the server has said who we are.
   if (!ready) return <div className="auth" />;
+
+  /**
+   * A link from a confirmation email takes over the whole window.
+   *
+   * Before the sign-in check, because the token is the authorisation and the
+   * mail may well have been opened in a browser that has never signed in here.
+   * Finishing it reloads the identity: a confirmed password change has just
+   * signed this session out, and a confirmed address change means /me now says
+   * something different.
+   */
+  if (confirmToken) {
+    return (
+      <ConfirmChange
+        token={confirmToken}
+        onDone={() => {
+          setConfirmToken('');
+          loadIdentity();
+        }}
+      />
+    );
+  }
 
   /**
    * No identity, no app.
@@ -341,12 +376,25 @@ export default function App() {
               Campaigns
             </button>
           )}
-          {!insideCampaign && isAdmin && (
+          {/* Everyone signed in can see who else is here — a DM picking members
+              is reading this same list from inside their campaign. What you can
+              *do* to it is another matter, and the tab itself decides that. */}
+          {!insideCampaign && authed && (
             <button
               className={activeTab === 'users' ? 'active' : ''}
               onClick={() => setTab('users')}
             >
               Users
+            </button>
+          )}
+          {/* After Users, and unlike it, for everybody: this one is about the
+              person signed in rather than about the server. */}
+          {!insideCampaign && authed && (
+            <button
+              className={activeTab === 'account' ? 'active' : ''}
+              onClick={() => setTab('account')}
+            >
+              My account
             </button>
           )}
         </nav>
@@ -401,7 +449,20 @@ export default function App() {
             onChanged={loadCampaigns}
           />
         )}
-        {activeTab === 'users' && isAdmin && <Roster onUsersChanged={loadCampaigns} />}
+        {activeTab === 'users' && authed && (
+          <Roster isAdmin={isAdmin} onUsersChanged={loadCampaigns} />
+        )}
+        {activeTab === 'account' && authed && (
+          <Account
+            actor={actor}
+            config={authConfig}
+            offline={offline}
+            // A new shown name is what every other screen calls you, so the
+            // identity behind them has to be re-read rather than left saying
+            // the old one until the next reload.
+            onChanged={loadIdentity}
+          />
+        )}
 
         {/* The campaign id in each key throws away every bit of state when the
             campaign changes, so a view can't briefly show the previous table's

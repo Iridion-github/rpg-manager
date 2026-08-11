@@ -50,8 +50,6 @@ const ALLOWED_HEADERS = [
   'x-client-id',
   'x-admin-password',
   'x-gm-password',
-  'x-user-key',
-  'x-player-key',
 ];
 
 function corsPolicy(origins) {

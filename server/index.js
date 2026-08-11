@@ -15,7 +15,9 @@ const {
   attachActor,
   resolveActor,
   sweepExpiredSessions,
+  dropInviteKeys,
 } = require('./auth');
+const { mailStatus } = require('./mailer');
 const { attachCampaign, isCampaignId, roleIn, touchActivity, CAMPAIGNS } = require('./campaigns');
 const { importJson } = require('./importJson');
 const adminRouter = require('./routes/admin');
@@ -90,14 +92,14 @@ const io = new Server(server, {
 app.set('io', io); // routes reach io via req.app.get('io')
 
 // Sockets authenticate once at handshake; the resolved actor rides along on the
-// connection. A key revoked mid-session takes effect on their next reconnect.
+// connection. A session destroyed mid-connection takes effect on the next
+// reconnect.
 io.use(async (socket, next) => {
   try {
-    const { gmPassword, adminPassword, playerKey, userKey, session } = socket.handshake.auth || {};
+    const { gmPassword, adminPassword, session } = socket.handshake.auth || {};
     socket.data.actor = await resolveActor({
       session,
       adminPassword: adminPassword || gmPassword,
-      userKey: userKey || playerKey,
     });
     next();
   } catch (err) {
@@ -398,6 +400,15 @@ importJson()
         .catch((err) => console.error('session sweep failed:', err.message));
     sweep();
     setInterval(sweep, 24 * 60 * 60_000).unref();
+
+    // A one-off, kept because it has to run against whatever database is in
+    // front of it rather than only against the one that was here when invite
+    // links went away — an import, a restored backup, or a copy from another
+    // machine can all bring keys back. Idempotent, and silent when there's
+    // nothing to do.
+    dropInviteKeys()
+      .then((n) => n && console.log(`removed ${n} dead invite key(s) from stored accounts`))
+      .catch((err) => console.error('invite key cleanup failed:', err.message));
   })
   .catch((err) => {
     console.error('Import failed — refusing to start rather than serving half-moved data:');
@@ -424,6 +435,11 @@ function announce() {
       ? '  signup: OPEN — anyone who reaches this server can register (set SIGNUP_CODE to close it)'
       : '  signup: requires SIGNUP_CODE'
   );
+  // Worth saying out loud: with no mailer, the links that confirm a password or
+  // an address change are written to a file instead of posted, and whoever is
+  // reading this banner is the only person who can fetch them. The line names
+  // whatever is still missing, so half-finished setup says which half.
+  console.log(`  mail: ${mailStatus}`);
   console.log(
     hasClientBuild
       ? `  app: serving client/dist — open http://localhost:${PORT}`

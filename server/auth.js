@@ -91,7 +91,6 @@ async function verifyPassword(password, stored) {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
-const newUserKey = () => crypto.randomBytes(24).toString('base64url');
 const newSessionToken = () => crypto.randomBytes(32).toString('base64url');
 const colorFor = (index) => PALETTE[index % PALETTE.length];
 
@@ -129,19 +128,50 @@ function validateCredentials(username, password) {
   return null;
 }
 
-function validateProfile(name, email) {
-  if (!name) return 'Tell us what to call you.';
-  if (name.length > MAX_NAME) return `Shown name must be at most ${MAX_NAME} characters.`;
+/**
+ * The rest of the form: what to call you, and where to reach you.
+ *
+ * The address is only insisted on when nothing else has vouched for the person
+ * filling this in. A server closed behind a signup code has already asked for
+ * something only an invited person has, and asking for an address as well is
+ * asking twice — see routes/auth.js, which decides which of the two this is.
+ *
+ * An address that *was* typed is checked either way. Half of one is a typo, not
+ * a decision to go without.
+ */
+/** One address, checked on its own — the form isn't the only thing that asks. */
+function validateEmail(email) {
   if (!email || email.length > MAX_EMAIL || !EMAIL_RE.test(email)) {
     return "That doesn't look like an email address.";
   }
   return null;
 }
 
-async function findUserByKey(key) {
-  if (!key) return null;
+function validateProfile(name, email, { emailRequired = true } = {}) {
+  if (!name) return 'Tell us what to call you.';
+  if (name.length > MAX_NAME) return `Shown name must be at most ${MAX_NAME} characters.`;
+  if (!email) return emailRequired ? "That doesn't look like an email address." : null;
+  return validateEmail(email);
+}
+
+/**
+ * Take the invite keys off any account still carrying one.
+ *
+ * Run once at boot, and idempotent. A key stopped being a credential when the
+ * link system went, and a secret nothing reads is still a secret sitting in the
+ * database — in backups, in exports, in whatever copy of the file gets moved to
+ * a new machine. Better gone than inert.
+ */
+async function dropInviteKeys() {
   const users = await store.list(USERS);
-  return users.find((u) => u.key && secretsMatch(u.key, key)) || null;
+  let cleaned = 0;
+  for (const user of users) {
+    if (!('key' in user)) continue;
+    const { key, ...rest } = user;
+    await store.put(USERS, rest);
+    cleaned += 1;
+  }
+  return cleaned;
 }
 
 async function findUserByUsername(username) {
@@ -249,7 +279,6 @@ async function ensureAdminUser() {
     name: process.env.ADMIN_NAME || 'Admin',
     username: ADMIN_USERNAME,
     color: colorFor(users.length),
-    key: newUserKey(),
     globalRole: 'admin',
   });
 }
@@ -262,17 +291,13 @@ async function ensureAdminUser() {
  * the admin — which defeats the entire point of being able to test the roles.
  * Dev mode is the fallback for requests that present nothing at all.
  */
-async function resolveActor({ adminPassword, userKey, session }) {
+async function resolveActor({ adminPassword, session }) {
   if (session) {
     const user = await userForSession(session);
     if (user) return actorFor(user);
   }
   if (gateEnabled && secretsMatch(adminPassword, ADMIN_PASSWORD)) {
     return actorFor(await ensureAdminUser());
-  }
-  if (userKey) {
-    const user = await findUserByKey(userKey);
-    if (user) return actorFor(user);
   }
   if (!gateEnabled) {
     // Open gate (dev): an unauthenticated visitor is the admin, which keeps
@@ -287,10 +312,9 @@ async function resolveActor({ adminPassword, userKey, session }) {
 function credsFromRequest(req) {
   return {
     session: req.get('x-session'),
-    // x-gm-password and x-player-key are the old header names, still accepted
-    // so a browser holding a credential from before the rename keeps working.
+    // x-gm-password is the old header name, still accepted so a browser holding
+    // a credential from before the rename keeps working.
     adminPassword: req.get('x-admin-password') || req.get('x-gm-password'),
-    userKey: req.get('x-user-key') || req.get('x-player-key'),
   };
 }
 
@@ -342,7 +366,7 @@ module.exports = {
   requireUser,
   requireAdmin,
   ensureAdminUser,
-  newUserKey,
+  dropInviteKeys,
   publicUser,
   colorFor,
   hashPassword,
@@ -350,6 +374,7 @@ module.exports = {
   secretsMatch,
   validateCredentials,
   validateProfile,
+  validateEmail,
   normalizeUsername,
   normalizeEmail,
   findUserByUsername,

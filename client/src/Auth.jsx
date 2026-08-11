@@ -112,14 +112,25 @@ export default function Auth({ onSignedIn }) {
             </label>
 
             {/* type="email" gets the browser's own validation, which is both
-                better than a regex and reported in the user's language. */}
+                better than a regex and reported in the user's language — and it
+                still applies to an address that's optional, since a half-typed
+                one is a typo rather than a decision to leave it out.
+
+                Optional exactly when a signup code is being asked for: the code
+                is already something only an invited person has, so an address
+                on top of it is asking twice for the same assurance. The server
+                decides this the same way (routes/auth.js) — this only spares
+                someone filling in a field that would have been accepted empty. */}
             <label>
-              Email <small>for recovering your account</small>
+              Email{' '}
+              <small>
+                {config.signupNeedsCode ? 'optional' : 'for recovering your account'}
+              </small>
               <input
                 type="email"
                 value={email}
                 autoComplete="email"
-                required
+                required={!config.signupNeedsCode}
                 maxLength={254}
                 placeholder="you@example.com"
                 onChange={(e) => setEmail(e.target.value)}
@@ -140,7 +151,12 @@ export default function Auth({ onSignedIn }) {
 
         <button
           type="submit"
-          disabled={busy || !username.trim() || !password || (registering && (!name.trim() || !email.trim()))}
+          disabled={
+            busy ||
+            !username.trim() ||
+            !password ||
+            (registering && (!name.trim() || (!config.signupNeedsCode && !email.trim())))
+          }
         >
           {registering ? 'Create account' : 'Log in'}
         </button>
@@ -148,8 +164,12 @@ export default function Auth({ onSignedIn }) {
 
       <p className="hint">
         {registering
-          ? 'Making an account gets you onto the server — a DM still has to add you to their campaign. Your email is only ever used to get you back in; nobody else can see it.'
-          : 'No account? Register above. If a DM sent you an invite link, opening it signs you in without one.'}
+          ? `Making an account gets you onto the server — a DM still has to add you to their campaign. ${
+              config.signupNeedsCode
+                ? 'The signup code is what gets you in, so an email is up to you; leave it blank and there is simply no way to reach you if you lose your password.'
+                : 'Your email is only ever used to get you back in; nobody else can see it.'
+            }`
+          : 'No account? Register above. A DM can add you to their table once you have one.'}
       </p>
     </div>
   );

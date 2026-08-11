@@ -1670,12 +1670,6 @@ button.token-tile:hover {
   flex: none;
 }
 
-.new-player {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
 /* --- character sheets --- */
 .sheet-toolbar {
   display: flex;
@@ -2679,6 +2673,106 @@ button.token-tile:hover {
   white-space: pre-wrap;
   line-height: 1.6;
   margin: 0;
+}
+
+/* --- my account ---
+   A reading-width column like the other text-heavy views: these are forms you
+   read before you fill in, and a password field three feet wide reads as a
+   different kind of thing than it is. */
+.account {
+  max-width: 640px;
+}
+
+/* What the server holds about you, as pairs rather than as another form: none
+   of it is being asked for here, it's being shown. */
+.account-facts {
+  display: grid;
+  gap: 0.35rem 1rem;
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 0.9rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 10px;
+}
+
+.account-facts > div {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.account-facts dt {
+  flex: none;
+  width: 7.5rem;
+  color: #8b90a0;
+  font-size: 0.82rem;
+}
+
+.account-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* One block per thing that can change, each with its own explanation and its
+   own answer — a single form with three buttons would leave you guessing which
+   message belonged to what you just pressed. */
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #262b38;
+}
+
+.account-form:last-child {
+  border-bottom: none;
+}
+
+.account-form h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.account-form .hint {
+  margin: 0;
+}
+
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  color: #8b90a0;
+}
+
+.account-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+/* What a form says once it has been used. Green rather than the plain grey of
+   an instruction: it's an answer, not a caption. */
+.account-said {
+  color: #6ee787;
+}
+
+/* Sits under the second password box while the two disagree. Quiet rather than
+   alarming — nothing has gone wrong yet, and the field is still being typed
+   into. */
+.account-mismatch {
+  color: #ff9a9a;
+  font-size: 0.75rem;
+}
+
+/* The two ways out of a confirmation link, side by side — neither is the
+   dangerous one, so neither is dressed as a warning. */
+.confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 /* --- chat --- */

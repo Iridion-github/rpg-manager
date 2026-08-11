@@ -1,13 +1,19 @@
 // Thin API client.
 //
-// Two credentials can be in play:
-//   GM password — typed by you, kept in localStorage, sent as x-gm-password.
-//   Player key   — arrives in an invite link (?key=…), sent as x-player-key.
-// The server turns whichever it sees into a role; the client never decides its
-// own permissions, it only renders what the server says it may do.
+// You sign in and get a session token; that is the credential. The admin
+// password is the one exception — it is the server's own configuration rather
+// than an account, and is sent as x-admin-password.
+//
+// There was a third: a key in an invite link, which signed you in by being
+// opened. It is gone. A bearer credential that lives in a URL ends up in
+// bookmarks, in browser history and in whatever chat it was pasted into, and it
+// never expired. People arrive by registering now — with SIGNUP_CODE, if the
+// server has one.
+//
+// The server turns what it sees into a role; the client never decides its own
+// permissions, it only renders what the server says it may do.
 
 const GM_KEY = 'rpg-manager:gm-password';
-const PLAYER_KEY = 'rpg-manager:player-key';
 const CLIENT_KEY = 'rpg-manager:client-id';
 const SESSION_KEY = 'rpg-manager:session';
 
@@ -49,49 +55,29 @@ export function setSession(value) {
   else localStorage.removeItem(SESSION_KEY);
 }
 
-export function getPlayerKey() {
-  return localStorage.getItem(PLAYER_KEY) || '';
-}
-
-export function setPlayerKey(value) {
-  if (value) localStorage.setItem(PLAYER_KEY, value);
-  else localStorage.removeItem(PLAYER_KEY);
-}
-
 /**
- * Claim an invite link. The key is moved out of the URL and into storage so it
- * doesn't linger in the address bar, get bookmarked, or leak through a shared
- * screenshot. Returns true if a new key was claimed.
+ * Forget a key left behind by the invite-link era.
  *
- * Called at module scope below — see the note there for why the timing matters.
+ * The links stopped working when the server stopped reading them, but the key
+ * itself would sit in this browser's storage forever — a dead secret nobody can
+ * see to delete. Run once at import, and after that there is nothing to find.
  */
-export function claimKeyFromUrl() {
-  const url = new URL(window.location.href);
-  const key = url.searchParams.get('key');
-  if (!key) return false;
-  setPlayerKey(key);
-  url.searchParams.delete('key');
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-  return true;
-}
-
-// Claim the invite key here, at import time, rather than from a component.
-// socket.js imports this module and reads the key while *its* module body runs,
-// which happens before any component body does. Claiming later would leave the
-// first socket of an invited player's session authenticated as a spectator,
-// so their tokens wouldn't move until they reloaded the page.
-claimKeyFromUrl();
+(function forgetOldInviteKey() {
+  try {
+    localStorage.removeItem('rpg-manager:player-key');
+  } catch {
+    // Private mode, or a storage that refuses. Nothing to clean up, then.
+  }
+})();
 
 export function authHeaders() {
   const headers = { 'x-client-id': clientId };
   const session = getSession();
   const pw = getGmPassword();
-  const playerKey = getPlayerKey();
-  // All three can be present; the server prefers the session. The other two are
-  // the pre-login credentials, still sent so old invite links keep working.
+  // Both can be present and the server prefers the session. The password is the
+  // admin's, and is server configuration rather than an account.
   if (session) headers['x-session'] = session;
   if (pw) headers['x-admin-password'] = pw;
-  if (playerKey) headers['x-user-key'] = playerKey;
   return headers;
 }
 
@@ -155,14 +141,18 @@ export const api = {
   register: (data) => post('/api/auth/register', data),
   login: (username, password) => post('/api/auth/login', { username, password }),
   logout: () => post('/api/auth/logout', {}),
-  changePassword: (current, password) => post('/api/auth/password', { current, password }),
+  // Your own account. The name changes on the spot; the password and the email
+  // either take the signup code or wait for a link to be opened — the server
+  // decides which, and says so in its answer.
+  updateAccount: (name) => put('/api/auth/account', { name }),
+  changePassword: (current, password, code) =>
+    post('/api/auth/password', { current, password, code }),
+  changeEmail: (email, code) => post('/api/auth/email', { email, code }),
+  confirmChange: (token) => post('/api/auth/confirm', { token }),
 
   // --- global: people, and the campaigns they belong to ---
   listUsers: () => get('/api/users'),
-  listUserKeys: () => get('/api/users/keys'),
-  createUser: (data) => post('/api/users', data),
   updateUser: (id, data) => put(`/api/users/${id}`, data),
-  rotateUserKey: (id) => post(`/api/users/${id}/rotate-key`, {}),
   deleteUser: (id) => del(`/api/users/${id}`),
 
   // Only ever the campaigns you're a member of — someone else's table doesn't

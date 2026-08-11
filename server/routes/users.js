@@ -3,17 +3,21 @@
 /**
  * The people this server knows about — global, not per campaign.
  *
- * Creating a user mints a credential, and that is the one act reserved to the
- * admin. Everything else about what a person can do is decided by campaign
- * membership, where the admin has no standing at all.
+ * A list, not a place accounts are made. People arrive by registering
+ * (routes/auth.js), and SIGNUP_CODE is what decides who may: an open
+ * registration endpoint on a tunnel-exposed machine would let anyone who found
+ * the URL mint an identity, and the code is the answer to that rather than
+ * routing every arrival through the admin.
  *
- * Users still never self-register. An open registration endpoint on a
- * tunnel-exposed machine would let anyone who found the URL mint an identity —
- * the reason hasn't changed, only the name of the person who does the minting.
+ * What the admin still holds here is what isn't a person's own to decide:
+ * renaming them, and removing them from the server. What each person can *do*
+ * is decided by campaign membership, where the admin has no standing at all,
+ * and how they get *in* is their own password.
  *
- * The roster *without* keys is readable by any signed-in user, because a DM
- * needs to pick from a list of people to add to their campaign. Keys are
- * admin-only and are stripped from every other response.
+ * The roster is readable by any signed-in user, because a DM needs to pick from
+ * a list of people to add to their campaign. It carries names and colours and
+ * nothing else — publicUser decides that, and it is the only shape a user ever
+ * leaves this file in.
  */
 
 const express = require('express');
@@ -23,7 +27,6 @@ const {
   USERS,
   requireUser,
   requireAdmin,
-  newUserKey,
   publicUser,
   colorFor,
   destroySessionsFor,
@@ -54,28 +57,11 @@ router.get('/', requireUser, async (req, res, next) => {
   }
 });
 
-// Admin-only: the roster including invite keys, for building share links.
-router.get('/keys', requireAdmin, async (req, res, next) => {
-  try {
-    res.json(await store.list(USERS));
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post('/', requireAdmin, async (req, res, next) => {
-  try {
-    const existing = await store.list(USERS);
-    const record = await store.create(USERS, {
-      ...sanitize(req.body, existing.length),
-      key: newUserKey(),
-      globalRole: 'user', // admin is seeded at boot, never minted here
-    });
-    res.status(201).json(record); // includes the key — the admin needs it once
-  } catch (err) {
-    next(err);
-  }
-});
+// No POST here on purpose. People arrive by registering — see routes/auth.js,
+// and SIGNUP_CODE for who may. An account minted from the admin list was a name
+// and an invite key with no username or password behind it, which made it a
+// second kind of person: one who could be handed a link but could never sign
+// in, change their own password, or hold an address. One way in is enough.
 
 router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
@@ -88,20 +74,9 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
-// Rotate a leaked key without losing anything the user owns (the id is stable,
-// and tokens and sheet access both point at the id).
-router.post('/:id/rotate-key', requireAdmin, async (req, res, next) => {
-  try {
-    const record = await store.update(USERS, req.params.id, { key: newUserKey() });
-    if (!record) return res.status(404).json({ error: 'Not found' });
-    // Their old key stops working the moment this lands; tell them so their
-    // browser can stop pretending it's still signed in.
-    notifyUser(req, req.params.id, 'identity:changed', {});
-    res.json(record);
-  } catch (err) {
-    next(err);
-  }
-});
+// Nothing to rotate any more: an account is reached by signing in, and a
+// password is the owner's to change (routes/auth.js). The admin's lever for a
+// compromised account is to delete it, which takes its sessions with it.
 
 router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {

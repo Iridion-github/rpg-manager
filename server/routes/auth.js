@@ -18,6 +18,8 @@
 const express = require('express');
 const store = require('../store');
 const limits = require('../rateLimit');
+const { sendMail, mailConfigured } = require('../mailer');
+const { holdChange, claimChange, forgetChangesFor, TTL_MS } = require('../accountChanges');
 const {
   USERS,
   ADMIN_USERNAME,
@@ -30,6 +32,8 @@ const {
   secretsMatch,
   validateCredentials,
   validateProfile,
+  validateEmail,
+  requireUser,
   normalizeUsername,
   normalizeEmail,
   findUserByUsername,
@@ -40,7 +44,6 @@ const {
   ensureAdminUser,
   credsFromRequest,
   publicUser,
-  newUserKey,
   colorFor,
 } = require('../auth');
 
@@ -74,7 +77,17 @@ const sessionPayload = (user, session) => ({
 // Lets the sign-in screen say whether registration is even available, rather
 // than offering a form that will be refused.
 router.get('/config', (req, res) => {
-  res.json({ signupIsOpen, signupNeedsCode: !signupIsOpen, writeGate: gateEnabled });
+  res.json({
+    signupIsOpen,
+    signupNeedsCode: !signupIsOpen,
+    writeGate: gateEnabled,
+    // What the account screen may offer: whether there's a code to type instead
+    // of answering a letter, and whether this server can post one at all. A
+    // screen that offered both on a server that has neither would be a screen
+    // full of dead ends.
+    hasSignupCode: !signupIsOpen,
+    canSendMail: mailConfigured,
+  });
 });
 
 router.post('/register', async (req, res, next) => {
@@ -96,7 +109,16 @@ router.post('/register', async (req, res, next) => {
     const name = cleanName(req.body?.name);
     const email = normalizeEmail(req.body?.email);
 
-    const problem = validateCredentials(username, password) || validateProfile(name, email);
+    // Getting this far on a closed server means the code was right — the check
+    // above returns before this line otherwise. So the code has already
+    // established that this is somebody who was invited, and an address is no
+    // longer being asked for as a second piece of evidence: it's offered, for
+    // the day there is something to send to it. An open server has been told
+    // nothing about who is filling the form in, and still asks.
+    const emailRequired = signupIsOpen;
+
+    const problem =
+      validateCredentials(username, password) || validateProfile(name, email, { emailRequired });
     if (problem) return res.status(400).json({ error: problem });
 
     if (username === ADMIN_USERNAME || (await findUserByUsername(username))) {
@@ -114,12 +136,13 @@ router.post('/register', async (req, res, next) => {
     const record = await store.create(USERS, {
       username,
       name,
-      email,
+      // Null, never an empty string. The unique index on this column skips
+      // nulls and does not skip '' — so a second account without an address
+      // would collide with the first one and fail on the way into the database
+      // rather than in front of the person filling in the form.
+      email: email || null,
       passwordHash: await hashPassword(password),
       color: colorFor(users.length),
-      // Still gets an invite key, so the admin can hand out a link to this
-      // account the same way as any other.
-      key: newUserKey(),
       globalRole: 'user',
     });
 
@@ -195,14 +218,89 @@ router.post('/logout', async (req, res, next) => {
   }
 });
 
-// Change your own password. Knowing the current one is required even though you
-// are already signed in: a session left open on someone else's machine should
-// not be enough to lock you out of your own account.
-router.post('/password', async (req, res, next) => {
+/**
+ * Where a confirmation link should point.
+ *
+ * PUBLIC_URL when it's set, and otherwise the address this very request came in
+ * on — which behind a tunnel is the tunnel's own hostname, so a link works
+ * without anything being configured for a name that changes every time the
+ * tunnel is restarted. `req.protocol` already reads X-Forwarded-Proto when
+ * TRUST_PROXY says the proxy in front can be believed.
+ */
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+const publicBase = (req) => PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+const confirmLink = (req, token) => `${publicBase(req)}/?confirm=${token}`;
+
+/**
+ * Whether the signup code was given, and was right.
+ *
+ * The code is the stand-in for answering a letter: on a server that has one,
+ * knowing it is already the proof that you belong here. Returns null when no
+ * code was offered at all, so a caller can tell "didn't try" from "got it
+ * wrong" — the first goes to the mailbox, the second is refused.
+ */
+function codeGiven(req) {
+  const code = String(req.body?.code || '');
+  if (!code) return null;
+  const ok = Boolean(SIGNUP_CODE) && secretsMatch(code, SIGNUP_CODE);
+  if (!ok) limits.signup.fail(limits.addressOf(req));
+  return ok;
+}
+
+/**
+ * Put a new password in place, wherever the decision came from.
+ *
+ * Every other session goes. Changing a password usually means somebody else has
+ * one, and a new password that leaves their session alive has not taken the
+ * account back. The browser doing the asking keeps its own — which is nothing
+ * at all when the asking is a link opened somewhere else, and that's correct
+ * too: the change is finished, so signing in again with the new password is the
+ * next thing to do.
+ */
+async function applyPassword(req, user, passwordHash) {
+  await store.update(USERS, user.id, { passwordHash });
+  await forgetChangesFor(user.id);
+  await destroySessionsFor(user.id, { except: credsFromRequest(req).session });
+}
+
+/**
+ * Change your own shown name — the one the table sees.
+ *
+ * The only field here that changes on the strength of being signed in. It isn't
+ * a credential and it isn't how anyone is identified: the username is, and that
+ * doesn't move. Getting it wrong costs a second edit.
+ */
+router.put('/account', requireUser, async (req, res, next) => {
   try {
-    if (!req.actor || req.actor.globalRole === 'anon') {
-      return res.status(401).json({ error: 'Sign in to do that.' });
-    }
+    const user = await store.get(USERS, req.actor.userId);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    const name = cleanName(req.body?.name);
+    // The profile check, asked about the name alone.
+    const problem = validateProfile(name, '', { emailRequired: false });
+    if (problem) return res.status(400).json({ error: problem });
+    const updated = await store.update(USERS, user.id, { name });
+    res.json({ user: { ...publicUser(updated), email: updated.email || '' } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Change your own password.
+ *
+ * The current one is always required, however the change is finished: a session
+ * left open on somebody else's machine should not be enough to lock you out of
+ * your own account.
+ *
+ * Then one of two ways. The signup code finishes it on the spot. Without it, a
+ * letter goes to the address on file and nothing changes until that link is
+ * followed — so a stranger at an unlocked browser can start this, and the
+ * person who owns the mailbox simply never finishes it. An account with no
+ * address on file has only the first way, which is the same bargain it made at
+ * registration.
+ */
+router.post('/password', requireUser, async (req, res, next) => {
+  try {
     const user = await store.get(USERS, req.actor.userId);
     if (!user) return res.status(404).json({ error: 'Not found' });
     if (user.globalRole === 'admin') {
@@ -216,8 +314,8 @@ router.post('/password', async (req, res, next) => {
     const blocked = limits.login.retryAfter(key);
     if (blocked) return limits.refuse(res, blocked);
 
-    const next_ = String(req.body?.password ?? '');
-    const problem = validateCredentials(user.username || 'placeholder', next_);
+    const wanted = String(req.body?.password ?? '');
+    const problem = validateCredentials(user.username || 'placeholder', wanted);
     if (problem) return res.status(400).json({ error: problem });
     if (!(await verifyPassword(String(req.body?.current ?? ''), user.passwordHash))) {
       limits.login.fail(key);
@@ -225,13 +323,153 @@ router.post('/password', async (req, res, next) => {
     }
     limits.login.clear(key);
 
-    await store.update(USERS, user.id, { passwordHash: await hashPassword(next_) });
-    // Everywhere else is signed out. Changing a password usually means someone
-    // else has one of these, and a new password that leaves their session alive
-    // has not taken the account back. The browser doing the asking keeps its
-    // own, so this isn't self-defeating.
-    await destroySessionsFor(user.id, { except: credsFromRequest(req).session });
-    res.status(204).end();
+    // Hashed before it goes anywhere, including into the waiting room.
+    const passwordHash = await hashPassword(wanted);
+
+    const code = codeGiven(req);
+    if (code === false) return res.status(403).json({ error: 'That signup code is not right.' });
+    if (code === true) {
+      await applyPassword(req, user, passwordHash);
+      return res.json({ applied: true });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({
+        error:
+          'This account has no email address, so a password change has to be confirmed with the signup code.',
+      });
+    }
+
+    const token = await holdChange(user.id, 'password', { passwordHash });
+    const { delivered } = await sendMail({
+      to: user.email,
+      subject: 'Confirm your new password',
+      text: [
+        `Somebody — we hope you — asked to change the password on the account "${user.username}".`,
+        '',
+        'Nothing has changed yet. To finish, open this link:',
+        confirmLink(req, token),
+        '',
+        `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
+        '',
+        "If this wasn't you, do nothing at all. The password stays as it is — and since",
+        'whoever asked was signed in as you, this is worth knowing about: sign in and',
+        'change your password from a device you trust.',
+      ].join('\n'),
+    });
+    res.json({ pending: true, delivered, sentTo: user.email });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Change your own email address.
+ *
+ * No current address is asked for — you're signed in, and unlike a password an
+ * address isn't a secret you prove you know. What guards it instead is where
+ * the letter goes: to the address being *replaced*, so the person who owns it
+ * is the one who agrees to lose it. An account with no address to warn has the
+ * signup code and nothing else, for the same reason as above.
+ */
+router.post('/email', requireUser, async (req, res, next) => {
+  try {
+    const user = await store.get(USERS, req.actor.userId);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+
+    const email = normalizeEmail(req.body?.email);
+    const problem = validateEmail(email);
+    if (problem) return res.status(400).json({ error: problem });
+    if (email === normalizeEmail(user.email || '')) {
+      return res.status(400).json({ error: 'That is already your address.' });
+    }
+    const taken = await findUserByEmail(email);
+    if (taken && taken.id !== user.id) {
+      return res.status(409).json({ error: 'That email is already registered.' });
+    }
+
+    const code = codeGiven(req);
+    if (code === false) return res.status(403).json({ error: 'That signup code is not right.' });
+    if (code === true) {
+      const updated = await store.update(USERS, user.id, { email });
+      return res.json({ applied: true, email: updated.email });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({
+        error:
+          'This account has no email address yet, so there is nowhere to send the warning — use the signup code to set one.',
+      });
+    }
+
+    const token = await holdChange(user.id, 'email', { email });
+    const { delivered } = await sendMail({
+      // Deliberately the old address, not the new one. The letter is a warning
+      // to the person about to lose the account's address, not a welcome to the
+      // one taking it over.
+      to: user.email,
+      subject: 'Confirm the new address on your account',
+      text: [
+        `Somebody — we hope you — asked to move the account "${user.username}" to a new email address.`,
+        '',
+        `From: ${user.email}`,
+        `To:   ${email}`,
+        '',
+        'Nothing has changed yet. To finish, open this link:',
+        confirmLink(req, token),
+        '',
+        `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
+        '',
+        "If this wasn't you, do nothing at all — this address stays on the account.",
+      ].join('\n'),
+    });
+    res.json({ pending: true, delivered, sentTo: user.email });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Finish a change that was waiting on a letter.
+ *
+ * Takes the token by POST rather than acting on the GET of the link itself.
+ * Mail clients and security scanners follow links in mail without anyone
+ * reading it, and a GET that changed a password would be a password changed by
+ * a spam filter. So the link opens a page, and the page asks.
+ *
+ * No session is needed: the token is the whole authorisation, which is what
+ * lets the link be opened in whatever browser the mail happened to be read in.
+ */
+router.post('/confirm', async (req, res, next) => {
+  try {
+    // Guessing at tokens is brute force like any other.
+    const key = `confirm:${limits.addressOf(req)}`;
+    const blocked = limits.login.retryAfter(key);
+    if (blocked) return limits.refuse(res, blocked);
+
+    const record = await claimChange(String(req.body?.token || ''));
+    if (!record) {
+      limits.login.fail(key);
+      return res.status(400).json({ error: 'That link has expired, or has already been used.' });
+    }
+    limits.login.clear(key);
+
+    const user = await store.get(USERS, record.userId);
+    if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
+
+    if (record.kind === 'password') {
+      await applyPassword(req, user, record.change.passwordHash);
+      return res.json({ kind: 'password' });
+    }
+
+    // Asked again at the last moment: the address was free when the letter went
+    // out, and somebody else may have registered it in the meantime.
+    const taken = await findUserByEmail(record.change.email);
+    if (taken && taken.id !== user.id) {
+      return res.status(409).json({ error: 'That email has been registered by somebody else since.' });
+    }
+    await store.update(USERS, user.id, { email: record.change.email });
+    res.json({ kind: 'email', email: record.change.email });
   } catch (err) {
     next(err);
   }
