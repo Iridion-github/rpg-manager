@@ -241,6 +241,16 @@ export const api = {
     put(table(`/scenes/${sceneId}/tokens/${tokenId}/position`), { x, y }),
   deleteToken: (sceneId, tokenId) => del(table(`/scenes/${sceneId}/tokens/${tokenId}`)),
 
+  // The drawing layer. Anyone playing may add one; the server decides whose is
+  // whose from the session, so there is no owner to pass here.
+  addShape: (sceneId, data) => post(table(`/scenes/${sceneId}/shapes`), data),
+  updateShape: (sceneId, shapeId, data) =>
+    put(table(`/scenes/${sceneId}/shapes/${shapeId}`), data),
+  deleteShape: (sceneId, shapeId) => del(table(`/scenes/${sceneId}/shapes/${shapeId}`)),
+  // Everything you may take off this scene, in one go. Answers with the shapes
+  // it removed, so they can be put back.
+  clearShapes: (sceneId) => del(table(`/scenes/${sceneId}/shapes`)),
+
   setTurnMode: (sceneId, on) => put(table(`/scenes/${sceneId}/turn`), { on }),
   nextTurn: (sceneId) => put(table(`/scenes/${sceneId}/turn/next`), {}),
   giveTurn: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/turn/current`), { tokenId }),

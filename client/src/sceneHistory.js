@@ -155,6 +155,98 @@ export function recordTokenDelete({ sceneId, token }) {
   });
 }
 
+async function shapeNow(sceneId, shapeId) {
+  const scene = await sceneNow(sceneId);
+  const shape = (scene.shapes || []).find((s) => s.id === shapeId);
+  if (!shape) throw stale('That shape is no longer on the map.');
+  return shape;
+}
+
+/** Drawing one. Undo rubs it out; redo draws it again, as a new shape. */
+export function recordShapeAdd({ sceneId, shape }) {
+  const live = { id: shape.id };
+  record({
+    label: 'draw that shape',
+    sceneId,
+    undo: async () => {
+      await shapeNow(sceneId, live.id);
+      await api.deleteShape(sceneId, live.id);
+    },
+    redo: async () => {
+      const again = await api.addShape(sceneId, withoutId(shape));
+      live.id = again.id;
+    },
+  });
+}
+
+/** Rubbing one out — the same pair the other way round. */
+export function recordShapeDelete({ sceneId, shape }) {
+  const live = { id: shape.id };
+  record({
+    label: 'rub out that shape',
+    sceneId,
+    undo: async () => {
+      const again = await api.addShape(sceneId, withoutId(shape));
+      live.id = again.id;
+    },
+    redo: async () => {
+      await shapeNow(sceneId, live.id);
+      await api.deleteShape(sceneId, live.id);
+    },
+  });
+}
+
+/**
+ * Clearing the board. One entry, so one Ctrl+Z brings the whole lot back.
+ *
+ * The shapes come back as *new* shapes — the server names every one it's given
+ * — so the entry follows the ids it made, exactly as the single-shape
+ * recorders do, or a second undo would go looking for shapes nobody has.
+ */
+export function recordShapesCleared({ sceneId, shapes }) {
+  const live = shapes.map((shape) => ({ ...shape }));
+  record({
+    label: `clear ${shapes.length} shape${shapes.length === 1 ? '' : 's'}`,
+    sceneId,
+    undo: async () => {
+      for (const [i, shape] of live.entries()) {
+        const again = await api.addShape(sceneId, withoutId(shape));
+        live[i] = { ...shape, id: again.id };
+      }
+    },
+    redo: async () => {
+      for (const shape of live) {
+        try {
+          await api.deleteShape(sceneId, shape.id);
+        } catch (err) {
+          // One that somebody has already taken off is one less to take off.
+          // Anything else is a real failure and belongs in front of the user.
+          if (err.status !== 404) throw err;
+        }
+      }
+    },
+  });
+}
+
+/**
+ * Changing one: moved, resized, recoloured.
+ *
+ * Guarded like every other reversal — if somebody else has since changed the
+ * same shape, this refuses rather than reaching into their work. A shape can
+ * only be changed by the hand that drew it or by the DM, so in practice that
+ * somebody is the DM tidying up behind you.
+ */
+export function recordShapeEdit({ sceneId, shapeId, before, after }) {
+  const step = (expected, next) => async () => {
+    const shape = await shapeNow(sceneId, shapeId);
+    if (!matches(shape, expected)) {
+      throw stale('That shape has been changed by someone else since — it is no longer yours to take back.');
+    }
+    await api.updateShape(sceneId, shapeId, next);
+  };
+  record({ label: 'change that shape', sceneId, undo: step(after, before), redo: step(before, after) });
+}
+
 // What to call a scene change in a message, by the field it touched. Several
 // fields can move together — a new map brings its own width and height — so the
 // first one named is the one that gets to speak for the change.

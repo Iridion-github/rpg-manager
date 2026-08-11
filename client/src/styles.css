@@ -783,6 +783,126 @@ button.linky:hover {
   touch-action: none;
 }
 
+/* --- the drawing layer ---
+   Sits between the map and the grid: a shape marks out ground, and the squares
+   are drawn over the ground, not under it. Deaf to the pointer unless a tool is
+   in hand — the rest of the time it's a picture, and a picture must not come
+   between anyone and their tokens. */
+.shape-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.surface.drawing {
+  cursor: crosshair;
+}
+
+/* It takes the keyboard when pressed, so that the shortcuts are the map's while
+   you're working on it — but a ring around the whole picture would be a strange
+   answer to a click on it. Nothing is lost: the surface is not in the tab order,
+   so this can never hide where a keyboard user actually is. */
+.surface:focus {
+  outline: none;
+}
+
+/* With a tool in hand the shapes become the things you can reach, and the
+   tokens stop being — the map is a drawing surface for as long as that lasts.
+   Which *part* of a shape answers is the whole of how one gesture does three
+   jobs: the middle moves it, the outline stretches it, the mark at its centre
+   turns it. They're painted in that order, so where they overlap the later one
+   wins, which is why the centre mark is always reachable. */
+.shape [data-grip] {
+  pointer-events: none;
+}
+
+.surface.drawing .shape [data-grip='move'] {
+  pointer-events: fill;
+  cursor: move;
+}
+
+.surface.drawing .shape [data-grip='resize'] {
+  pointer-events: stroke;
+  cursor: nwse-resize;
+}
+
+.surface.drawing .shape [data-grip='rotate'] {
+  pointer-events: all;
+  cursor: grab;
+}
+
+.surface.drawing .token {
+  pointer-events: none;
+}
+
+/* --- the centre mark ---
+   A dot on the shape's own centre with half a turn drawn clockwise around it,
+   arrowhead at the end so which way it goes can be read without moving
+   anything. Both are inked in whichever of black or white stands furthest from
+   the fill, worked out per shape — see contrastInk in shapes.js.
+
+   Only while a tool is in hand. It's a handle, and a handle on a map nobody is
+   drawing on is a mark on the artwork saying nothing: the table is looking at
+   where the fireball landed, not at what could be dragged. */
+.shape-pivot {
+  display: none;
+}
+
+.surface.drawing .shape-pivot {
+  display: block;
+}
+.shape-turn {
+  fill: none;
+  /* Thinner along with everything else, but not below a pixel and a half —
+     under that a curve this short stops reading as an arrow at all. */
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.shape-pivot circle,
+.shape-turn,
+.shape-turn-head {
+  /* The group is already scaled against the zoom, so these are screen pixels
+     and must not be scaled a second time. */
+  vector-effect: none;
+}
+
+/* The handle, which is bigger than the dot and invisible: what you aim at is
+   the mark, what catches you is a circle around the whole of it. */
+.shape-grab {
+  fill: transparent;
+}
+
+/* Never the thing being dragged out: it's under the pointer by definition, and
+   hit-testing it would be hit-testing the gesture that's drawing it. */
+.shape.sketching {
+  pointer-events: none;
+}
+
+.shape-ring {
+  stroke: #ffffff;
+  stroke-width: 2px;
+  stroke-dasharray: 6 4;
+  opacity: 0.9;
+}
+
+/* A shape's name, and the size readout while one is being pulled out. Drawn
+   with its own dark outline rather than a backing box: a label sits over map
+   art of any colour, and a box big enough to hold it would hide the very
+   ground the shape is pointing at. */
+.shape text {
+  fill: #ffffff;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 3px;
+  paint-order: stroke;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-weight: 600;
+  user-select: none;
+}
+
 .grid-overlay {
   position: absolute;
   inset: 0;
@@ -2701,6 +2821,101 @@ button.token-tile:hover {
 
 .chat-buttons button {
   flex: 1;
+}
+
+/* --- the drawing box --- */
+.shape-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* The same quiet, spaced-out capitals the chat and the map's own panels use for
+   a heading that names a group rather than announcing a section. */
+.shape-heading {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
+}
+
+/* Two rows of two rather than a strip: four tools in a column would push the
+   sliders below the fold of a window this narrow. */
+.shape-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.3rem;
+}
+
+/* The tools panel's own toggle, lit while its window is open — the same lit
+   state the tool buttons inside that window use. */
+.map-tools-body button.active,
+.shape-picker button.active {
+  background: #35406a;
+  border-color: #58a6ff;
+  color: #e7e9ee;
+}
+
+/* Label, control, readout — the same three-part row the map's own bars use, so
+   the two panels read as one instrument. */
+.shape-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #8b90a0;
+}
+
+.shape-field > span {
+  flex: none;
+  width: 4.2rem;
+}
+
+.shape-field input[type='range'],
+.shape-field input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.shape-field small {
+  flex: none;
+  width: 2.6rem;
+  text-align: right;
+  color: #8b90a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.shape-swatch input[type='color'] {
+  flex: 1;
+  min-width: 0;
+  height: 1.6rem;
+  padding: 0;
+  background: none;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.shape-check {
+  gap: 0.4rem;
+}
+
+.shape-check input {
+  accent-color: #58a6ff;
+  cursor: pointer;
+}
+
+.shape-check > span {
+  width: auto;
+}
+
+.shape-state {
+  margin: 0;
+}
+
+.shape-erase {
+  margin-top: 0.2rem;
 }
 
 /* --- roll results --- */

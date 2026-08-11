@@ -382,6 +382,170 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
   }
 });
 
+// ---- Shapes ----
+
+/**
+ * The drawing layer: the fireball's circle, the dragon's cone, a rectangle
+ * around the room nobody has opened yet.
+ *
+ * Measured in *cells*, like tokens and for the same reason — a shape means "the
+ * six squares by the door", not "these pixels of this picture", so it keeps its
+ * meaning when the grid is retuned and rides the grid's offset with everything
+ * else standing on the board.
+ *
+ * Anyone playing may draw. A player marking where they mean to run is the same
+ * kind of act as moving their own token, and the ownership rule that follows is
+ * the same one tokens have: yours are yours to change, and the DM's table is
+ * the DM's.
+ */
+const SHAPE_KINDS = new Set(['rect', 'circle', 'cone', 'line']);
+
+// A ceiling, not a budget. Nobody draws two hundred shapes on one map on
+// purpose; something that has is a stuck pointer or a bad script, and the point
+// is that it stops before the scene record does.
+const MAX_SHAPES = 200;
+
+function sanitizeShape(body = {}, existing = {}) {
+  const cells = (value, fallback, lo = 0.1, hi = 200) => clamp(num(value, fallback), lo, hi);
+  return {
+    kind: SHAPE_KINDS.has(body.kind) ? body.kind : existing.kind || 'rect',
+    // Where it sits: a rectangle's top-left corner, a circle's centre, the
+    // point a cone or a line comes out of.
+    x: clamp(num(body.x, existing.x ?? 0), -500, 500),
+    y: clamp(num(body.y, existing.y ?? 0), -500, 500),
+    w: cells(body.w, existing.w ?? 1),
+    h: cells(body.h, existing.h ?? 1),
+    // Radius for a circle, length for a cone or a line.
+    r: cells(body.r, existing.r ?? 1),
+    // Which way a cone or a line points: degrees clockwise from due east, and
+    // wrapped rather than clamped, since 370° is a direction like any other.
+    dir: (((num(body.dir, existing.dir ?? 0) % 360) + 360) % 360),
+    // How wide a cone opens. 53° is the angle a 5e cone template cuts, which is
+    // why every tabletop that has one of these defaults to it.
+    angle: clamp(num(body.angle, existing.angle ?? 53), 5, 360),
+    thickness: cells(body.thickness, existing.thickness ?? 1, 0.1, 20),
+    fill: hexOr(body.fill ?? existing.fill, '#58a6ff'),
+    stroke: hexOr(body.stroke ?? existing.stroke, '#9fb4ff'),
+    opacity: clamp(Math.round(num(body.opacity, existing.opacity ?? 35)), 5, 100),
+    strokeWidth: clamp(Math.round(num(body.strokeWidth, existing.strokeWidth ?? 2)), 0, 12),
+    label: String(body.label ?? existing.label ?? '').slice(0, 40),
+  };
+}
+
+/** Yours to change if you drew it; the DM's to change whoever drew it. */
+function canEditShape(actor, role, shape) {
+  if (!actor || !shape || !role) return false;
+  if (role === 'dm') return true;
+  return Boolean(shape.ownerId) && shape.ownerId === actor.userId;
+}
+
+// Drawing is for the people at the table. A spectator reads the board.
+function requireDrawer(req, res, next) {
+  if (req.campaignRole === 'dm' || req.campaignRole === 'player') return next();
+  return res.status(403).json({ error: 'Only the people playing at this table can draw on it.' });
+}
+
+function shapeIn(scene, shapeId) {
+  const shape = (scene.shapes || []).find((s) => s.id === shapeId);
+  if (!shape) throw new HttpError(404, 'Shape not found');
+  return shape;
+}
+
+router.post('/:id/shapes', requireDrawer, async (req, res, next) => {
+  try {
+    const shape = {
+      id: crypto.randomUUID(),
+      ...sanitizeShape(req.body),
+      // Read off the session, never off the request: who drew a shape decides
+      // who may change it, so it isn't a thing the drawer gets to claim.
+      ownerId: req.actor?.userId || null,
+    };
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const shapes = current.shapes || [];
+      if (shapes.length >= MAX_SHAPES) {
+        throw new HttpError(409, 'This scene is holding as many shapes as it can. Clear a few first.');
+      }
+      return { ...current, shapes: [...shapes, shape] };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'shape:add', scene);
+    res.status(201).json(shape);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:id/shapes/:shapeId', requireDrawer, async (req, res, next) => {
+  try {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = shapeIn(current, req.params.shapeId);
+      if (!canEditShape(req.actor, req.campaignRole, existing)) {
+        throw new HttpError(403, 'You can only change a shape you drew.');
+      }
+      // The id and the hand that drew it are not fields of the edit.
+      const updated = {
+        ...existing,
+        ...sanitizeShape(req.body, existing),
+        id: existing.id,
+        ownerId: existing.ownerId ?? null,
+      };
+      return { ...current, shapes: current.shapes.map((s) => (s.id === updated.id ? updated : s)) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'shape:update', scene);
+    res.json(scene.shapes.find((s) => s.id === req.params.shapeId));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Clear the board — of everything the caller may take off it.
+ *
+ * One transaction rather than a delete per shape: the table would otherwise
+ * watch the map empty a shape at a time, and a request that failed halfway
+ * would leave a board nobody asked for. The same ownership rule as the single
+ * delete decides what goes, so a player clears their own drawings and the DM
+ * clears the lot.
+ *
+ * Answers with what it actually removed, which is what lets the drawer put it
+ * all back again.
+ */
+router.delete('/:id/shapes', requireDrawer, async (req, res, next) => {
+  try {
+    let removed = [];
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const shapes = current.shapes || [];
+      removed = shapes.filter((s) => canEditShape(req.actor, req.campaignRole, s));
+      if (!removed.length) return current;
+      const going = new Set(removed.map((s) => s.id));
+      return { ...current, shapes: shapes.filter((s) => !going.has(s.id)) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    if (removed.length) announce(req, 'shape:clear', scene);
+    res.json({ removed });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id/shapes/:shapeId', requireDrawer, async (req, res, next) => {
+  try {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = shapeIn(current, req.params.shapeId);
+      if (!canEditShape(req.actor, req.campaignRole, existing)) {
+        throw new HttpError(403, 'You can only rub out a shape you drew.');
+      }
+      return { ...current, shapes: current.shapes.filter((s) => s.id !== existing.id) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'shape:delete', scene);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---- Turn mode ----
 
 /**

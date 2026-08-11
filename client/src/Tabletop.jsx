@@ -5,12 +5,36 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
 import TokenTooltip from './TokenTooltip.jsx';
+import ShapeTools from './ShapeTools.jsx';
+import {
+  DEFAULT_STYLE,
+  angleTo,
+  contrastInk,
+  edgesAt,
+  isDrawn,
+  localPoint,
+  resizeRadius,
+  resizeRect,
+  shapeAnchor,
+  shapeFromDrag,
+  shapePath,
+  shapePivot,
+  shapeSize,
+  snapCell,
+  turnArcPath,
+  turnHeadPath,
+  turnedTo,
+} from './shapes.js';
 import { initiativeText, turnOrderOf } from './initiative.js';
 import { canRedo, canUndo, redo, subscribe, undo } from './history.js';
 import {
   matches,
   pick,
   recordSceneEdit,
+  recordShapeAdd,
+  recordShapeDelete,
+  recordShapeEdit,
+  recordShapesCleared,
   recordTokenAdd,
   recordTokenDelete,
   recordTokenEdit,
@@ -28,6 +52,22 @@ const GRID_SAVE_MS = 400;
 
 // Where this browser remembers whether the map's tools panel is rolled up.
 const TOOLS_MIN_KEY = 'rpg:map-tools-min';
+
+// And what the drawing tools were last set to. A colour and an opacity are how
+// *you* draw rather than anything about the table, so they live here beside the
+// panel's fold — and reaching for the same tool twice in one evening shouldn't
+// mean setting it up twice.
+const SHAPE_STYLE_KEY = 'rpg:shape-style';
+
+// How long a shape's sliders settle before the change is saved. The same
+// bargain the grid slider makes: one write per adjustment, not per pixel.
+const SHAPE_SAVE_MS = 400;
+
+// How wide a shape's outline is to *grab*, in screen pixels, as against the one
+// or two it may be drawn as. A border you have to hit exactly is a border you
+// end up dragging the whole shape by, so the band that answers to the hand is
+// far wider than the one the eye sees.
+const GRIP_PX = 14;
 
 // And how solid the turn tracker is. Like the panel's fold and the window's own
 // box, this says nothing about the table — only how much of this screen its
@@ -76,6 +116,118 @@ const PING_MS = 2400;
 // strictly need to, which nobody has ever complained about.
 const MENU_W = 140;
 const MENU_H = 156;
+
+/**
+ * One shape on the board: a fill, an outline, and its name if it was given one.
+ *
+ * Everything is measured in map pixels because the layer's viewBox is, so this
+ * knows nothing about the zoom except for the two things that must *not* follow
+ * it — the outline, which would thin to nothing zoomed out, and the lettering,
+ * which is meant to be read rather than scaled.
+ */
+function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
+  const d = shapePath(shape, cell, origin);
+  const at = shapeAnchor(shape, cell, origin);
+  const caption = sketching ? shapeSize(shape) : shape.label;
+  // The centre mark, in map pixels — where the shape turns about.
+  const pivot = shapePivot(shape);
+  const middle = { x: origin.x + pivot.x * cell, y: origin.y + pivot.y * cell };
+  const ink = contrastInk(shape.fill);
+  // A circle looks the same whichever way it faces, so it has no rotation at
+  // all: no arrow promising a turn, and no handle to start one with — a grip
+  // that quietly wrote a new facing nobody could see would still be a change,
+  // a broadcast and an entry in everyone's undo. It keeps the dot, which says
+  // where the burst is centred. Everything else can be pointed somewhere.
+  const turnable = shape.kind !== 'circle';
+
+  return (
+    <g
+      className={`shape${selected ? ' selected' : ''}${sketching ? ' sketching' : ''}`}
+      // What the press handler reads back to know which shape was hit. The one
+      // being dragged out isn't one yet, and has nothing to be picked by.
+      data-shape-id={sketching ? undefined : shape.id}
+    >
+      <path
+        d={d}
+        data-grip="move"
+        fill={shape.fill}
+        fillOpacity={(shape.opacity ?? 35) / 100}
+        stroke={shape.stroke}
+        strokeWidth={shape.strokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+      {/* The outline again, unpainted and far thicker, purely as something for
+          the hand to catch. Laid over the fill so that near an edge it's the
+          edge you get, which is what "grab the border" has to mean. */}
+      {!sketching && (
+        <path
+          className="shape-edge"
+          data-grip="resize"
+          d={d}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={GRIP_PX}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+      {/* A second pass over the same outline rather than a box around it: a
+          dashed ring on the shape itself says which one is selected without
+          claiming a rectangle of map that isn't part of it. */}
+      {selected && (
+        <path className="shape-ring" d={d} fill="none" vectorEffect="non-scaling-stroke" />
+      )}
+      {caption && (
+        <text x={at.x} y={at.y} fontSize={13 / zoom} vectorEffect="non-scaling-stroke">
+          {caption}
+        </text>
+      )}
+      {/* Scaled against the zoom so the mark is the same size on screen at any
+          magnification — which is what lets everything inside it be written in
+          plain pixels. Drawn last, so it's the mark you get when it overlaps
+          anything else the shape offers. */}
+      {!sketching && (
+        <g className="shape-pivot" transform={`translate(${middle.x} ${middle.y}) scale(${1 / zoom})`}>
+          {turnable && (
+            <>
+              <path className="shape-turn" d={turnArcPath()} stroke={ink} />
+              <path className="shape-turn-head" d={turnHeadPath()} fill={ink} />
+            </>
+          )}
+          {/* Three pixels across. A centre mark that covers the centre is no
+              longer telling you where it is. */}
+          <circle r="1.5" fill={ink} />
+          {/* Far bigger than the mark it sits on, and invisible: what you aim
+              at is the arrow, what catches you is a circle around the whole of
+              it, because a three-pixel target is one nobody hits. */}
+          {turnable && <circle className="shape-grab" data-grip="rotate" r="9" />}
+        </g>
+      )}
+    </g>
+  );
+}
+
+// Fields that a Delete or a Ctrl+Z belongs to before it belongs to the map.
+const TEXT_ENTRY = /^(|text|search|url|email|tel|password|number)$/;
+
+/**
+ * Whether a keystroke was aimed at something being *typed into*.
+ *
+ * Deliberately not "is the focus in a field of any kind". A press on the map
+ * calls preventDefault — that's what stops a drag selecting text as it goes —
+ * and a prevented press also stops the browser moving the focus. So the focus
+ * stays on whatever was last touched in a panel, which after any use of the
+ * drawing box is a slider or a colour well. Reading that as typing meant a
+ * slider nobody was holding quietly swallowed every shortcut afterwards.
+ *
+ * A range, a checkbox and a colour well have no use for either key. A text box
+ * has, and keeps them.
+ */
+function isTyping(target) {
+  const el = target?.closest?.('textarea, [contenteditable], input');
+  if (!el) return false;
+  if (el.tagName !== 'INPUT') return true;
+  return TEXT_ENTRY.test(el.getAttribute('type') || '');
+}
 
 const round1 = (v) => Math.round(v * 10) / 10;
 // Free placement still gets rounded, just far more finely than to a cell —
@@ -163,6 +315,14 @@ export default function Tabletop({ actor, players, offline }) {
   const panRef = useRef(null);
   const pannedRef = useRef(false);
   const gridTimer = useRef(null);
+  // The drawing drag in flight: either a new shape being pulled out, or one
+  // being pushed around. A ref for the same reason the token drag is one —
+  // pointer handlers must see the current values, not a render's idea of them.
+  const drawRef = useRef(null);
+  // Slider changes waiting to be written, and what the shape looked like before
+  // the first of them — which is what Undo has to put back.
+  const shapeEdit = useRef(null);
+  const shapeTimer = useRef(null);
   const wheelAcc = useRef(0);
   const zoomAnchor = useRef(null);
   const pendingFocus = useRef(null);
@@ -180,6 +340,28 @@ export default function Tabletop({ actor, players, offline }) {
   // as state rather than read at render because the stack is a plain module —
   // it changes without React being told, so it says so instead.
   const [history, setHistory] = useState(() => ({ undo: canUndo(), redo: canRedo() }));
+
+  // --- the drawing layer ---
+  // Whether the drawing box is open, and which tool it's holding. A tool in
+  // hand *is* drawing mode: there is no third state where the box is open and
+  // the map does nothing.
+  const [shapeWindow, setShapeWindow] = useState(false);
+  const [shapeTool, setShapeTool] = useState(null);
+  // What the next shape will be drawn as. Read back from this browser, since a
+  // colour is a habit rather than a fact about the table.
+  const [shapeStyle, setShapeStyle] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SHAPE_STYLE_KEY) || 'null');
+      // Spread over the defaults rather than trusted whole: a style saved by an
+      // older version is missing whatever has been added since.
+      return saved && typeof saved === 'object' ? { ...DEFAULT_STYLE, ...saved } : DEFAULT_STYLE;
+    } catch {
+      return DEFAULT_STYLE;
+    }
+  });
+  // The shape the panel is pointing at, and the drag drawing one right now.
+  const [selectedShapeId, setSelectedShapeId] = useState(null);
+  const [sketch, setSketch] = useState(null);
 
   const isDm = actor?.role === 'dm';
   /**
@@ -263,6 +445,11 @@ export default function Tabletop({ actor, players, offline }) {
     setOffsetDraft(null);
     setPings([]);
     setMenu(null);
+    // A shape belongs to the scene it was drawn on, so a selection can't
+    // survive a change of scene either. The tool stays in your hand: it's about
+    // what you're doing, not about which board you're looking at.
+    setSelectedShapeId(null);
+    setSketch(null);
     clearTimeout(gridTimer.current);
   }, [selectedId]);
 
@@ -410,6 +597,80 @@ export default function Tabletop({ actor, players, offline }) {
     [scene, gridOn]
   );
 
+  // --- the drawing layer ---
+  // Drawing is for the people playing: a spectator reads the board, and the
+  // server would refuse them anyway.
+  const canDraw = !offline && (isDm || actor?.role === 'player');
+  /**
+   * Drawing mode is the box being open, not a tool being held.
+   *
+   * Opening it is a change of mode: from then on the map answers to shapes
+   * rather than to tokens, whether or not there's a tool in hand. You can pick
+   * up what's already drawn, and every shape shows its centre mark — a mode you
+   * have to arm by choosing a tool would be two steps to reach one state.
+   * Picking a tool then adds the one thing this doesn't do on its own: pulling
+   * a *new* shape out of the map.
+   */
+  const drawing = canDraw && shapeWindow;
+  const shapes = scene?.shapes || [];
+  const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
+  // Yours if you drew it, anyone's if you're the DM — the rule the server keeps.
+  const canEditShape = useCallback(
+    (shape) =>
+      Boolean(shape) &&
+      !offline &&
+      (isDm || (Boolean(shape.ownerId) && shape.ownerId === actor?.userId)),
+    [isDm, offline, actor]
+  );
+  // The ones this person could clear: all of them for the DM, their own for
+  // anyone else — the rule the server keeps, asked here so the button that
+  // offers it can name a real number. Declared below canEditShape rather than
+  // beside the list it filters, because that's the order it can be read in.
+  const clearableShapes = shapes.filter((s) => canEditShape(s));
+
+  /**
+   * While a tool is in hand the wheel belongs to the zoom.
+   *
+   * Not a preference so much as a consequence: the grid gauge's own gesture is
+   * a right-drag, and a right-drag is how you move the view while you draw. One
+   * of the two has to give, and it can't be the one that lets you reach the
+   * part of the map you're drawing on.
+   */
+  const pickWheel = useCallback(
+    (target) => {
+      if (target === 'grid' && drawing) return;
+      setWheelTarget(target);
+    },
+    [drawing]
+  );
+
+  useEffect(() => {
+    if (drawing) setWheelTarget('zoom');
+  }, [drawing]);
+
+  // A tool put down, or the box closed, leaves nothing selected: the panel is
+  // what the selection was for.
+  useEffect(() => {
+    if (!drawing) setSelectedShapeId(null);
+  }, [drawing]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHAPE_STYLE_KEY, JSON.stringify(shapeStyle));
+    } catch {
+      // Private mode, or a full quota. It still draws; it just won't remember.
+    }
+  }, [shapeStyle]);
+
+  useEffect(() => () => clearTimeout(shapeTimer.current), []);
+
+  // The rubbing-out, as of this render. The Delete key binds once per selection
+  // and would otherwise hold whatever the board looked like at that moment.
+  const eraseRef = useRef(null);
+  useEffect(() => {
+    eraseRef.current = eraseShape;
+  });
+
   // --- dragging ---
 
   function pointerCell(e) {
@@ -424,6 +685,295 @@ export default function Tabletop({ actor, players, offline }) {
     dragRef.current = null;
     setDrag(null);
     socket.emit('token:drag:end');
+  }
+
+  // --- drawing ---
+  // The look a new shape is drawn with, which is the style minus the two things
+  // in it that are about *drawing* rather than about a shape.
+  const shapeLook = () => ({
+    fill: shapeStyle.fill,
+    stroke: shapeStyle.stroke,
+    opacity: shapeStyle.opacity,
+    strokeWidth: shapeStyle.strokeWidth,
+    label: shapeStyle.label,
+  });
+
+  // Snapping is only ever on when there are squares to snap to.
+  const snapping = shapeStyle.snap && gridOn;
+
+  // Where the pointer is on the board, in cells — on the squares if that's what
+  // was asked for.
+  function drawPoint(e) {
+    const { px, py } = pointerCell(e);
+    return { x: snapCell(px, snapping), y: snapCell(py, snapping) };
+  }
+
+  // The same, untouched. Turning and stretching do their own rounding — of an
+  // angle, or of the far edge — and snapping the pointer first would round the
+  // measurement twice, each time to a different thing.
+  function rawPoint(e) {
+    const { px, py } = pointerCell(e);
+    return { x: px, y: py };
+  }
+
+  /**
+   * A press on the board.
+   *
+   * Three things can be taken hold of on a shape and they're told apart by
+   * where the hand landed rather than by a mode picked in advance: the middle
+   * of it moves, the outline stretches, the mark at its centre turns it. That's
+   * how every drawing tool worth using behaves, and it means the panel never
+   * has to carry a row of "now do this instead" buttons.
+   */
+  function onDrawStart(e) {
+    if (!drawing || e.button !== 0) return;
+    const hit = e.target?.closest?.('[data-shape-id]')?.dataset.shapeId;
+    e.preventDefault();
+    // A press on the map is the map taking the keyboard. The preventDefault
+    // above is what stops the browser doing this itself, so without it the
+    // focus stays wherever the panel left it — and after typing a label,
+    // Delete would go on belonging to that text field rather than to the shape
+    // you have just picked up. Without the scroll, because moving the view is
+    // the one thing a press on the map must never do by itself.
+    e.currentTarget.focus?.({ preventScroll: true });
+    e.currentTarget.setPointerCapture(e.pointerId);
+
+    if (hit) {
+      const shape = shapes.find((s) => s.id === hit);
+      setSelectedShapeId(hit);
+      // Somebody else's shape can be pointed at but not pushed around. The
+      // selection is still worth making: it's what tells you whose it is.
+      if (!canEditShape(shape)) return;
+      const grip = e.target?.closest?.('[data-grip]')?.dataset.grip || 'move';
+      const raw = rawPoint(e);
+      const base = { ...shape };
+
+      if (grip === 'rotate') {
+        const pivot = shapePivot(shape);
+        drawRef.current = {
+          mode: 'rotate',
+          id: hit,
+          base,
+          shape: base,
+          pivot,
+          // Where the hand took hold, so the shape turns *with* it rather than
+          // snapping round to point at it the instant it's touched.
+          grabbedAt: angleTo(pivot, raw),
+        };
+        return;
+      }
+
+      if (grip === 'resize') {
+        drawRef.current = {
+          mode: 'resize',
+          id: hit,
+          base,
+          shape: base,
+          // Which sides, for a rectangle. The tolerance is the hit stroke's own
+          // width in cells — what the hand was aiming at was a band of screen
+          // pixels, and this is that band said in the shape's units.
+          held:
+            shape.kind === 'rect'
+              ? edgesAt(shape, localPoint(shape, raw), GRIP_PX / 2 / cellPx)
+              : null,
+        };
+        return;
+      }
+
+      const at = drawPoint(e);
+      drawRef.current = {
+        mode: 'move',
+        id: hit,
+        base,
+        shape: base,
+        // Where inside the shape it was taken hold of, so it doesn't jump.
+        grabX: at.x - shape.x,
+        grabY: at.y - shape.y,
+      };
+      return;
+    }
+
+    // A press on bare map puts down whatever was held. With no tool chosen
+    // that's all it does: in drawing mode without one, the map is a board you
+    // rearrange rather than one you draw on.
+    setSelectedShapeId(null);
+    if (!shapeTool) return;
+    const at = drawPoint(e);
+    const started = { ...shapeFromDrag(shapeTool, at, at, shapeStyle), ...shapeLook() };
+    drawRef.current = { mode: 'draw', from: at, shape: started };
+    setSketch(started);
+  }
+
+  // Returns whether it took the event, so the token drag below can have it
+  // otherwise. Only ever one of the two is in flight.
+  // Returns whether it took the event, so the token drag below can have it
+  // otherwise. Only ever one of the two is in flight.
+  function onDrawMove(e) {
+    const d = drawRef.current;
+    if (!d) return false;
+
+    if (d.mode === 'draw') {
+      d.shape = { ...shapeFromDrag(shapeTool, d.from, drawPoint(e), shapeStyle), ...shapeLook() };
+    } else if (d.mode === 'rotate') {
+      d.shape = {
+        ...d.base,
+        dir: turnedTo(d.base.dir || 0, d.grabbedAt, angleTo(d.pivot, rawPoint(e)), snapping),
+      };
+    } else if (d.mode === 'resize') {
+      // Always measured from the shape as it was when the drag began, never
+      // from the last frame: reading a stretch off its own output would let a
+      // rounding of half a pixel walk the edge across the map.
+      const raw = rawPoint(e);
+      d.shape =
+        d.base.kind === 'rect'
+          ? { ...d.base, ...resizeRect(d.base, d.held, localPoint(d.base, raw), snapping) }
+          : { ...d.base, r: resizeRadius(d.base, raw, snapping) };
+    } else {
+      const at = drawPoint(e);
+      // Carrying the whole shape rather than just its corner: the sketch is
+      // what gets drawn while the hand is down, so it has to look like itself.
+      d.shape = { ...d.base, x: round2(at.x - d.grabX), y: round2(at.y - d.grabY) };
+    }
+
+    setSketch(d.shape);
+    return true;
+  }
+
+  // Everything a gesture can change about a shape it already had. One list, so
+  // moving, stretching and turning all end the same way and only ever write the
+  // numbers they actually moved.
+  const GEOMETRY = ['x', 'y', 'w', 'h', 'r', 'dir'];
+
+  function onDrawEnd() {
+    const d = drawRef.current;
+    if (!d) return false;
+    drawRef.current = null;
+    setSketch(null);
+    // The geometry off the gesture, not off the sketch state: a release can
+    // arrive before the render that last drew it.
+    const drawn = d.shape;
+    if (d.mode === 'draw') {
+      // A click that never became a drag isn't a shape. It has already done its
+      // other job, which was to clear the selection.
+      if (drawn && isDrawn(drawn)) createShape(drawn);
+      return true;
+    }
+    const changes = {};
+    for (const key of GEOMETRY) {
+      if (drawn[key] !== d.base[key]) changes[key] = drawn[key];
+    }
+    if (Object.keys(changes).length) editShape(d.id, changes);
+    return true;
+  }
+
+  async function createShape(shape) {
+    setError('');
+    try {
+      const created = await api.addShape(scene.id, shape);
+      setScenes((prev) =>
+        prev.map((s) => (s.id === scene.id ? { ...s, shapes: [...(s.shapes || []), created] } : s))
+      );
+      // Selected on arrival: you have just decided where it goes, and what's
+      // wanted next is almost always to tune it.
+      setSelectedShapeId(created.id);
+      recordShapeAdd({ sceneId: scene.id, shape: created });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  /**
+   * Change a shape: a slider moved, or a drag that put it somewhere else.
+   *
+   * Applied here and written when the hand stops, like the grid's own sliders —
+   * a colour picker dragged across the spectrum would otherwise be a hundred
+   * writes and a hundred broadcasts of a shape nobody has finished choosing.
+   */
+  function editShape(id, changes) {
+    const shape = shapes.find((s) => s.id === id);
+    if (!shape || !canEditShape(shape)) return;
+    setScenes((prev) =>
+      prev.map((s) =>
+        s.id === scene.id
+          ? { ...s, shapes: s.shapes.map((x) => (x.id === id ? { ...x, ...changes } : x)) }
+          : s
+      )
+    );
+    // The shape as it stood before the *first* change of a burst is the one
+    // Undo has to put back — not as it stood one slider-notch ago.
+    if (shapeEdit.current?.id !== id) shapeEdit.current = { id, before: shape, changes: {} };
+    shapeEdit.current.changes = { ...shapeEdit.current.changes, ...changes };
+    clearTimeout(shapeTimer.current);
+    shapeTimer.current = setTimeout(saveShapeEdit, SHAPE_SAVE_MS);
+  }
+
+  async function saveShapeEdit() {
+    const pending = shapeEdit.current;
+    shapeEdit.current = null;
+    if (!pending) return;
+    const fields = Object.keys(pending.changes);
+    try {
+      const updated = await api.updateShape(scene.id, pending.id, pending.changes);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id
+            ? { ...s, shapes: s.shapes.map((x) => (x.id === updated.id ? updated : x)) }
+            : s
+        )
+      );
+      const before = pick(pending.before, fields);
+      const after = pick(updated, fields);
+      if (!matches(after, before)) {
+        recordShapeEdit({ sceneId: scene.id, shapeId: updated.id, before, after });
+      }
+    } catch (e) {
+      setError(e.message);
+      refresh(); // whatever the board is, it isn't what we just drew
+    }
+  }
+
+  /**
+   * Take every shape off the board that's yours to take off.
+   *
+   * For the DM that's the lot; for anyone else it's their own drawings, which
+   * is the same rule as rubbing out one of them and is enforced on the server
+   * either way. One request, so the table sees the map clear at once rather
+   * than a shape at a time, and one undo entry, so it comes back the same way.
+   */
+  async function clearShapes() {
+    clearTimeout(shapeTimer.current);
+    shapeEdit.current = null;
+    setError('');
+    const { removed } = await api.clearShapes(scene.id);
+    const gone = new Set((removed || []).map((s) => s.id));
+    setScenes((prev) =>
+      prev.map((s) =>
+        s.id === scene.id ? { ...s, shapes: (s.shapes || []).filter((x) => !gone.has(x.id)) } : s
+      )
+    );
+    setSelectedShapeId(null);
+    if (removed?.length) recordShapesCleared({ sceneId: scene.id, shapes: removed });
+  }
+
+  async function eraseShape(id) {
+    const shape = shapes.find((s) => s.id === id);
+    if (!shape || !canEditShape(shape)) return;
+    // Anything still waiting to be written is about a shape that's leaving.
+    clearTimeout(shapeTimer.current);
+    shapeEdit.current = null;
+    setError('');
+    try {
+      await api.deleteShape(scene.id, id);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id ? { ...s, shapes: s.shapes.filter((x) => x.id !== id) } : s
+        )
+      );
+      setSelectedShapeId(null);
+      recordShapeDelete({ sceneId: scene.id, shape });
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   // --- panning ---
@@ -657,7 +1207,7 @@ export default function Tabletop({ actor, players, offline }) {
       // A text box has an undo of its own, and that is the one being asked for.
       // Taking the keystroke from someone retyping a chat line to instead move
       // a token behind them would be a poor trade.
-      if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+      if (isTyping(e.target)) return;
       // A form over the map is what the keyboard is aimed at, even when the
       // focus has slipped off its fields.
       if (tokenForm || confirmDelete) return;
@@ -667,6 +1217,31 @@ export default function Tabletop({ actor, players, offline }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [runHistory, tokenForm, confirmDelete]);
+
+  /**
+   * Delete rubs out the shape you have hold of.
+   *
+   * Only while a tool is in hand and something is picked — the same two
+   * conditions that put the button in the panel — so the key means nothing at
+   * all when there's nothing selected to mean it about. Undo puts it back, like
+   * everything else here, which is why it doesn't stop to ask.
+   */
+  useEffect(() => {
+    if (!drawing || !selectedShapeId) return;
+    const onKey = (e) => {
+      if (e.key !== 'Delete') return;
+      // Delete inside a text box is a text box's own key — the label field in
+      // the drawing panel is one, and it's a field you type in with a shape
+      // selected by definition. A slider is not.
+      if (isTyping(e.target)) return;
+      e.preventDefault();
+      // Through the ref, so the listener always rubs out against the board as
+      // it stands rather than as it stood when the key was bound.
+      eraseRef.current(selectedShapeId);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawing, selectedShapeId]);
 
   function onContextMenu(e) {
     // Windows fires contextmenu on mouse-*up*, so a pan that finishes over a
@@ -891,6 +1466,11 @@ export default function Tabletop({ actor, players, offline }) {
 
   function onPointerDown(e, token) {
     if (e.button !== 0) return; // left button drags tokens; right pans the map
+    // With a tool in hand the map is a drawing surface, not a board of pieces.
+    // The stylesheet already stops tokens hearing this; so does this line, and
+    // between them there is no arrangement where a stray press moves a figure
+    // somebody meant to draw around.
+    if (drawing) return;
     if (!canMove(token)) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -921,6 +1501,7 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   function onPointerMove(e) {
+    if (onDrawMove(e)) return;
     const d = dragRef.current;
     if (!d) return;
     const { px, py } = pointerCell(e);
@@ -937,6 +1518,7 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   async function onPointerUp() {
+    if (onDrawEnd()) return;
     const d = dragRef.current;
     if (!d) return;
     // Snap to the grid on drop — or don't, when there isn't one.
@@ -1179,6 +1761,37 @@ export default function Tabletop({ actor, players, offline }) {
   const width = mapW * zoom;
   const height = mapH * zoom;
 
+  /**
+   * What the confirmation dialog says, by the thing it's asking about.
+   *
+   * A lookup rather than a run of ternaries: there are three of these now and
+   * each wants its own heading, its own warning and its own button. The
+   * warnings differ in kind, not just in wording — a scene is gone for good,
+   * where a token or a board of shapes is one Ctrl+Z from coming back.
+   */
+  const CONFIRM = {
+    scene: {
+      description:
+        'This deletes the scene, its map and every token standing on it, for everyone at the table. It cannot be undone.',
+      confirmLabel: 'Delete scene',
+      run: () => removeScene(confirmDelete.id),
+    },
+    token: {
+      description: 'This takes the token off the map for everyone at the table.',
+      confirmLabel: 'Delete token',
+      run: () => removeToken(confirmDelete.id),
+    },
+    shapes: {
+      title: `Delete ${clearableShapes.length} shape${clearableShapes.length === 1 ? '' : 's'}?`,
+      description: isDm
+        ? 'This clears every shape on this scene, whoever drew it, for everyone at the table. Ctrl+Z puts them all back.'
+        : 'This clears every shape you drew on this scene. Anything drawn by somebody else stays where it is. Ctrl+Z puts yours back.',
+      confirmLabel: 'Delete all shapes',
+      run: clearShapes,
+    },
+  };
+  const asking = confirmDelete ? CONFIRM[confirmDelete.kind] : null;
+
   return (
     <div className="tabletop">
       <div className="scene-bar">
@@ -1198,7 +1811,7 @@ export default function Tabletop({ actor, players, offline }) {
             type="button"
             className="wheel-pick"
             aria-pressed={wheelTarget === 'zoom'}
-            onClick={() => setWheelTarget('zoom')}
+            onClick={() => pickWheel('zoom')}
             title="Scroll over the map to zoom"
           >
             Zoom
@@ -1213,7 +1826,7 @@ export default function Tabletop({ actor, players, offline }) {
             onChange={(e) => setZoom(Number(e.target.value))}
             // Taking hold of a bar is as much a way of choosing it as clicking
             // its name — you've said which one you're working on either way.
-            onPointerDown={() => setWheelTarget('zoom')}
+            onPointerDown={() => pickWheel('zoom')}
             title="Scroll over the map to zoom"
           />
           <small>{Math.round(zoom * 100)}%</small>
@@ -1238,8 +1851,16 @@ export default function Tabletop({ actor, players, offline }) {
                 type="button"
                 className="wheel-pick"
                 aria-pressed={wheelTarget === 'grid'}
-                onClick={() => setWheelTarget('grid')}
-                title="Scroll over the map to resize the cells, right-drag to move the grid"
+                onClick={() => pickWheel('grid')}
+                // Held still while a drawing tool is in hand: the gauge's own
+                // gesture is a right-drag, and that is how you move the view
+                // while you draw. Said out loud rather than left to be noticed.
+                disabled={drawing}
+                title={
+                  drawing
+                    ? 'Put the drawing tool down to retune the grid'
+                    : 'Scroll over the map to resize the cells, right-drag to move the grid'
+                }
               >
                 Grid
               </button>
@@ -1255,7 +1876,7 @@ export default function Tabletop({ actor, players, offline }) {
                 value={gridSize}
                 aria-label="Cell size"
                 onChange={(e) => onGridSlide(Number(e.target.value))}
-                onPointerDown={() => setWheelTarget('grid')}
+                onPointerDown={() => pickWheel('grid')}
                 title={gridOn ? 'Cell size relative to the map' : 'Token scale relative to the map'}
               />
               <small>{gridOn ? `${cols}×${rows}` : `${gridSize}px`}</small>
@@ -1337,8 +1958,12 @@ export default function Tabletop({ actor, players, offline }) {
         onContextMenu={onContextMenu}
       >
         <div
-          className="surface"
+          className={`surface${drawing ? ' drawing' : ''}`}
           ref={surfaceRef}
+          // Focusable on purpose but never in the tab order: it's here so a
+          // press on the map can hand it the keyboard, not so that tabbing
+          // through the page stops on the picture.
+          tabIndex={-1}
           style={{
             width,
             height,
@@ -1349,10 +1974,49 @@ export default function Tabletop({ actor, players, offline }) {
             '--grid-x': `${offXPx}px`,
             '--grid-y': `${offYPx}px`,
           }}
+          onPointerDown={onDrawStart}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
+          {/* The drawing layer, under the grid and under the tokens: a shape
+              marks out ground, and ground is the thing everything else stands
+              on. In map pixels via the viewBox, so one set of numbers is right
+              at every zoom — and the strokes are told not to scale with it, or
+              zooming out would thin every outline into nothing. */}
+          <svg
+            className="shape-layer"
+            width={width}
+            height={height}
+            viewBox={`0 0 ${mapW} ${mapH}`}
+            aria-hidden="true"
+          >
+            {shapes.map((s) => {
+              // The one under the hand is drawn from the gesture instead, so it
+              // isn't painted twice while it moves.
+              if (sketch?.id === s.id) return null;
+              return (
+                <ShapeMark
+                  key={s.id}
+                  shape={s}
+                  cell={gridSize}
+                  origin={{ x: gridOffX, y: gridOffY }}
+                  zoom={zoom}
+                  selected={s.id === selectedShapeId}
+                />
+              );
+            })}
+            {sketch && (
+              <ShapeMark
+                shape={sketch}
+                cell={gridSize}
+                origin={{ x: gridOffX, y: gridOffY }}
+                zoom={zoom}
+                sketching
+              />
+            )}
+          </svg>
+
           {gridOn && <div className="grid-overlay" />}
 
           {/* Inside the surface, so a ping sits at its map position and stays
@@ -1461,17 +2125,54 @@ export default function Tabletop({ actor, players, offline }) {
               </button>
             </div>
             <div className="map-tools-body">
-              {isDm ? (
+              {isDm && (
                 <button onClick={toggleTurnMode} disabled={busy}>
                   {turnMode ? 'Exit Turn mode' : 'Enter Turn mode'}
                 </button>
-              ) : (
-                <small>Nothing here for you yet.</small>
               )}
+              {/* Not the DM's alone: marking where a spell lands, or where you
+                  mean to run, is the same kind of thing as moving your own
+                  token. What you drew stays yours to change. */}
+              {canDraw && (
+                <button
+                  onClick={() => setShapeWindow((open) => !open)}
+                  aria-pressed={shapeWindow}
+                  className={shapeWindow ? 'active' : ''}
+                >
+                  {shapeWindow ? 'Standard mode' : 'Draw mode'}
+                </button>
+              )}
+              {!isDm && !canDraw && <small>Nothing here for you yet.</small>}
             </div>
           </div>
         )}
       </div>
+
+      {/* The drawing box. Yours alone — unlike the turn tracker, which is the
+          table's, this one only says what *your* pointer is about to do. */}
+      {shapeWindow && canDraw && (
+        <ShapeTools
+          tool={shapeTool}
+          onTool={setShapeTool}
+          style={shapeStyle}
+          onStyle={(changes) => setShapeStyle((s) => ({ ...s, ...changes }))}
+          selected={selectedShape}
+          canEditSelected={canEditShape(selectedShape)}
+          onEditSelected={(changes) => editShape(selectedShapeId, changes)}
+          onDeleteSelected={() => eraseShape(selectedShapeId)}
+          // How many are yours to clear. None, and the button isn't drawn.
+          clearable={clearableShapes.length}
+          onClearAll={() => setConfirmDelete({ kind: 'shapes' })}
+          onClose={() => {
+            // Putting the box away puts the tool down with it. Leaving drawing
+            // mode on with nothing on screen to say so is how you end up
+            // scribbling on the map while trying to move a token.
+            setShapeTool(null);
+            setShapeWindow(false);
+          }}
+          offline={offline}
+        />
+      )}
 
       {/* One tracker, shown to the whole table while the fight is on. Only the
           DM can put it away, and doing so is what ends turn mode — so a player
@@ -1640,21 +2341,14 @@ export default function Tabletop({ actor, players, offline }) {
       {/* A scene asks for its name to be typed; a token only asks. The scene
           takes every token on it with it and can't be got back, which is the
           test the sheet windows already use — a token is a minute's work. */}
-      {confirmDelete && (
+      {asking && (
         <ConfirmDeleteModal
           name={confirmDelete.name}
+          title={asking.title}
           byName={confirmDelete.kind === 'scene'}
-          description={
-            confirmDelete.kind === 'scene'
-              ? 'This deletes the scene, its map and every token standing on it, for everyone at the table. It cannot be undone.'
-              : 'This takes the token off the map for everyone at the table.'
-          }
-          confirmLabel={confirmDelete.kind === 'scene' ? 'Delete scene' : 'Delete token'}
-          onConfirm={() =>
-            confirmDelete.kind === 'scene'
-              ? removeScene(confirmDelete.id)
-              : removeToken(confirmDelete.id)
-          }
+          description={asking.description}
+          confirmLabel={asking.confirmLabel}
+          onConfirm={asking.run}
           onClose={() => setConfirmDelete(null)}
         />
       )}
