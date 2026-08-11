@@ -17,15 +17,18 @@ body {
   --shell-pad: 0.7rem;
   padding: var(--shell-pad);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
+  /* The chat's column. Wide enough that a line of dialogue is read rather than
+     spelled down the side of the window — a chat two or three words to the line
+     costs more of the map in scrolling than it ever saved in width. */
+  grid-template-columns: minmax(0, 1fr) 375px;
   gap: 1rem;
   align-items: start;
 }
 
 
 /* Outside a campaign there is no chat — the chat belongs to a table. Without
-   this the grid would still reserve its 250px and the directory would sit next
-   to a column of nothing. */
+   this the grid would still reserve that column and the directory would sit
+   next to a column of nothing. */
 .app.solo {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -2543,13 +2546,22 @@ button.token-tile:hover {
    sticks; the chat then flexes into whatever the player leaves. */
 .sidebar {
   position: sticky;
-  top: 1.5rem;
+  /* The shell's own padding, so a stuck sidebar rests exactly where an unstuck
+     one starts — flush with the top of the map beside it. */
+  top: var(--shell-pad);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  /* No gap of its own: a flex gap is held between the two whether or not the
+     music bar is showing anything, and with nothing playing — which is most of
+     the time — that is half a centimetre of the chat's height spent on a rule
+     between it and an empty box. The space belongs to the bar instead, below. */
+  gap: 0;
   /* Same window-minus-frame as .app.map .main, and for the same reason: this
-     column is what the map bottom-aligns with. Change one, change both. */
-  height: calc(100vh - 3rem);
+     column is what the map bottom-aligns with. Both are the viewport less the
+     shell's padding top and bottom, written the same way so they can't drift
+     apart again — they once did, and the chat stopped an inch short of the
+     bottom of the map. Change one, change both. */
+  height: calc(100vh - 2 * var(--shell-pad));
   min-width: 0;
 }
 
@@ -2580,16 +2592,31 @@ button.token-tile:hover {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  /* Keeps a long unbroken word from widening the whole column. */
+  /* Keeps a long unbroken word from widening the whole column. `anywhere`
+     rather than `break-word` on purpose: it also lowers what the text reports
+     as its narrowest possible size, which is what lets the flex rows below
+     shrink instead of pushing their tail off the side of the column. */
   overflow-wrap: anywhere;
+  /* Deliberately *not* overflow-x: hidden. Everything inside this box is set up
+     to wrap, so nothing should reach the edge in the first place; if some future
+     message still does, being able to scroll to it beats having it quietly cut
+     off — which is the one outcome this whole section is here to prevent. */
+  min-width: 0;
+}
+
+/* Each message is as wide as the log and no wider, whatever it contains. */
+.chat-msg {
+  min-width: 0;
 }
 
 .chat-msg p {
   margin: 0.1rem 0 0;
   font-size: 0.87rem;
   line-height: 1.35;
+  /* Honour the newlines people type — but `pre-wrap`, not `pre`: their line
+     breaks are kept and ours are still added where a line runs out of room. */
   white-space: pre-wrap;
-  /* honour the newlines people type */
+  min-width: 0;
 }
 
 .chat-meta {
@@ -2598,11 +2625,18 @@ button.token-tile:hover {
   align-items: baseline;
   font-size: 0.72rem;
   color: #8b90a0;
+  /* A long name and its time are a line that wraps, not one that runs past the
+     edge. The badge drops under the name rather than off the side. */
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .chat-meta strong {
   color: #9fb4ff;
   font-size: 0.76rem;
+  /* Even a single unbroken name that fills the column has to break somewhere,
+     and a flex item won't do that until it's allowed to be narrow. */
+  min-width: 0;
 }
 
 .chat-msg.from-gm .chat-meta strong {
@@ -3322,6 +3356,25 @@ button.token-tile:hover {
 }
 
 /* The player itself, under the chat. */
+/* The gap the sidebar doesn't keep, carried by the thing that needs it: the bar
+   holds the chat off only while it has something to hold it off with. Idle and
+   hidden both collapse to nothing, and there the chat runs to the bottom of the
+   column — level with the bottom of the map, which is the point. */
+.sidebar > .music-bar {
+  margin-top: 0.5rem;
+}
+
+.sidebar > .music-bar.idle,
+.sidebar > .music-bar.hidden {
+  margin-top: 0;
+}
+
+/* One exception: a listener whose browser blocked playback keeps a single
+   button in an otherwise hidden bar, and that does need the space. */
+.music-bar.hidden > .music-enable {
+  margin-top: 0.5rem;
+}
+
 .music-bar {
   flex: none;
   display: flex;
