@@ -205,7 +205,7 @@ export default function App() {
    * still on screen with nothing in it.
    */
   const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'players'];
-  const shellTabs = ['campaigns', 'people'];
+  const shellTabs = ['campaigns', 'users'];
 
   function resolveTab(wanted) {
     if (!insideCampaign) return tableTabs.includes(wanted) ? 'campaigns' : wanted;
@@ -241,45 +241,32 @@ export default function App() {
       }`}
     >
       <div className="main">
+        {/* Identity and navigation on one line. They were stacked, which cost
+            the map two rows of chrome to say two short things — and the map is
+            the one view that wants every pixel. Wraps back to two lines when
+            the window is too narrow to hold both, which is no worse than what
+            it always did. */}
+        <div className="topbar">
         <header>
           <h1>⚔️ RPG Manager</h1>
-          <span className={connected ? 'badge on' : 'badge off'}>
-            {connected ? 'live' : 'offline'}
-          </span>
+          {/* A dot rather than a word. This is a green "fine" almost always,
+              and the state that actually matters — not connected — already
+              gets a full-width banner under the bar. The colour carries it;
+              the tooltip spells it out for anyone who wants it. */}
+          <span
+            className={`live-dot${connected ? ' on' : ''}`}
+            role="status"
+            aria-label={connected ? 'Connected to the table' : 'Not connected to the table'}
+            title={
+              connected
+                ? 'Connected — changes reach the table as you make them'
+                : 'Not connected — the table is not seeing your changes'
+            }
+          />
           <span className={`badge role ${role || actor.globalRole}`}>{roleLabel}</span>
           {actor.globalRole === 'admin' && <span className="badge role gm">admin</span>}
           {campaign && <span className="campaign-name">{campaign.name}</span>}
-          <div className="spacer" />
-          {insideCampaign && myCampaigns.length > 1 && (
-            <select
-              className="campaign-switch"
-              value={campaignId}
-              onChange={(e) => openCampaign(e.target.value)}
-            >
-              {myCampaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {/* Only outside a campaign. At a table the header is for the table,
-              and leaving is a two-step move — close the campaign, then log
-              out — rather than one click sitting next to the scene controls. */}
-          {!insideCampaign && (
-            <button className="linky" onClick={signOut}>
-              Log out
-            </button>
-          )}
         </header>
-
-        {offline && (
-          <p className="offline-banner">
-            Offline — the table's server is unreachable, so this is a read-only view of
-            the last data your browser cached.
-            {lastSynced && ` Last synced ${new Date(lastSynced).toLocaleString()}.`}
-          </p>
-        )}
 
         {/* With no identity there are no tabs at all, and an empty tab bar is
             just a stray rule across the page. */}
@@ -352,13 +339,51 @@ export default function App() {
           )}
           {!insideCampaign && isAdmin && (
             <button
-              className={activeTab === 'people' ? 'active' : ''}
-              onClick={() => setTab('people')}
+              className={activeTab === 'users' ? 'active' : ''}
+              onClick={() => setTab('users')}
             >
-              People
+              Users
             </button>
           )}
         </nav>
+        )}
+
+        {/* End of the bar: the spacer pushes these right, past the tabs. They
+            were inside the header when the header owned its own row; on a
+            shared row they belong to the row. */}
+        <div className="spacer" />
+        {insideCampaign && myCampaigns.length > 1 && (
+          <select
+            className="campaign-switch"
+            value={campaignId}
+            onChange={(e) => openCampaign(e.target.value)}
+          >
+            {myCampaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+        {/* Only outside a campaign. At a table, leaving is a two-step move —
+            close the campaign, then log out — rather than one click sitting
+            next to the scene controls. */}
+        {!insideCampaign && (
+          <button className="linky" onClick={signOut}>
+            Log out
+          </button>
+        )}
+        </div>
+
+        {/* Its own block under the bar rather than a item in it: it is a
+            paragraph, and squeezing it between the tabs and the switcher would
+            leave room for about three words of it. */}
+        {offline && (
+          <p className="offline-banner">
+            Offline — the table's server is unreachable, so this is a read-only view of
+            the last data your browser cached.
+            {lastSynced && ` Last synced ${new Date(lastSynced).toLocaleString()}.`}
+          </p>
         )}
 
         {activeTab === 'campaigns' && authed && (
@@ -372,7 +397,7 @@ export default function App() {
             onChanged={loadCampaigns}
           />
         )}
-        {activeTab === 'people' && isAdmin && <Roster onUsersChanged={loadCampaigns} />}
+        {activeTab === 'users' && isAdmin && <Roster onUsersChanged={loadCampaigns} />}
 
         {/* The campaign id in each key throws away every bit of state when the
             campaign changes, so a view can't briefly show the previous table's

@@ -284,7 +284,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
                   </ul>
                   {users.length === 0 && (
                     <p className="empty">
-                      No other people exist yet — the admin adds them in the People tab.
+                      No other people exist yet — the admin adds them in the Users tab.
                     </p>
                   )}
 

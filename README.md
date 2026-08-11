@@ -204,7 +204,7 @@ ADMIN_PASSWORD=your-secret npm start             # bash
 ### Inviting people
 Two separate steps, because they answer two different questions.
 
-**Getting someone onto the server** is the admin's job: the **People** tab, add
+**Getting someone onto the server** is the admin's job: the **Users** tab, add
 a friend, *Copy invite link*. The link looks like `https://your-tunnel/?key=…`;
 their browser claims the key and remembers it, so they land as themselves every
 time. Nobody self-registers — an open registration endpoint on a tunnel-exposed
@@ -514,7 +514,7 @@ credentials file.
 ### Before you send the link
 - **`ADMIN_PASSWORD` is set** to something you didn't reuse elsewhere. The server
   won't start without it, so this is hard to get wrong.
-- **Each friend has their own invite link** from the People tab. Anyone without
+- **Each friend has their own invite link** from the Users tab. Anyone without
   one lands as a spectator, which is the right outcome for a stranger who finds
   the URL.
 - **The table is only up while the tunnel is.** Close it and the site is gone —
@@ -705,7 +705,7 @@ configuration rather than anything stored on the account.
 | `ADMIN_USERNAME` | `admin` | Username the admin logs in with |
 | `SIGNUP_CODE` | *(unset — open)* | When set, registration demands this code |
 | `GM_PASSWORD` | *(unset)* | Old name for the above, still honoured |
-| `ADMIN_NAME` | `Admin` | Display name of the seeded admin account |
+| `ADMIN_NAME` | `Admin` | Display name given to the admin account **when it is first created**. Renaming it later is a normal edit (`PUT /api/users/:id`) and this variable won't override it |
 | `DATA_DIR` | `./data` | Where the database + uploads live |
 | `DB_FILE` | `$DATA_DIR/rpg-manager.db` | The SQLite file itself |
 | `PORT` | `3001` | Server port |

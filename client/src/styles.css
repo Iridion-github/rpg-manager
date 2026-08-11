@@ -12,12 +12,16 @@ body {
 /* The shell spans the window; individual views decide their own width. The
    tabletop wants every pixel it can get, whereas lists of text do not. */
 .app {
-  padding: 1.5rem;
+  /* Named, because the tabletop's height is the window minus exactly this,
+     twice. Two places that must agree, and a variable is how they do. */
+  --shell-pad: 0.7rem;
+  padding: var(--shell-pad);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 250px;
   gap: 1rem;
   align-items: start;
 }
+
 
 /* Outside a campaign there is no chat — the chat belongs to a table. Without
    this the grid would still reserve its 250px and the directory would sit next
@@ -42,15 +46,51 @@ body {
   max-width: 900px;
 }
 
+/* The one row that carries who you are and where you are going. Identical in
+   and out of a campaign — walking into a table shouldn't move the furniture. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  /* Just enough to keep it off whatever the tabs lead to. */
+  margin-bottom: 0.5rem;
+  /* Too narrow to hold both halves? Then it becomes two lines again, which is
+     what it used to be all the time. */
+  flex-wrap: wrap;
+}
+
 header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  /* Sized to its contents so the tabs sit next to it rather than being pushed
+     to the far side of the window. */
+  flex: none;
 }
 
+/* A landmark, not a headline. The interesting thing up here is the campaign's
+   name — or, outside one, the list of them below. Same size everywhere so the
+   bar doesn't resize itself as you walk in and out of a table. */
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.05rem;
   margin: 0;
+  white-space: nowrap;
+}
+
+/* Connection, in one character's worth of space. The same green and red the
+   Players tab uses for presence, so "connected" looks the same wherever the
+   app says it. */
+.live-dot {
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #b3413b;
+}
+
+.live-dot.on {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.7);
 }
 
 .badge {
@@ -423,6 +463,15 @@ button.linky:hover {
   border-bottom: 1px solid #2c3140;
 }
 
+/* On the shared row the tabs carry no margins of their own, and the rule under
+   them would be a line through the middle of the bar — the active tab's own
+   underline is doing that job anyway. */
+.topbar .tabs {
+  margin: 0;
+  border-bottom: none;
+  flex-wrap: wrap;
+}
+
 .tabs button {
   background: none;
   border: none;
@@ -553,11 +602,12 @@ button.linky:hover {
    a subtraction and the page grows a scrollbar over a few stray pixels, too
    large and a band of empty background sits under the map. */
 .app.map .main {
-  height: calc(100vh - 3rem);
+  height: calc(100vh - 2 * var(--shell-pad));
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
+
 
 .app.map .tabletop {
   flex: 1;
