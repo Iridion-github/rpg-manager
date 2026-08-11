@@ -762,6 +762,12 @@ button.linky:hover {
   cursor: grabbing;
 }
 
+/* The same gesture aimed at the grid instead of the view. A different cursor
+   because a different thing is moving under it. */
+.surface-scroll.nudging {
+  cursor: move;
+}
+
 .surface {
   position: relative;
   /* Centres a map narrower than the viewport. With a map *wider* than the
@@ -781,6 +787,15 @@ button.linky:hover {
   background-image:
     repeating-linear-gradient(to right, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell)),
     repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell));
+  /* One cell per tile, so the pattern repeats on the cell rather than on the
+     map: a map that isn't a whole number of cells wide would otherwise show a
+     short column where the element-sized tile wrapped, once the grid is moved
+     off zero. */
+  background-size: var(--cell) var(--cell);
+  /* Where the grid was dragged to. The map's image is on the surface behind
+     this and is not moved by it — which is the point: the picture holds still
+     and the cells slide onto whatever grid is drawn in it. */
+  background-position: var(--grid-x, 0) var(--grid-y, 0);
 }
 
 /* --- ping ---

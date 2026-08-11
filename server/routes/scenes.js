@@ -41,16 +41,26 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * without the map changing size. Column and row counts are *derived* from that
  * ratio rather than stored, which is what keeps the two from contradicting
  * each other.
+ *
+ * `gridOffsetX`/`gridOffsetY` are where the first cell's corner sits, for a map
+ * that came with a grid drawn on it: getting the size right lines the cells up,
+ * and the offset then slides them onto the ones in the picture.
  */
 function sanitizeScene(body = {}) {
   const { name = 'New Scene', imageUrl = '', gridSize = 70 } = body;
   // Older scenes described their size as cols/rows instead of pixels.
   const fallbackW = num(body.cols, 0) * num(gridSize, 70) || 1200;
   const fallbackH = num(body.rows, 0) * num(gridSize, 70) || 840;
+  const cell = clamp(num(gridSize, 70), 8, 500);
+  // A grid repeats, so a nudge of one whole cell in either direction reaches
+  // every alignment there is — past that you are back where you started.
+  const offset = (v) => clamp(Math.round(num(v, 0)), -cell, cell);
   return {
     name: String(name).slice(0, 120),
     imageUrl: String(imageUrl).slice(0, 500),
-    gridSize: clamp(num(gridSize, 70), 8, 500), // map px per cell
+    gridSize: cell, // map px per cell
+    gridOffsetX: offset(body.gridOffsetX),
+    gridOffsetY: offset(body.gridOffsetY),
     // Absent means on: every scene that existed before this flag did had a
     // grid, and they should keep it.
     gridOn: body.gridOn !== false,

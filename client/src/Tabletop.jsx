@@ -94,6 +94,9 @@ export default function Tabletop({ actor, players, offline }) {
   // a local value while the GM is actually dragging, so another GM's change
   // isn't masked by a stale draft.
   const [gridDraft, setGridDraft] = useState(null);
+  // The same for where the grid sits, while it's being dragged into place.
+  // Null means "whatever the scene says", for the same reason.
+  const [offsetDraft, setOffsetDraft] = useState(null);
   // Which bar the wheel drives while the cursor is over the map. Zoom to begin
   // with: it's the one everybody reaches for, and the one a player has at all.
   const [wheelTarget, setWheelTarget] = useState('zoom');
@@ -152,7 +155,10 @@ export default function Tabletop({ actor, players, offline }) {
   const pendingFocus = useRef(null);
   const pingTimers = useRef(new Set());
   const menuRef = useRef(null);
-  const [panning, setPanning] = useState(false);
+  // What the right button is doing to the map right now: 'pan' to move the
+  // view, 'grid' to move the grid over it, null between gestures. One piece of
+  // state rather than two flags, because it is only ever doing one of them.
+  const [gesture, setGesture] = useState(null);
   // Bumped to force a render after a focus arrives, so the scroll is applied by
   // a layout effect that runs *after* the new zoom is on screen. Without it a
   // focus that doesn't change the zoom would re-render nothing and never scroll.
@@ -203,6 +209,7 @@ export default function Tabletop({ actor, players, offline }) {
   // A draft belongs to the scene it was made on, and so does a pulse on the map.
   useEffect(() => {
     setGridDraft(null);
+    setOffsetDraft(null);
     setPings([]);
     setMenu(null);
     clearTimeout(gridTimer.current);
@@ -325,6 +332,14 @@ export default function Tabletop({ actor, players, offline }) {
   const mapW = scene?.width || 1200;
   const mapH = scene?.height || 840;
   const cellPx = gridSize * zoom;
+  // Where cell (0,0) starts, in map pixels. Everything measured in cells —
+  // the lines, the tokens, the square a pointer is over — is measured from
+  // here, so moving it slides the whole grid across a map that stays put.
+  const gridOffX = offsetDraft?.x ?? scene?.gridOffsetX ?? 0;
+  const gridOffY = offsetDraft?.y ?? scene?.gridOffsetY ?? 0;
+  // The same corner in screen pixels, which is what the layout wants.
+  const offXPx = gridOffX * zoom;
+  const offYPx = gridOffY * zoom;
   const cols = Math.max(1, Math.floor(mapW / gridSize));
   const rows = Math.max(1, Math.floor(mapH / gridSize));
 
@@ -348,7 +363,10 @@ export default function Tabletop({ actor, players, offline }) {
 
   function pointerCell(e) {
     const rect = surfaceRef.current.getBoundingClientRect();
-    return { px: (e.clientX - rect.left) / cellPx, py: (e.clientY - rect.top) / cellPx };
+    return {
+      px: (e.clientX - rect.left - offXPx) / cellPx,
+      py: (e.clientY - rect.top - offYPx) / cellPx,
+    };
   }
 
   function endDrag() {
@@ -362,6 +380,17 @@ export default function Tabletop({ actor, players, offline }) {
   // for the scrollbars. Tokens are excluded: a right-click on one keeps its
   // normal browser menu.
   const onToken = (e) => Boolean(e.target.closest?.('.token'));
+
+  /**
+   * Whether a right-drag moves the grid instead of the view.
+   *
+   * With the Grid gauge selected the same gesture is aimed at the grid rather
+   * than the camera: the map stays exactly where it is and the cells slide over
+   * it. That's what makes a map with a grid already drawn on it usable — size
+   * the cells to match the art, then push them onto it. The view still has its
+   * scrollbars, and picking Zoom again gives the pan back.
+   */
+  const canNudgeGrid = canTuneGrid && gridOn && wheelTarget === 'grid';
 
   function onPanStart(e) {
     pannedRef.current = false; // any fresh press starts a new gesture
@@ -377,8 +406,16 @@ export default function Tabletop({ actor, players, offline }) {
       y: e.clientY,
       left: el.scrollLeft,
       top: el.scrollTop,
+      // Decided at the press, not at each move: changing gauge mid-drag would
+      // otherwise turn a nudge into a pan halfway through it.
+      grid: canNudgeGrid,
+      // Where the grid started, and where it has got to — kept here rather than
+      // read back from the draft, so the save at the end can't pick up a value
+      // from a render that hasn't happened yet.
+      offX: gridOffX,
+      offY: gridOffY,
     };
-    setPanning(true);
+    setGesture(canNudgeGrid ? 'grid' : 'pan');
   }
 
   function onPanMove(e) {
@@ -391,6 +428,18 @@ export default function Tabletop({ actor, players, offline }) {
       return;
     }
     pannedRef.current = true;
+    if (p.grid) {
+      // In map pixels, not screen ones: the offset is stored against the map,
+      // so everyone draws the same alignment whatever their zoom. Held to a
+      // cell each way — beyond that the grid only repeats itself.
+      p.offX = clamp(Math.round(p.offX + (e.clientX - p.x) / zoom), -gridSize, gridSize);
+      p.offY = clamp(Math.round(p.offY + (e.clientY - p.y) / zoom), -gridSize, gridSize);
+      // The travel so far has been spent; measure the next move from here.
+      p.x = e.clientX;
+      p.y = e.clientY;
+      setOffsetDraft({ x: p.offX, y: p.offY });
+      return;
+    }
     const el = scrollRef.current;
     // Drag the map with the cursor: content moves the way the hand does, so
     // the scroll offset goes the opposite way.
@@ -402,12 +451,15 @@ export default function Tabletop({ actor, players, offline }) {
     const p = panRef.current;
     if (!p) return;
     panRef.current = null;
-    setPanning(false);
+    setGesture(null);
     try {
       scrollRef.current?.releasePointerCapture(p.pointerId);
     } catch {
       /* pointer already gone */
     }
+    // Saved when the hand comes off the map rather than once per pixel of
+    // travel — the same bargain the cell-size slider makes with its timer.
+    if (p.grid && pannedRef.current) saveGridOffset(p.offX, p.offY);
   }
 
   // --- scroll to adjust ---
@@ -627,8 +679,8 @@ export default function Tabletop({ actor, players, offline }) {
     const half = (token.size || 1) / 2;
     socket.emit('scene:focus', {
       sceneId: scene.id,
-      x: (token.x + half) * gridSize,
-      y: (token.y + half) * gridSize,
+      x: gridOffX + (token.x + half) * gridSize,
+      y: gridOffY + (token.y + half) * gridSize,
       zoom,
     });
   }
@@ -639,8 +691,8 @@ export default function Tabletop({ actor, players, offline }) {
   // here is where you want it.
   function openTokenModal() {
     if (!menu || !scene) return;
-    const cellX = menu.mx / gridSize;
-    const cellY = menu.my / gridSize;
+    const cellX = (menu.mx - gridOffX) / gridSize;
+    const cellY = (menu.my - gridOffY) / gridSize;
     setTokenForm({
       x: clamp(gridOn ? Math.round(cellX) : round2(cellX), 0, cols - 1),
       y: clamp(gridOn ? Math.round(cellY) : round2(cellY), 0, rows - 1),
@@ -658,7 +710,7 @@ export default function Tabletop({ actor, players, offline }) {
   // noise during a drag or a pan, and would sit on top of the right-click menu,
   // so those three states suppress it outright.
   const hoveredToken =
-    hovered && !drag && !panning && !menu
+    hovered && !drag && !gesture && !menu
       ? scene?.tokens.find((t) => t.id === hovered.id)
       : null;
 
@@ -913,6 +965,27 @@ export default function Tabletop({ actor, players, offline }) {
     }, GRID_SAVE_MS);
   }
 
+  // Where the drag left the grid. No timer: a nudge ends when the button comes
+  // up, which is a moment the slider never gets.
+  async function saveGridOffset(x, y) {
+    try {
+      const updated = await api.updateScene(scene.id, {
+        ...scene,
+        // The slider's own draft, if one is mid-flight — otherwise saving the
+        // offset would write the cell size back to what it was before it moved.
+        gridSize,
+        gridOffsetX: x,
+        gridOffsetY: y,
+      });
+      setScenes((prev) =>
+        prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
+      );
+      setOffsetDraft(null); // back to following the scene
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   /**
    * Make the token the modal describes, at the spot the menu chose.
    *
@@ -1045,7 +1118,7 @@ export default function Tabletop({ actor, players, offline }) {
                 className="wheel-pick"
                 aria-pressed={wheelTarget === 'grid'}
                 onClick={() => setWheelTarget('grid')}
-                title="Scroll over the map to resize the cells"
+                title="Scroll over the map to resize the cells, right-drag to move the grid"
               >
                 Grid
               </button>
@@ -1132,7 +1205,9 @@ export default function Tabletop({ actor, players, offline }) {
           whose height changes as it wraps. */}
       <div className="map-area">
       <div
-        className={`surface-scroll${panning ? ' panning' : ''}`}
+        className={`surface-scroll${gesture === 'pan' ? ' panning' : ''}${
+          gesture === 'grid' ? ' nudging' : ''
+        }`}
         ref={scrollRef}
         onPointerDown={onPanStart}
         onPointerMove={onPanMove}
@@ -1148,6 +1223,10 @@ export default function Tabletop({ actor, players, offline }) {
             height,
             backgroundImage: scene.imageUrl ? `url(${scene.imageUrl})` : 'none',
             '--cell': `${cellPx}px`,
+            // Only the grid reads these. The map's own background is placed by
+            // the stylesheet and stays where it is while they change.
+            '--grid-x': `${offXPx}px`,
+            '--grid-y': `${offYPx}px`,
           }}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -1199,8 +1278,11 @@ export default function Tabletop({ actor, players, offline }) {
                   token.id === spotlitId ? ' spotlit' : ''
                 }`}
                 style={{
-                  left: pos.x * cellPx,
-                  top: pos.y * cellPx,
+                  // Tokens ride the grid rather than the picture: a token in a
+                  // cell stays in that cell when the grid is moved onto the one
+                  // drawn on the map.
+                  left: offXPx + pos.x * cellPx,
+                  top: offYPx + pos.y * cellPx,
                   width: token.size * cellPx,
                   height: token.size * cellPx,
                   // A picture replaces the fill, not just the name — cover so a
