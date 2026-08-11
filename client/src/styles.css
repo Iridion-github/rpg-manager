@@ -1668,6 +1668,9 @@ button.token-tile:hover {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  /* The list is the first thing in this tab now that the paragraph above it has
+     gone, so the header carries the gap that paragraph used to. */
+  margin-top: 0.75rem;
   /* The dot's width plus the row's gap, so "Name" starts above the names
      rather than above the dots. */
   padding: 0 0.6rem 0 1.65rem;

@@ -71,14 +71,6 @@ export default function Roster({ isAdmin, onUsersChanged }) {
 
   return (
     <div className="roster">
-      <p className="hint">
-        Everyone who has registered on this server. People arrive by registering
-        — with the signup code, if you've set one — and sign in with their own
-        password. Being on this list gets them onto the server, not into any
-        campaign: that's each DM's call.
-        {!isAdmin && ' This is a list to read; only the server admin can change it.'}
-      </p>
-
       {error && <p className="error">{error}</p>}
 
       {/* A header, because the second column is a date and a column of dates
