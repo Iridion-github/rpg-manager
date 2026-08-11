@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 
 /**
@@ -27,6 +27,9 @@ function Note({ note }) {
 export default function Account({ actor, config, onChanged, offline }) {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Why the account couldn't be read, when it couldn't. Held apart from the
+  // per-form notes below: this one is about the whole screen.
+  const [loadError, setLoadError] = useState('');
 
   // Each form keeps its own state and its own answer, so a failed password
   // change doesn't wipe what was typed into the address below it.
@@ -49,21 +52,39 @@ export default function Account({ actor, config, onChanged, offline }) {
   const [mailNote, setMailNote] = useState(null);
   const [mailBusy, setMailBusy] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .whoami()
-      .then((data) => {
-        if (!alive) return;
-        setMe(data.user || null);
-        setName(data.user?.name || '');
-      })
-      .catch(() => {})
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
+  /**
+   * Read the account this screen is about.
+   *
+   * Its failure used to be swallowed, which was worse than it sounds: with
+   * nothing loaded every question below answers "no" — no address, no name —
+   * and the page went on to state those as facts about your account, telling
+   * people with a perfectly good address on file that they hadn't one. A screen
+   * that can't read the thing it describes has to say so, not guess.
+   */
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await api.whoami();
+      if (!data?.user) {
+        // /me answered, but about nobody — the session ended under us.
+        setLoadError('Your session has ended. Sign in again to manage your account.');
+        setMe(null);
+        return;
+      }
+      setMe(data.user);
+      setName(data.user.name || '');
+    } catch (err) {
+      setLoadError(err.message);
+      setMe(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const isAdmin = actor?.globalRole === 'admin';
   const hasCode = Boolean(config?.hasSignupCode);
@@ -172,6 +193,24 @@ export default function Account({ actor, config, onChanged, offline }) {
   }
 
   if (loading) return <div className="account" />;
+
+  /**
+   * Nothing is claimed about an account that couldn't be read.
+   *
+   * Every form below turns on what the account holds — whether there's an
+   * address to send a confirmation to, most of all — so rendering them against
+   * a blank would be inventing answers. One honest sentence and a way to try
+   * again is the whole of what this screen can offer here.
+   */
+  if (!me) {
+    return (
+      <div className="account">
+        <h2>My account</h2>
+        <p className="error">{loadError || 'Your account could not be read.'}</p>
+        <button onClick={load}>Try again</button>
+      </div>
+    );
+  }
 
   return (
     <div className="account">
