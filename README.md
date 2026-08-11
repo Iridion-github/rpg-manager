@@ -271,9 +271,14 @@ Two separate steps, because they answer two different questions.
 **Getting someone onto the server** is theirs to do: send them the URL and your
 `SIGNUP_CODE`, and they register with a username and password of their own. The
 code is what stops an open registration endpoint on a tunnel-exposed machine
-being an invitation to anyone who finds the URL. The **Users** tab lists who has
-registered, and lets the admin rename or remove them — it doesn't mint accounts
-and doesn't hand out credentials.
+being an invitation to anyone who finds the URL.
+
+The **Users** tab lists who has registered. Everyone signed in can read it —
+it's the same list a DM reads when picking members, and it carries names and
+colours and nothing else; the server strips email, password hash and the rest
+before it leaves. Only the admin sees a way to remove anybody, and the routes
+behind it refuse everyone else regardless of what the page draws. It doesn't
+mint accounts and doesn't hand out credentials.
 
 **Getting them to your table** is the DM's job: **Campaigns → Members**, and
 pick Player or DM for each person. Being on the server gets you nothing on its
@@ -322,12 +327,22 @@ doesn't is a click, and opens a menu instead. The threshold is why that works:
 no hand is perfectly still for the length of a click, so testing for *no*
 movement would mean the menu almost never opened.
 
-**Scroll to zoom** — the wheel drives the zoom bar instead of the scrollbars, in
-the same 10% steps, and zooms around the point under your cursor so the map
-doesn't lurch away from what you're looking at. Trackpad deltas accumulate, so a
-light two-finger flick doesn't tear through the whole range.
+**Scroll to adjust** — the wheel drives one of the bars in the scene bar rather
+than the scrollbars: whichever of **Zoom** or **Grid** is selected there. Zoom
+moves in 10% steps around the point under your cursor, so the map doesn't lurch
+away from what you're looking at. Trackpad deltas accumulate, so a light
+two-finger flick doesn't tear through the whole range.
 
-Left-drag is unchanged: it moves a token you own.
+Which gauge is selected also decides what a right-drag does, because both want
+the same gesture:
+
+| Gauge | Right-drag |
+| --- | --- |
+| **Zoom** | moves your view |
+| **Grid** (DM) | moves the grid over the map — see below |
+
+Left-drag moves a token you own — unless Draw mode is on, where the map becomes
+a drawing surface instead.
 
 The map runs to the bottom of the window, finishing level with the chat column
 beside it, rather than stopping at a fixed fraction of the screen.
@@ -347,6 +362,10 @@ Right-clicking the **map** offers three things:
   for a position, because the right-click already answered that; the token
   appears where you clicked, sliding to the first free cell if that one is
   taken.
+- **Undo** and **Redo** — below a rule, because they act on what you have
+  already done to the map rather than on the map itself. Greyed out rather than
+  hidden when there's nothing left to take back, so where they *are* stays worth
+  knowing. **Ctrl+Z** and **Ctrl+Shift+Z** do the same. See below.
 
 Right-clicking a **token** offers **Edit** — the same form, prefilled — and
 **Delete**, which removes it at once with no confirmation. Editing sends only
@@ -369,9 +388,80 @@ map never resizes; slide right for bigger (fewer) cells, left for smaller (more)
 Column and row counts are derived from `width / gridSize`, never stored, so the
 two can't drift out of agreement.
 
-Use it to line the grid up with a map that already has squares drawn on it. Note
-that tokens are positioned *by cell*, so re-tuning the grid moves them relative
-to the art — set the grid before placing tokens.
+Note that tokens are positioned *by cell*, so re-tuning the grid moves them
+relative to the art — settle the grid before placing tokens.
+
+**Moving the grid.** Sizing the cells is only half of matching a map that came
+with squares drawn on it; the other half is where those squares *start*. With
+the **Grid** gauge selected, right-drag on the map slides the grid over the
+picture, which stays exactly where it is. Get the size right by scrolling, then
+push the grid onto the drawn one.
+
+The offset is stored on the scene as `gridOffsetX`/`gridOffsetY` in map pixels,
+held to one cell in each direction — a grid repeats, so a whole cell of travel
+reaches every alignment there is. Tokens and shapes ride the grid rather than
+the artwork, so a token in a cell stays in that cell as it moves.
+
+While a drawing tool is in hand the Grid gauge is disabled: its gesture is a
+right-drag, and that's how you move your view while drawing. One of the two has
+to give, and it can't be the one that reaches the part of the map you're on.
+
+### Drawing shapes
+**Tools → Draw mode** opens a floating window and turns the map into a drawing
+surface. The mode is the window being open, not a tool being held: from the
+moment it opens you can pick up what's already drawn, and every shape shows its
+centre mark. Choosing one of **Rectangle**, **Circle**, **Cone** or **Line**
+adds the one thing that doesn't do on its own — pulling a *new* shape out of the
+map. Right-drag still moves your view throughout.
+
+The four are the set every tabletop with a template layer settles on. Each is
+dragged out and then tuned by slider: a rectangle by two corners, a circle from
+its centre, a cone and a line from the point they come out of. Cones default to
+**53°**, the angle a 5e cone template cuts.
+
+Everything shares fill and line colour, opacity, outline width, an optional
+label, and snap-to-grid — which snaps to the nearest **half** cell, so a circle
+centred on a corner and one centred in a square both work without a second
+toggle.
+
+Once drawn, a shape has three grips, told apart by where you take hold:
+
+| Where | What it does |
+| --- | --- |
+| its middle | moves it |
+| its outline | resizes it — a rectangle by the sides you grabbed |
+| the mark at its centre | turns it, snapping to 15° |
+
+The centre mark is a dot with a half-turn arrow around it, inked black or white
+by whichever contrasts further with the fill. A circle gets the dot but no arrow:
+it looks the same whichever way it faces, so there is no rotation to offer.
+**Delete** rubs out the selected shape, and with nothing selected the panel
+offers to clear the board.
+
+Shapes are measured in **cells**, like tokens, so they keep their meaning when
+the grid is retuned. Anyone playing may draw; what you drew stays yours to
+change, and the DM may change anyone's — the same ownership rule tokens have.
+
+### Undo and redo
+The map's right-click menu carries **Undo** and **Redo**, and **Ctrl+Z** /
+**Ctrl+Shift+Z** do the same while the tabletop is on screen. (A browser can't
+tell the left Shift from the right one on a keypress, so either hand redoes.)
+Both are ignored while you're typing in a text box, which keeps its own undo.
+
+It reaches token moves, creations, edits and deletions; scene changes — cell
+size, grid on/off, grid position, map image, name; and everything on the drawing
+layer, with a cleared board coming back in one step.
+
+Two rules make it safe at a shared table. The stack lives **in your browser
+tab**, so it only ever holds your own actions — there is no way to reach
+somebody else's from it, because it was never put there. And before reversing
+anything, the entry re-reads the board and checks the thing is still as it left
+it; if somebody else has moved that token or retuned that grid since, it refuses
+and says so rather than undoing *their* work on top of yours.
+
+Nothing is persisted: a reload starts with an empty history, because an entry is
+a promise that something can be put back and across a reload that's a promise it
+can't keep.
 
 Movement is deliberately split in two: while you drag, positions go over the
 WebSocket only and never touch the disk; on drop, one request persists the final
@@ -769,8 +859,15 @@ configuration rather than anything stored on the account.
 | --- | --- | --- |
 | `ADMIN_PASSWORD` | *(unset)* | The admin's login password. **Required** except under `npm run dev` |
 | `ADMIN_USERNAME` | `admin` | Username the admin logs in with |
-| `SIGNUP_CODE` | *(unset — open)* | When set, registration demands this code |
-| `GM_PASSWORD` | *(unset)* | Old name for the above, still honoured |
+| `SIGNUP_CODE` | *(unset — open)* | When set, registration demands this code — and makes an email address optional, and lets a password or address change skip the emailed confirmation |
+| `GM_PASSWORD` | *(unset)* | Old name for `ADMIN_PASSWORD`, still honoured |
+| `SMTP_PASS` | *(unset — mail off)* | The sending mailbox's password; an **app password** at Gmail. The one mail variable that must stay out of the repo |
+| `SITE_EMAIL` | *(default in `server/mailer.js`)* | Address to send from and log in as. Not a secret — set it only to send from a different mailbox |
+| `SMTP_HOST` | *(inferred for `@gmail.com`)* | Submission server. Required for any other provider |
+| `SMTP_PORT` | `587` | `465` for implicit TLS |
+| `SMTP_SECURE` | *(from the port)* | Override the guess that `465` means TLS from the first byte |
+| `SMTP_USER` / `MAIL_FROM` | *(from `SITE_EMAIL`)* | Only where the login and the sender genuinely differ |
+| `PUBLIC_URL` | *(the request's own host)* | What confirmation links point at. Leave unset behind a quick tunnel, whose hostname changes every restart |
 | `ADMIN_NAME` | `Admin` | Display name given to the admin account **when it is first created**. Renaming it later is a normal edit (`PUT /api/users/:id`) and this variable won't override it |
 | `DATA_DIR` | `./data` | Where the database + uploads live |
 | `DB_FILE` | `$DATA_DIR/rpg-manager.db` | The SQLite file itself |
@@ -794,5 +891,11 @@ configuration rather than anything stored on the account.
 10. ✅ SQLite instead of JSON files: real transactions, real constraints
 11. ✅ Rate limits on login, registration and password changes
 12. ✅ Right-click menus on the map: ping, focus, create/edit/delete tokens
-13. ⬜ Assign a token to a player from the UI (`ownerId` exists; no form does)
-14. ⬜ Restore a backup through the app, so `/api/admin/backup` round-trips
+13. ✅ Grid offset: slide the grid onto a map that came with one drawn on it
+14. ✅ Per-tab undo/redo of your own map actions, refusing to reverse anyone else's
+15. ✅ A drawing layer: rectangle, circle, cone and line, drawn and tuned on the map
+16. ✅ My account: change your shown name, password and email — the last two
+    confirmed by an emailed link, or by the signup code
+17. ✅ Invite links removed: registration and sessions are the only way in
+18. ⬜ Assign a token to a player from the UI (`ownerId` exists; no form does)
+19. ⬜ Restore a backup through the app, so `/api/admin/backup` round-trips
