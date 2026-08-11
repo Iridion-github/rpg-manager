@@ -3,7 +3,7 @@ import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
 import CharacterSheet from './sheet/CharacterSheet.jsx';
-import FloatingWindow from './FloatingWindow.jsx';
+import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import { abilityMod, blankSheet, signed } from './sheet/rules.js';
 
@@ -15,6 +15,8 @@ const SAVE_DEBOUNCE_MS = 400;
 // long enough stack would climb over the map's context menu and the dice
 // dialogs, which have to stay on top. See the bands noted in styles.css.
 const WIN_Z_BASE = 40;
+
+const clampPercent = (v) => Math.min(100, Math.max(OPACITY_MIN, v));
 const WIN_Z_CEILING = 400;
 
 /**
@@ -39,6 +41,16 @@ export default function CharacterSheets({
   // An array rather than a set because the order *is* the stacking order, and
   // re-opening one that's already up is how you bring it forward.
   const [openIds, setOpenIds] = useState([]);
+  /**
+   * How solid each open sheet is, by sheet id.
+   *
+   * Per sheet rather than one setting for all of them, because that is how the
+   * windows already work: each remembers its own box under its own key, and a
+   * player who fades the sheet they keep over the map has said nothing about
+   * the one they keep beside it. Read from storage on first sight of a sheet
+   * and written back on every change, exactly like the box.
+   */
+  const [opacities, setOpacities] = useState({});
   const [error, setError] = useState('');
   // Which sheets have a write in flight or queued, by id. Per sheet, not a
   // count: with several windows open, only the one being typed into should say
@@ -69,6 +81,26 @@ export default function CharacterSheets({
 
   // Bring it to the front if it's already up, otherwise put it there.
   const openSheet = (id) => setOpenIds((prev) => [...prev.filter((x) => x !== id), id]);
+
+  const opacityKey = (id) => `rpg:sheet-opacity:${id}`;
+
+  // Storage is only consulted for a sheet we haven't been asked about yet; from
+  // then on the state holds it. Clamped into range on the way out, so a value
+  // saved under a different floor is honoured rather than thrown away.
+  const opacityOf = (id) => {
+    if (opacities[id] !== undefined) return opacities[id];
+    const saved = Number(localStorage.getItem(opacityKey(id)));
+    return Number.isFinite(saved) && saved > 0 ? clampPercent(saved) : 100;
+  };
+
+  function setOpacityOf(id, next) {
+    setOpacities((prev) => ({ ...prev, [id]: next }));
+    try {
+      localStorage.setItem(opacityKey(id), String(next));
+    } catch {
+      // Private mode, or a full quota. It still fades; it just won't remember.
+    }
+  }
   const closeSheet = (id) => setOpenIds((prev) => prev.filter((x) => x !== id));
 
   const markSaving = (id, busy) =>
@@ -324,6 +356,8 @@ export default function CharacterSheets({
             isTop={i === openSheets.length - 1}
             onFocus={() => openSheet(sheet.id)}
             onClose={() => closeSheet(sheet.id)}
+            opacity={opacityOf(sheet.id) / 100}
+            onOpacityChange={(next) => setOpacityOf(sheet.id, next)}
             controls={
               <>
                 {savingIds.has(sheet.id) && <span className="badge saving">saving…</span>}

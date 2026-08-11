@@ -2,9 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
-import FloatingWindow from './FloatingWindow.jsx';
+import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
 import TokenTooltip from './TokenTooltip.jsx';
+import { initiativeText, turnOrderOf } from './initiative.js';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
 // frames a pointer actually produces.
@@ -18,11 +19,17 @@ const GRID_SAVE_MS = 400;
 // Where this browser remembers whether the map's tools panel is rolled up.
 const TOOLS_MIN_KEY = 'rpg:map-tools-min';
 
+// And how solid the turn tracker is. Like the panel's fold and the window's own
+// box, this says nothing about the table — only how much of this screen its
+// owner wants the map to have — so it lives in the browser, not the scene.
+const TURNS_OPACITY_KEY = 'rpg:turns-opacity';
+
 // The turn tracker holds a short list, not a character sheet, so it may be
 // pulled far below the floor a FloatingWindow keeps by default. A constant
 // rather than an inline object: a fresh one each render would be a new prop
 // every time the map moves.
 const TURNS_MIN = { w: 190, h: 120 };
+
 
 // Zoom bounds shared by the slider and the wheel, so the two can't disagree.
 const ZOOM_MIN = 0.4;
@@ -123,6 +130,16 @@ export default function Tabletop({ actor, players, offline }) {
   // What a confirmation dialog is currently asking about: { kind, id, name }.
   // One piece of state for both kinds, because only ever one of them is open.
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // How solid the turn tracker is, 10–100. Read back on mount because leaving
+  // the tab unmounts the map, and a preference that forgot itself every time
+  // you looked at your character sheet would not be much of one.
+  const [turnsOpacity, setTurnsOpacity] = useState(() => {
+    const saved = Number(localStorage.getItem(TURNS_OPACITY_KEY));
+    // Clamped rather than rejected: a value saved under an older, lower floor
+    // is still an answer to "how faint do you want this", and snapping someone
+    // from a tenth to fully solid is a worse reading of it than 20%.
+    return Number.isFinite(saved) && saved > 0 ? clamp(saved, OPACITY_MIN, 100) : 100;
+  });
 
   const surfaceRef = useRef(null);
   const scrollRef = useRef(null);
@@ -681,18 +698,12 @@ export default function Tabletop({ actor, players, offline }) {
    * The order everyone reads off the tracker.
    *
    * The same rule the server applies when Next decides who acts (routes/
-   * scenes.js `turnOrder`): highest initiative first, and a token without one
-   * isn't in the fight at all. The two are kept in step on purpose — if this
-   * list and that one disagreed, the highlight would land somewhere Next never
-   * goes.
+   * scenes.js `turnOrder`): highest initiative first, ties to the bigger
+   * modifier, and a token without an initiative isn't in the fight at all. The
+   * two are kept in step on purpose — if this list and that one disagreed, the
+   * highlight would land somewhere Next never goes.
    */
-  const order = useMemo(
-    () =>
-      (scene?.tokens || [])
-        .filter((t) => t.initiative !== null && t.initiative !== undefined)
-        .sort((a, b) => b.initiative - a.initiative),
-    [scene?.tokens]
-  );
+  const order = useMemo(() => turnOrderOf(scene?.tokens), [scene?.tokens]);
 
   const turnMode = Boolean(scene?.turnMode);
 
@@ -700,6 +711,15 @@ export default function Tabletop({ actor, players, offline }) {
   // under the pointer — the fight ends, the window is folded — and no
   // mouseleave arrives to say so, which would strand the highlight on the map.
   const spotlitId = turnMode ? spotlight : null;
+
+  function setOpacity(next) {
+    setTurnsOpacity(next);
+    try {
+      localStorage.setItem(TURNS_OPACITY_KEY, String(next));
+    } catch {
+      // Private mode, or a full quota. It still fades; it just won't remember.
+    }
+  }
 
   // Folding the panel is remembered per browser, not per visit: leaving the
   // tab unmounts the map, and a panel that unfolded itself every time you came
@@ -1260,9 +1280,11 @@ export default function Tabletop({ actor, players, offline }) {
           defaultSize={{ w: 380, h: 420 }}
           minSize={TURNS_MIN}
           onClose={isDm ? toggleTurnMode : undefined}
-          // No controls of its own, only the spacer that sends the window's own
-          // two buttons to the far end of the bar — the same way the sheet and
-          // note windows lay their header out.
+          opacity={turnsOpacity / 100}
+          onOpacityChange={setOpacity}
+          // The window draws the opacity slider itself, beside the title. All
+          // this adds is the spacer that sends the window's own two buttons to
+          // the far end of the bar, as the sheet and note windows do.
           controls={<div className="spacer" />}
         >
           <div className="turns">
@@ -1324,7 +1346,12 @@ export default function Tabletop({ actor, players, offline }) {
                         </span>
                       )}
                     </span>
-                    <span className="turn-init">{t.initiative}</span>
+                    <span className="turn-init">
+                      {initiativeText(t).total}
+                      {initiativeText(t).breakdown && (
+                        <small>({initiativeText(t).breakdown})</small>
+                      )}
+                    </span>
                   </li>
                   );
                 })}

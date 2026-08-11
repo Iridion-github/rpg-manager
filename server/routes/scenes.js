@@ -76,6 +76,27 @@ function statOrNull(value, lo, hi) {
 }
 
 /**
+ * Initiative, and the roll behind it.
+ *
+ * The total is what the order is read from, so it stays the authoritative
+ * field — but when both halves are known the total is *derived* from them
+ * rather than trusted alongside them. Two numbers that are supposed to add up
+ * to a third will eventually disagree if all three are stored independently,
+ * and the one that would be wrong is the one everything else reads.
+ *
+ * Half a breakdown is no breakdown: a die with no modifier tells a tie nothing,
+ * so both or neither are kept and a lone half is dropped back to a bare total.
+ */
+function rolledInitiative(total, die, mod) {
+  const d = statOrNull(die, -99, 999);
+  const m = statOrNull(mod, -99, 999);
+  if (d !== null && m !== null) {
+    return { initiative: clamp(d + m, -99, 999), initiativeDie: d, initiativeMod: m };
+  }
+  return { initiative: statOrNull(total, -99, 999), initiativeDie: null, initiativeMod: null };
+}
+
+/**
  * Current and total hit points, decided together.
  *
  * Current only means something measured against a total — it's what draws the
@@ -103,6 +124,12 @@ function sanitizeToken(body = {}, existing = {}) {
     // What the tooltip reads out. Everyone sees initiative; the hit points are
     // the DM's business, and the client only shows them to them.
     initiative = existing.initiative ?? null,
+    // The two halves of that total, kept because the total alone can't settle a
+    // tie: two creatures on 25 are separated by who had the bigger modifier,
+    // which is a fact about the creature rather than about the roll. Optional —
+    // a token whose initiative was typed in as a bare number has neither.
+    initiativeDie = existing.initiativeDie ?? null,
+    initiativeMod = existing.initiativeMod ?? null,
     maxHp = existing.maxHp ?? null,
     hp = existing.hp ?? null,
     x = existing.x ?? 0,
@@ -118,7 +145,7 @@ function sanitizeToken(body = {}, existing = {}) {
     imageUrl: String(imageUrl).slice(0, 500),
     // Wide enough for a d20 plus any modifier a table can produce, and for the
     // dexterity contest that follows a tie.
-    initiative: statOrNull(initiative, -99, 999),
+    ...rolledInitiative(initiative, initiativeDie, initiativeMod),
     ...hitPoints(maxHp, hp),
     x: num(x, 0),
     y: num(y, 0),
@@ -362,7 +389,25 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
 function turnOrder(scene) {
   return (scene.tokens || [])
     .filter((t) => t.initiative !== null && t.initiative !== undefined)
-    .sort((a, b) => b.initiative - a.initiative);
+    .sort((a, b) => b.initiative - a.initiative || byModifier(a, b));
+}
+
+/**
+ * The tie-break: level totals are settled by the bigger modifier.
+ *
+ * A token whose initiative was typed in as a bare total has no modifier to
+ * compare, and sorts below any token that does — it can't win a contest it
+ * brought no evidence to. Compared rather than subtracted so that two unknowns
+ * are equal instead of NaN, which is what `-Infinity - -Infinity` would give
+ * and what a subtracting comparator would quietly scramble the order with.
+ */
+function byModifier(a, b) {
+  const of = (t) =>
+    t.initiativeMod === null || t.initiativeMod === undefined ? -Infinity : t.initiativeMod;
+  const ma = of(a);
+  const mb = of(b);
+  if (ma === mb) return 0;
+  return mb > ma ? 1 : -1;
 }
 
 /**

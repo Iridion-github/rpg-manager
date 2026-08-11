@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { initiativeText } from './initiative.js';
 
 /**
  * What a token is, shown while the pointer rests on it.
@@ -68,7 +69,13 @@ export default function TokenTooltip({ anchor, token, showHp, status }) {
 
       {hasInitiative && (
         <span className="token-tip-row">
-          Initiative <b>{token.initiative}</b>
+          Initiative{' '}
+          <b>
+            {initiativeText(token).total}
+            {initiativeText(token).breakdown && (
+              <small> ({initiativeText(token).breakdown})</small>
+            )}
+          </b>
         </span>
       )}
 

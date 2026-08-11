@@ -279,6 +279,22 @@ select option {
 /* Buttons run a notch smaller than the body text they sit among. The rule above
    gives every control the same padding; a button is chrome rather than content,
    so it does not need to match the text inputs it stands next to. */
+/* A range is not a field, and the rule above dresses every control as one.
+   On a slider that fill, border and padding become the thing you read as the
+   gauge — while the track the thumb actually travels along is the content box
+   inside them. The ends never line up: at maximum the thumb stops a padding's
+   width short of the box, which reads as the slider failing to reach its own
+   end. Stripping the field styling makes the track the gauge. */
+input[type='range'] {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  /* The blue the checkboxes already use, so the two agree. */
+  accent-color: #58a6ff;
+  cursor: pointer;
+}
+
 button {
   cursor: pointer;
   background: #2b3350;
@@ -1315,6 +1331,8 @@ button.token-tile:hover {
   color: #9aa0b2;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+  /* "25 (18+7)" is one thing to read, not two lines. */
+  white-space: nowrap;
 }
 
 .turns-foot {
@@ -2722,6 +2740,23 @@ button.token-tile:hover {
   background: #3a1d1d;
 }
 
+/* Fades the window it sits in. Narrow, and allowed to shrink further, because
+   the header it shares is as small as 190px on the turn tracker — and the
+   window's own two buttons past it are not optional. */
+.win-opacity {
+  display: flex;
+  align-items: center;
+  flex: 0 1 5rem;
+  min-width: 2.5rem;
+}
+
+.win-opacity input[type='range'] {
+  width: 100%;
+  /* The header drags the window, but not by this. FloatingWindow already lets
+     inputs through; this keeps the thumb comfortable to catch. */
+  cursor: pointer;
+}
+
 /* The window's own buttons, in the order Windows puts them: fold, then close.
    Sized and spaced alike so they read as one set rather than two decisions. */
 /* Qualified by .win-head, not left as bare classes: these are .linky buttons,
@@ -2940,6 +2975,27 @@ button.token-tile:hover {
 .token-stat small {
   color: #8b90a0;
   white-space: nowrap;
+}
+
+/* The worked-out initiative total, standing in for the input it replaces —
+   same height and weight, visibly not typeable. */
+.token-total {
+  width: 4.5rem;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1px dashed #2c3140;
+  border-radius: 6px;
+  color: #e7e9ee;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The "(18+7)" beside a total, in the tracker and in the hover tooltip. */
+.turn-init small,
+.token-tip-row small {
+  margin-left: 0.25rem;
+  color: #8b90a0;
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 .token-colour input[type='checkbox'] {

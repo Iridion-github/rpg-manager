@@ -31,6 +31,16 @@ const DEFAULT_MIN = { w: MIN_W, h: MIN_H };
 // different floor: wide enough for a name, and only as tall as its own header.
 const MINI_W = 240;
 
+/**
+ * How faint a window may be made.
+ *
+ * Never fully invisible: a window you cannot see is one you cannot find again,
+ * and past this point even the slider that would bring it back is hard to
+ * catch. Exported so the windows that offer the control all answer to the same
+ * floor rather than each picking one.
+ */
+export const OPACITY_MIN = 20;
+
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), Math.max(lo, hi));
 
 // Keep the whole window on screen. Size is clamped before position, because
@@ -112,6 +122,12 @@ export default function FloatingWindow({
   // How small this one may be pulled. The default suits a character sheet; a
   // window holding a short list can ask for far less and still be usable.
   minSize = DEFAULT_MIN,
+  // 0–1, applied to the whole window. Pass `onOpacityChange` as well and the
+  // header grows the slider that drives it — kept here rather than handed to
+  // each caller as markup so every window that offers it looks and behaves the
+  // same, and answers to one floor.
+  opacity = 1,
+  onOpacityChange,
   // Where this one sits in a stack of them: `zIndex` paints it, `cascade`
   // places it the first time, and `isTop` decides who answers the Escape key —
   // one keypress should close the window in front, not every one at once.
@@ -284,10 +300,25 @@ export default function FloatingWindow({
       // Anywhere in the window, not just the header: reaching for a field in the
       // one behind should bring it forward, the same as reaching for its bar.
       onPointerDown={onFocus}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex }}
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex, opacity }}
     >
       <div ref={headRef} className="win-head" onPointerDown={beginMove}>
         <strong className="win-title">{title}</strong>
+        {/* Beside the title, and only while the window is open — rolled up,
+            the bar is a name and its own two buttons. */}
+        {onOpacityChange && !minimized && (
+          <label className="win-opacity" title={`Opacity ${Math.round(opacity * 100)}%`}>
+            <input
+              type="range"
+              min={OPACITY_MIN}
+              max={100}
+              step={5}
+              value={Math.round(opacity * 100)}
+              aria-label={`Opacity of ${title}`}
+              onChange={(e) => onOpacityChange(Number(e.target.value))}
+            />
+          </label>
+        )}
         {/* Rolled up, the bar carries the name and nothing else. The controls
             act on a sheet you can't see, so they go with it — but the window's
             own buttons stay, or a folded sheet would have no way back. */}

@@ -28,6 +28,14 @@ const DEFAULT_BORDER = '#0d1017';
 // An untouched stat field is null, not zero. The server reads it the same way.
 const blankToNull = (v) => (String(v).trim() === '' ? null : Number(v));
 
+// The total, when both halves are there to add up. Half a breakdown settles no
+// tie, so it counts for nothing until the other half arrives.
+function rolledTotal(die, mod) {
+  const d = blankToNull(die);
+  const m = blankToNull(mod);
+  return d === null || m === null || Number.isNaN(d) || Number.isNaN(m) ? null : d + m;
+}
+
 export default function TokenModal({ token, onSubmit, onClose }) {
   const editing = Boolean(token);
   const [label, setLabel] = useState(token?.label ?? 'NPC');
@@ -41,6 +49,11 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   // meaningful answer here — "not tracking this" — and Number('') is 0, which
   // would quietly turn an empty box into a token with no hit points left.
   const [initiative, setInitiative] = useState(token?.initiative ?? '');
+  // The two halves behind that total. Kept so a tie can be settled by the
+  // bigger modifier — with only the total, two creatures on 25 are simply
+  // 25 and 25.
+  const [initDie, setInitDie] = useState(token?.initiativeDie ?? '');
+  const [initMod, setInitMod] = useState(token?.initiativeMod ?? '');
   const [hp, setHp] = useState(token?.hp ?? '');
   const [maxHp, setMaxHp] = useState(token?.maxHp ?? '');
   const [uploading, setUploading] = useState(false);
@@ -50,6 +63,11 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef(null);
+
+  // Non-null once both halves are filled in, at which point it replaces the
+  // total field rather than sitting beside it — two editable numbers that are
+  // supposed to add up to a third invite them to disagree.
+  const rolled = rolledTotal(initDie, initMod);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -104,7 +122,9 @@ export default function TokenModal({ token, onSubmit, onClose }) {
         borderColor,
         size,
         imageUrl,
-        initiative: blankToNull(initiative),
+        initiative: rolled === null ? blankToNull(initiative) : rolled,
+        initiativeDie: blankToNull(initDie),
+        initiativeMod: blankToNull(initMod),
         hp: blankToNull(hp),
         maxHp: blankToNull(maxHp),
       });
@@ -149,18 +169,44 @@ export default function TokenModal({ token, onSubmit, onClose }) {
         </label>
 
         {/* Left blank on the tokens nobody rolls for — scenery, a door, a pile
-            of crates. An empty stat prints no line in the tooltip at all. */}
-        <label className="token-field">
-          Initiative
+            of crates. An empty stat prints no line in the tooltip at all.
+
+            Two halves rather than one number, because a tie is settled by the
+            modifier: 25 and 25 are the same, but 18+7 beats 22+3. Fill both and
+            the total is worked out for you; fill neither and you can still type
+            a bare total, which is what the tokens made before this had. */}
+        <div className="token-field">
+          <span>Initiative</span>
           <span className="token-stat">
+            {rolled === null ? (
+              <input
+                type="number"
+                value={initiative}
+                onChange={(e) => setInitiative(e.target.value)}
+                placeholder="—"
+                aria-label="Initiative total"
+              />
+            ) : (
+              <output className="token-total">{rolled}</output>
+            )}
+            <small>=</small>
             <input
               type="number"
-              value={initiative}
-              onChange={(e) => setInitiative(e.target.value)}
-              placeholder="—"
+              value={initDie}
+              onChange={(e) => setInitDie(e.target.value)}
+              placeholder="die"
+              aria-label="Initiative die roll"
+            />
+            <small>+</small>
+            <input
+              type="number"
+              value={initMod}
+              onChange={(e) => setInitMod(e.target.value)}
+              placeholder="mod"
+              aria-label="Initiative modifier"
             />
           </span>
-        </label>
+        </div>
 
         {/* Two controls, so not a <label>: it can only speak for the first. */}
         <div className="token-field">
