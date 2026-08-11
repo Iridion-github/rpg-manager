@@ -599,7 +599,9 @@ export default function Tabletop({ actor, players, offline }) {
 
   // --- the drawing layer ---
   // Drawing is for the people playing: a spectator reads the board, and the
-  // server would refuse them anyway.
+  // server would refuse them anyway. What you may do to a shape once it exists
+  // is a separate question — see canEditShape below, which is the ownership
+  // rule tokens already have.
   const canDraw = !offline && (isDm || actor?.role === 'player');
   /**
    * Drawing mode is the box being open, not a tool being held.

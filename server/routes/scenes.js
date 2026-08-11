@@ -393,10 +393,14 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
  * meaning when the grid is retuned and rides the grid's offset with everything
  * else standing on the board.
  *
- * Anyone playing may draw. A player marking where they mean to run is the same
- * kind of act as moving their own token, and the ownership rule that follows is
- * the same one tokens have: yours are yours to change, and the DM's table is
- * the DM's.
+ * Anyone playing may draw, and everyone at the table sees what's drawn — scenes
+ * go out whole to every member. A player marking where a spell lands or where
+ * they mean to run is the same kind of act as moving their own token.
+ *
+ * What follows from that is the ownership rule tokens already have, and it is
+ * the whole of the permission model here: a shape remembers the hand that drew
+ * it, that hand may change or rub out its own, and the DM may change or rub out
+ * anybody's. Nobody can reach across the table at somebody else's marks.
  */
 const SHAPE_KINDS = new Set(['rect', 'circle', 'cone', 'line']);
 
@@ -432,7 +436,18 @@ function sanitizeShape(body = {}, existing = {}) {
   };
 }
 
-/** Yours to change if you drew it; the DM's to change whoever drew it. */
+/**
+ * Yours to change if you drew it; the DM's to change whoever drew it.
+ *
+ * Deliberately the same shape as canMoveToken, because it is the same idea
+ * about a different object: a mark on the map belongs to the person who made
+ * it, and the table's owner overrules that as they overrule everything else on
+ * their own board.
+ *
+ * A shape with no owner at all — one that arrived through an import, where the
+ * ids of another server's people mean nothing — is the DM's alone. That is the
+ * safe reading: better a mark only the DM can clear than one anybody can.
+ */
 function canEditShape(actor, role, shape) {
   if (!actor || !shape || !role) return false;
   if (role === 'dm') return true;
@@ -516,6 +531,8 @@ router.delete('/:id/shapes', requireDrawer, async (req, res, next) => {
     let removed = [];
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const shapes = current.shapes || [];
+      // Only the ones this hand may take off: everything for the DM, your own
+      // for everyone else.
       removed = shapes.filter((s) => canEditShape(req.actor, req.campaignRole, s));
       if (!removed.length) return current;
       const going = new Set(removed.map((s) => s.id));

@@ -89,6 +89,10 @@ function stripUsers(name, record) {
     return {
       ...record,
       tokens: (record.tokens || []).map((t) => ({ ...t, ownerId: null })),
+      // Shapes remember who drew them, for the same reason tokens remember who
+      // owns them — and the id means nothing here. Left in place it would name
+      // nobody, or, on the day two servers mint the same id, the wrong person.
+      shapes: (record.shapes || []).map((s) => ({ ...s, ownerId: null })),
     };
   }
   if (name === 'sheets') return { ...record, access: {} };
