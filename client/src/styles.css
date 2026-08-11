@@ -1659,7 +1659,54 @@ button.token-tile:hover {
 }
 
 .player-list .del {
-  margin-left: auto;
+  flex: none;
+}
+
+/* Header and rows share these two, so the dates line up under the word that
+   names them however long the names beside them are. */
+.roster-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  /* The dot's width plus the row's gap, so "Name" starts above the names
+     rather than above the dots. */
+  padding: 0 0.6rem 0 1.65rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
+}
+
+.roster-who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-seen {
+  flex: none;
+  width: 9rem;
+  text-align: right;
+  font-size: 0.82rem;
+  color: #8b90a0;
+}
+
+/* Green for here, red for not. Bigger than the three-state dot in a campaign's
+   player list, because this one carries the whole answer rather than sitting
+   beside a word that says it. */
+.presence-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  flex: none;
+  background: #ff6b6b;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
+.presence-dot.on {
+  background: #6ee787;
 }
 
 .swatch {

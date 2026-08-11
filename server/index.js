@@ -10,6 +10,7 @@ const { Server } = require('socket.io');
 
 const store = require('./store');
 const {
+  USERS,
   gateEnabled,
   signupIsOpen,
   attachActor,
@@ -107,13 +108,40 @@ io.use(async (socket, next) => {
   }
 });
 
+/**
+ * Note that this person was here just now.
+ *
+ * Distinct from `lastLoginAt`, which answers "when did they last prove who they
+ * are". This answers "when were they last connected", and they part company the
+ * moment somebody leaves a tab open for a fortnight.
+ *
+ * Failures are swallowed on purpose: a socket connecting is not a request
+ * anybody is waiting on, and a write that fails should not take the connection
+ * down with it.
+ */
+function markSeen(socket) {
+  const userId = socket.data.actor?.userId;
+  if (!userId) return;
+  store
+    .update(USERS, userId, { lastSeenAt: new Date().toISOString() })
+    .catch((err) => console.error('could not record presence:', err.message));
+}
+
 io.on('connection', (socket) => {
   socket.emit('hello', { message: 'connected to rpg-manager', actor: socket.data.actor });
 
   // Arriving, leaving and moving between tables are the three things that
   // change who is shown as online or present, so each of them says so.
   announcePresence(io);
-  socket.on('disconnect', () => announcePresence(io));
+  markSeen(socket);
+  socket.on('disconnect', () => {
+    announcePresence(io);
+    // Written on the way out as well as the way in: while a connection is open
+    // "last online" is now, and the moment worth remembering is the one it
+    // closed. A server that dies without warning leaves the arrival time
+    // instead, which is the honest answer to "when were they last *seen*".
+    markSeen(socket);
+  });
 
   /**
    * "I'm looking at this campaign now."

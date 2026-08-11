@@ -100,6 +100,24 @@ function presenceIn(io, campaignId) {
 }
 
 /**
+ * Everyone with a connection open, anywhere on this server.
+ *
+ * The same fact `presenceIn` reads, asked without a table in mind: the global
+ * roster cares whether somebody is *here*, not which campaign they happen to be
+ * looking at. Unstored for the same reason — a saved copy would survive a crash
+ * as a list of people the server believes are connected to it.
+ */
+function onlineUserIds(io) {
+  const online = new Set();
+  if (!io) return online;
+  for (const socket of io.of('/').sockets.values()) {
+    const userId = socket.data.actor?.userId;
+    if (userId) online.add(userId);
+  }
+  return online;
+}
+
+/**
  * Presence moved. Sent to everyone, with nothing in it.
  *
  * Any player list on screen is stale the moment someone connects, disconnects
@@ -112,4 +130,11 @@ function announcePresence(io) {
   if (io) io.emit('presence:changed');
 }
 
-module.exports = { broadcast, broadcastPerActor, notifyUser, presenceIn, announcePresence };
+module.exports = {
+  broadcast,
+  broadcastPerActor,
+  notifyUser,
+  presenceIn,
+  onlineUserIds,
+  announcePresence,
+};

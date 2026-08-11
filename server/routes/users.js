@@ -22,7 +22,7 @@
 
 const express = require('express');
 const store = require('../store');
-const { notifyUser } = require('../realtime');
+const { notifyUser, onlineUserIds } = require('../realtime');
 const {
   USERS,
   requireUser,
@@ -47,11 +47,20 @@ router.get('/me', (req, res) => {
   res.json(req.actor);
 });
 
-// Names and colours, for member pickers and token labels. Never keys.
+/**
+ * Names and colours, for member pickers and token labels — plus who is here.
+ *
+ * `online` is read from the live sockets on every request rather than stored:
+ * it is a fact about connections that exist right now, and the roster listens
+ * for `presence:changed` to ask again. `lastSeenAt` is the stored half of the
+ * same question, and the only one that can answer it about somebody who isn't
+ * connected to hear it asked.
+ */
 router.get('/', requireUser, async (req, res, next) => {
   try {
     const users = await store.list(USERS);
-    res.json(users.map(publicUser));
+    const online = onlineUserIds(req.app.get('io'));
+    res.json(users.map((user) => ({ ...publicUser(user), online: online.has(user.id) })));
   } catch (err) {
     next(err);
   }
