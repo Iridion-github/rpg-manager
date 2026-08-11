@@ -28,6 +28,7 @@ const {
   publicSummary,
   removeCampaignData,
 } = require('../campaigns');
+const { exportCampaign, validate, importInto } = require('../campaignTransfer');
 
 const router = express.Router();
 
@@ -81,6 +82,70 @@ router.get('/:id/members', requireUser, async (req, res, next) => {
       })
       .filter(Boolean);
     res.json(members);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * The campaign as a file. DM only — it carries the unshared notes, every
+ * character sheet and the whole chat log, which is the DM's view of the table
+ * rather than a player's.
+ */
+router.get('/:id/export', requireUser, async (req, res, next) => {
+  try {
+    const campaign = await store.get(CAMPAIGNS, req.params.id);
+    // 404 rather than 403 for a non-member: whether a campaign exists is public,
+    // but this endpoint's existence for *you* is not worth confirming.
+    if (!campaign || !isMember(campaign, req.actor)) {
+      return res.status(404).json({ error: 'No such campaign' });
+    }
+    if (!isDm(campaign, req.actor)) {
+      return res.status(403).json({ error: 'Only this campaign’s DM can export it.' });
+    }
+    const data = await exportCampaign(campaign);
+    const slug =
+      String(campaign.name || 'campaign')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'campaign';
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}-${Date.now()}.json"`);
+    res.send(JSON.stringify(data, null, 2));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * A new campaign built from an export.
+ *
+ * Its own endpoint rather than a flag on create, because the failure modes are
+ * different: creating asks for a name, this asks whether a file makes sense,
+ * and a caller that mixes them up should get a clear answer about which.
+ *
+ * The name and subtitle are taken from the body when given and from the file
+ * otherwise — the dialog fills its fields from the file only when they're
+ * empty, and this is the same rule on the server so a direct caller can't end
+ * up with a campaign named differently from the one it asked for.
+ */
+router.post('/import', requireUser, async (req, res, next) => {
+  try {
+    const data = req.body?.data;
+    const problem = validate(data);
+    if (problem) return res.status(400).json({ error: problem });
+
+    const record = await store.create(CAMPAIGNS, {
+      ...sanitizeCampaign({
+        name: req.body?.name || data.campaign.name,
+        subtitle: req.body?.subtitle || data.campaign.subtitle,
+      }),
+      // You run what you import, exactly as you run what you start.
+      members: { [req.actor.userId]: 'dm' },
+    });
+
+    const counts = await importInto(record.id, data);
+    res.status(201).json({ campaign: publicSummary(record, req.actor), imported: counts });
   } catch (err) {
     next(err);
   }

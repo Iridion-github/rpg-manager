@@ -206,4 +206,35 @@ async function removeTree(prefix) {
 
 const isEmpty = () => statements.count.get().n === 0;
 
-module.exports = { DATA_DIR, DB_FILE, db, list, get, create, update, mutate, remove, removeTree, isEmpty };
+/**
+ * Write a record whose id is already decided.
+ *
+ * `create` mints an id, which is right for everything a person makes here and
+ * wrong for an import: the file arrives with its own ids, and a scene's tokens
+ * refer to the sheet ids beside them. Renumbering on the way in would mean
+ * rewriting every reference, so the ids come across intact — they only have to
+ * be unique within the campaign that now holds them, and that campaign is new.
+ */
+async function put(collection, record) {
+  const stamp = now();
+  return write(collection, {
+    createdAt: record.createdAt || stamp,
+    ...record,
+    updatedAt: stamp,
+  });
+}
+
+module.exports = {
+  DATA_DIR,
+  DB_FILE,
+  db,
+  list,
+  get,
+  create,
+  put,
+  update,
+  mutate,
+  remove,
+  removeTree,
+  isEmpty,
+};

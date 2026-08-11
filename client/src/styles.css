@@ -346,6 +346,19 @@ button:hover {
   background: #35406a;
 }
 
+/* Destructive, everywhere it appears. This colour used to be applied per place
+   — sheet headers, window headers, the roster — which left every other delete
+   button in the app, the campaign's included, looking like an ordinary one.
+   Excluding :disabled so a greyed-out delete doesn't advertise itself. */
+.del:not(:disabled) {
+  background: #3a1d1d;
+  border-color: #5c2b2b;
+}
+
+.del:not(:disabled):hover {
+  background: #4d2626;
+}
+
 .new-sheet {
   display: flex;
   gap: 0.5rem;
@@ -385,7 +398,6 @@ button:hover {
 
 .sheet-head .del {
   margin-left: auto;
-  background: #3a1d1d;
 }
 
 .stats {
@@ -1490,7 +1502,6 @@ button.token-tile:hover {
 
 .player-list .del {
   margin-left: auto;
-  background: #3a1d1d;
 }
 
 .swatch {
@@ -2149,8 +2160,32 @@ button.token-tile:hover {
   margin: 1rem 0;
 }
 
-.new-campaign input {
-  flex: 1 1 12rem;
+/* Banners inside the create dialog: the file was understood, or it wasn't. The
+   same green and red pairs the app uses for "on" and for errors. */
+.banner {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.banner.good {
+  background: #16351f;
+  border: 1px solid #2f6b3e;
+  color: #6ee787;
+}
+
+.banner.bad {
+  background: #3a1d1d;
+  border: 1px solid #5c2b2b;
+  color: #ff9a9a;
+}
+
+.import-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .campaign-table {
@@ -2786,9 +2821,6 @@ button.token-tile:hover {
   white-space: nowrap;
 }
 
-.win-head .del {
-  background: #3a1d1d;
-}
 
 /* Fades the window it sits in. Narrow, and allowed to shrink further, because
    the header it shares is as small as 190px on the turn tracker — and the

@@ -172,6 +172,27 @@ export const api = {
   updateCampaign: (id, data) => put(`/api/campaigns/${id}`, data),
   deleteCampaign: (id) => del(`/api/campaigns/${id}`),
   listMembers: (id) => get(`/api/campaigns/${id}/members`),
+
+  // A campaign as a file, and back again. The export is a download rather than
+  // a value, so it fetches and hands the browser a blob — a plain <a href>
+  // couldn't carry the session header.
+  exportCampaign: async (id, name) => {
+    const res = await fetch(`/api/campaigns/${id}/export`, { headers: authHeaders() });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download =
+      /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] ||
+      `${name || 'campaign'}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  },
+  importCampaign: (payload) => post('/api/campaigns/import', payload),
   setMembers: (id, members) => put(`/api/campaigns/${id}/members`, { members }),
 
   // --- inside the current campaign ---

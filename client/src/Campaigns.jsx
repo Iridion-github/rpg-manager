@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import CreateCampaignModal from './CreateCampaignModal.jsx';
 
 /**
  * The campaign directory — the first thing you see on arriving.
@@ -50,8 +51,9 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   const [campaigns, setCampaigns] = useState([]);
   const [users, setUsers] = useState([]);
   const [members, setMembers] = useState([]); // of the campaign being edited
-  const [name, setName] = useState('');
-  const [subtitle, setSubtitle] = useState('');
+  // Whether the create dialog is up. The fields it holds live inside it — they
+  // are its business until it hands back a finished campaign.
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(''); // campaign whose panel is open
@@ -98,19 +100,49 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
     }
   }
 
-  const create = (e) => {
-    e.preventDefault();
-    return guard(async () => {
-      const created = await api.createCampaign({
-        name: name || 'New Campaign',
-        description: subtitle,
-      });
-      setCampaigns((prev) => [...prev, created]);
-      setName('');
-      setSubtitle('');
-      onOpen?.(created.id); // you almost certainly want to walk into it
-    });
-  };
+  /**
+   * Make the campaign the dialog describes — from a file if one was accepted,
+   * from nothing if not.
+   *
+   * Not wrapped in guard(): the dialog is up, and an error belongs in front of
+   * the person still looking at it rather than in the banner behind. Throwing
+   * is how it gets there.
+   */
+  async function create({ name: wantedName, subtitle: wantedSubtitle, imported }) {
+    const created = imported
+      ? (
+          await api.importCampaign({
+            name: wantedName,
+            subtitle: wantedSubtitle,
+            data: imported,
+          })
+        ).campaign
+      : await api.createCampaign({
+          name: wantedName || 'New Campaign',
+          description: wantedSubtitle,
+        });
+    setCampaigns((prev) => [...prev, created]);
+    setCreating(false);
+
+    /**
+     * Tell the shell before walking in, and wait for it.
+     *
+     * Whether you are "inside" a campaign is decided by finding it in the
+     * shell's own list and reading your role off it — so opening one it hasn't
+     * heard of sets an id that renders nothing, and the click looks ignored.
+     * This used to come free from guard(), which calls onChanged on the way
+     * out; this path throws instead, so its errors can reach the dialog, and
+     * has to say so itself.
+     *
+     * Awaited rather than fired off, or there is a frame where the id is set
+     * and the role isn't, and the whole table flickers past on the way in.
+     */
+    await onChanged?.();
+    onOpen?.(created.id); // you almost certainly want to walk into it
+  }
+
+  const exportCampaign = (campaign) =>
+    guard(() => api.exportCampaign(campaign.id, campaign.name));
 
   // From the live list, so the dialog can't outlive what it asks about.
   const confirmCampaign = campaigns.find((c) => c.id === confirmDelete) || null;
@@ -160,22 +192,11 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
 
       {error && <p className="error">{error}</p>}
 
-      <form className="new-campaign" onSubmit={create}>
-        <input
-          placeholder="Campaign name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          placeholder="Subtitle (optional)"
-          value={subtitle}
-          maxLength={200}
-          onChange={(e) => setSubtitle(e.target.value)}
-        />
-        <button type="submit" disabled={busy}>
-          + Start a campaign
+      <div className="new-campaign">
+        <button onClick={() => setCreating(true)} disabled={busy}>
+          + Create campaign
         </button>
-      </form>
+      </div>
 
       <div className="campaign-table" role="table">
         <div className="campaign-head" role="row">
@@ -290,6 +311,13 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
 
                   <div className="campaign-danger">
                     <div className="spacer" />
+                    {/* The whole table as a file, minus the people at it. Next
+                        to Delete because they are the two things you do to a
+                        campaign as a whole — and in that order, since one of
+                        them is what you'd want to have done before the other. */}
+                    <button onClick={() => exportCampaign(c)} disabled={busy}>
+                      Export campaign
+                    </button>
                     {/* Asked in the same dialog as every other delete in the
                         app rather than by swapping this row for two buttons —
                         one place to read "is this the right thing?", and the
@@ -310,6 +338,10 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
           </p>
         )}
       </div>
+
+      {creating && (
+        <CreateCampaignModal onCreate={create} onClose={() => setCreating(false)} />
+      )}
 
       {/* The heaviest delete in the app — scenes, sheets, notes, chat, the lot
           — so it asks for the name in full. */}
