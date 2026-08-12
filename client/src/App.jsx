@@ -16,6 +16,7 @@ import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
 import Auth from './Auth.jsx';
 import ResetPassword from './ResetPassword.jsx';
+import PatchNotes from './PatchNotes.jsx';
 
 const ANON = { globalRole: 'anon', userId: null, name: '' };
 
@@ -253,7 +254,7 @@ export default function App() {
    * still on screen with nothing in it.
    */
   const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'players'];
-  const shellTabs = ['campaigns', 'users', 'account'];
+  const shellTabs = ['campaigns', 'users', 'patch', 'account'];
 
   function resolveTab(wanted) {
     if (!insideCampaign) return tableTabs.includes(wanted) ? 'campaigns' : wanted;
@@ -439,7 +440,20 @@ export default function App() {
               Users
             </button>
           )}
-          {/* After Users, and unlike it, for everybody: this one is about the
+          {/* Before My account, which is where a list of "what's new here"
+              belongs: the tabs to its left are places to go and do something,
+              and this is the one that says what has changed since you last
+              did. Shown to anyone signed in — it describes the app, and every
+              signed-in person is using the same one. */}
+          {!insideCampaign && authed && (
+            <button
+              className={activeTab === 'patch' ? 'active' : ''}
+              onClick={() => setTab('patch')}
+            >
+              Patch notes
+            </button>
+          )}
+          {/* Last, and unlike the rest, for everybody: this one is about the
               person signed in rather than about the server. */}
           {!insideCampaign && authed && (
             <button
@@ -504,6 +518,11 @@ export default function App() {
         {activeTab === 'users' && authed && (
           <Roster isAdmin={isAdmin} onUsersChanged={loadCampaigns} />
         )}
+        {/* Nothing is passed to it and nothing is fetched: the list ships with
+            the app, so it always describes the version being looked at. It also
+            means this page works with the server unreachable, which is the one
+            time somebody might reasonably wonder what changed. */}
+        {activeTab === 'patch' && authed && <PatchNotes />}
         {activeTab === 'account' && authed && (
           <Account
             actor={actor}

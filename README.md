@@ -96,7 +96,7 @@ The app is in one of two modes, and the tab bar shows only the one you're in:
 
 | | Tabs |
 | --- | --- |
-| **Outside** a campaign | Campaigns, Users, My account |
+| **Outside** a campaign | Campaigns, Users, Patch notes, My account |
 | **Inside** one | Tabletop, Characters, Notes, Music *(DM)*, Tokens, Players, Close campaign |
 
 The inside tabs and the chat are views onto a *single* campaign's data, so
@@ -117,6 +117,24 @@ exists while you're outside one.
 If a campaign closes under you — you're removed from it, or your account is
 deleted — whatever you were looking at falls back to the directory rather than
 emptying out where it stands.
+
+### Patch notes
+What has changed lately, in plain English, newest first — grouped by the day it
+landed rather than by commit, since several changes usually arrive together and
+"what's new since last week" is the question being asked. Each line is tagged
+**New**, **Fixed** or **Changed**.
+
+The list lives in `client/src/patchNotes.js` and ships with the app rather than
+being fetched, so it always describes the version you are looking at — a
+changelog served from elsewhere can cheerfully announce features the page it is
+on doesn't have. It also means the page works with the server unreachable, which
+is one of the few moments somebody might genuinely wonder what changed.
+
+**Adding to it** is a hand edit at the top of that file, and it is meant to be:
+commit messages are notes between developers, and a table full of players is not
+the audience for "Fix token update bug". If today already has a group, add a line
+to it; otherwise start a new one above the last. Entries that changed nothing
+anybody can see — a dependency bump, a README pass — get no line at all.
 
 ## Roles
 

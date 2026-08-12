@@ -49,6 +49,88 @@ body {
   max-width: 900px;
 }
 
+/* --- patch notes ---
+   Narrower than the roster next to it, because this is prose rather than a
+   table: a line of text that runs the width of a wide monitor is a line the eye
+   loses its place in on the way back. */
+.patch-notes {
+  max-width: 680px;
+}
+
+.patch-day {
+  margin-top: 1.6rem;
+}
+
+/* The date is what the page is scanned for, so it is given a rule of its own to
+   sit on rather than being one more line of text among the entries. */
+.patch-day h3 {
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #2c3140;
+  font-size: 0.95rem;
+  color: #e7e9ee;
+}
+
+.patch-day ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+/* Tag and text on one row, the text wrapping under itself rather than under the
+   tag — so a three-line entry still reads as one block with one label. */
+.patch-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #c7ccd8;
+}
+
+/* A fixed width, so the tags form a column and the sentences all start at the
+   same place. Wide enough for "Changed", the longest of the three. */
+.patch-tag {
+  flex: none;
+  width: 4.4rem;
+  text-align: center;
+  padding: 0.1rem 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  /* Nudged up: baseline-aligning a small pill against a larger line leaves it
+     sitting low against the first line of the sentence beside it. */
+  position: relative;
+  top: -0.05rem;
+}
+
+/* Green for new, amber for changed, blue for fixed — the palette the rest of
+   the app already uses for the same three kinds of news. Colour is never the
+   only signal: each pill says its own word. */
+.patch-entry.new .patch-tag {
+  background: #16301f;
+  border-color: #2ea04326;
+  color: #6ee787;
+}
+
+.patch-entry.fix .patch-tag {
+  background: #15243a;
+  border-color: #58a6ff26;
+  color: #79c0ff;
+}
+
+.patch-entry.change .patch-tag {
+  background: #2b2314;
+  border-color: #d2992226;
+  color: #e3b341;
+}
+
 /* The one row that carries who you are and where you are going. Identical in
    and out of a campaign — walking into a table shouldn't move the furniture. */
 .topbar {
