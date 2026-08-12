@@ -130,6 +130,25 @@ const api = createThrottle({ max: 600, windowMs: 60_000, name: 'api' });
 const uploads = createThrottle({ max: 40, windowMs: 60 * 60_000, name: 'uploads' });
 
 /**
+ * Asking for a password reset link.
+ *
+ * A throttle rather than a limiter, because this endpoint has no failures to
+ * count: it answers the same way whether or not the account exists, which is
+ * the whole point of it, and a limiter that only counted wrong answers would
+ * count none of these. What needs a ceiling is the *asking* — every request
+ * that finds a real account posts a letter, so an unlimited form is a way to
+ * bury somebody's mailbox using a server they don't run.
+ *
+ * Low, because the honest use is once or twice: you ask, you go and read your
+ * mail. Not *as* low as that suggests, though — four friends at one table can
+ * share an address, and a limit tuned to one person would have the third of
+ * them to forget their password locked out by the first two. Keyed by caller
+ * and by the account named, so neither one address working through the roster
+ * nor many addresses hammering one account gets more than this.
+ */
+const recovery = createThrottle({ max: 10, windowMs: 15 * 60_000, name: 'recovery' });
+
+/**
  * Which bucket a request counts against.
  *
  * The account first, the address second. A household behind one address is one
@@ -165,6 +184,7 @@ module.exports = {
   signup,
   api,
   uploads,
+  recovery,
   bucketOf,
   addressOf,
   refuse,

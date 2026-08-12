@@ -19,6 +19,7 @@ const express = require('express');
 const store = require('../store');
 const limits = require('../rateLimit');
 const { sendMail, mailConfigured } = require('../mailer');
+const { confirmLink, resetLink } = require('../links');
 const { holdChange, claimChange, forgetChangesFor, TTL_MS } = require('../accountChanges');
 const {
   USERS,
@@ -219,17 +220,151 @@ router.post('/logout', async (req, res, next) => {
 });
 
 /**
- * Where a confirmation link should point.
+ * "I've forgotten my password."
  *
- * PUBLIC_URL when it's set, and otherwise the address this very request came in
- * on — which behind a tunnel is the tunnel's own hostname, so a link works
- * without anything being configured for a name that changes every time the
- * tunnel is restarted. `req.protocol` already reads X-Forwarded-Proto when
- * TRUST_PROXY says the proxy in front can be believed.
+ * The one door into this account system that an unauthenticated stranger may
+ * knock on and have something happen. Three things make that safe, and all
+ * three are load-bearing:
+ *
+ *   - **The answer never varies.** Found, not found, found but with no address,
+ *     found but it's the admin — every one of them gets the same 202 and the
+ *     same words. A form that said "no such account" would be a way to ask this
+ *     server, one name at a time, who plays here; that a name is *registered*
+ *     is not a thing a stranger is entitled to learn, and the cost of hiding it
+ *     is one sentence of vagueness on a screen almost nobody reads twice.
+ *   - **Nothing is chosen here.** The request carries no new password — see the
+ *     note in accountChanges.js. It buys nothing but the right to type one on
+ *     the page the link opens, so a stranger who fires this at your address has
+ *     sent you an unwanted letter and gained no other foothold. Even clicking
+ *     the link in it changes nothing on its own.
+ *   - **The signup code is not accepted, deliberately.** Everywhere else in
+ *     this file the code stands in for answering a letter, and everywhere else
+ *     it does that *on top of* something only the owner has — being signed in,
+ *     knowing the current password. Here there would be nothing underneath it,
+ *     so a code shared with the whole table would be a code that takes over any
+ *     account at the table, the DM's included. An account with no mailbox is
+ *     recovered by the admin instead (routes/users.js).
+ *
+ * `who` is a username or an address, because somebody who has forgotten their
+ * password may well have forgotten which of the two they signed up with.
  */
-const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
-const publicBase = (req) => PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
-const confirmLink = (req, token) => `${publicBase(req)}/?confirm=${token}`;
+router.post('/forgot', async (req, res, next) => {
+  try {
+    const who = String(req.body?.who || '').trim();
+
+    // Both keys spend from the same allowance, so neither a single caller
+    // working through a list of names nor a crowd aimed at one mailbox gets
+    // more than the honest user asking twice.
+    for (const key of [`ip:${limits.addressOf(req)}`, `who:${normalizeUsername(who)}`]) {
+      const wait = limits.recovery.take(key);
+      if (wait) return limits.refuse(res, wait);
+    }
+
+    // 202: taken in, and what follows is out of the caller's sight. Said before
+    // any of the work below, and said identically in every case.
+    res.status(202).json({ ok: true });
+
+    // Everything past the response is deliberate. Sending a letter takes an
+    // SMTP round trip and finding nobody takes none, so a caller with a stopwatch
+    // could read the difference as an answer to the question the wording above
+    // is careful not to answer. Doing the work after the reply also means a
+    // mail server having a slow morning is not a form that appears to hang.
+    const user = who.includes('@')
+      ? await findUserByEmail(who)
+      : (await findUserByUsername(who)) || (await findUserByEmail(who));
+
+    // No such person, nowhere to write to, or the admin — whose password is
+    // ADMIN_PASSWORD in the environment and cannot be reset by anything this
+    // server stores. All three end here, silently, having already said yes.
+    if (!user || !user.email || user.globalRole === 'admin') return;
+
+    const token = await holdChange(user.id, 'reset', {});
+    await sendMail({
+      to: user.email,
+      subject: 'Reset the password on your RPG Manager account',
+      text: [
+        `Somebody — we hope you — asked to reset the password on the account "${user.username}".`,
+        '',
+        'Nothing has changed yet, and nothing will until you choose a new password.',
+        'To do that, open this link:',
+        resetLink(req, token),
+        '',
+        `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
+        '',
+        "If this wasn't you, do nothing at all. Your password stays exactly as it is,",
+        'and whoever asked learns nothing — they cannot see this letter, and the link',
+        'is the only thing that would let anyone set a new password.',
+      ].join('\n'),
+    }).catch((err) => {
+      // Nobody is left to tell: the reply went out several lines ago, and it
+      // could not have carried this news anyway without answering the question
+      // of whether the account exists. The person running the server is the one
+      // who can act on it.
+      console.error(`[recovery] could not send the reset letter for ${user.username}:`, err.message);
+    });
+  } catch (err) {
+    // Only reachable before the response above; after it, the catch below would
+    // be trying to send headers twice.
+    if (!res.headersSent) return next(err);
+    console.error('[recovery] failed after answering:', err.message);
+  }
+});
+
+/**
+ * Finish a reset: here is the link, here is the new password.
+ *
+ * A separate route from /confirm rather than another `kind` inside it, because
+ * it is a different shape of act. /confirm agrees to something already decided
+ * and needs nothing but the token; this one *is* the deciding, and the password
+ * it carries is the whole substance of it.
+ *
+ * No session is needed or wanted. The person reading the mail may be on a
+ * machine that has never signed in here — that is the ordinary case, not the
+ * strange one, since the reason they're here is that they can't sign in.
+ */
+router.post('/reset', async (req, res, next) => {
+  try {
+    // Guessing at tokens is brute force like any other.
+    const key = `reset:${limits.addressOf(req)}`;
+    const blocked = limits.login.retryAfter(key);
+    if (blocked) return limits.refuse(res, blocked);
+
+    /**
+     * The password is checked before the token is spent.
+     *
+     * Order matters here and nowhere else in this file: a link that works once
+     * and a password that might be refused must not meet in that sequence, or
+     * typing seven characters costs the person their only way back in and the
+     * screen telling them so is the screen that can no longer help. So the
+     * cheap check first, and the irreversible one only once it has passed.
+     *
+     * A stand-in username, since whose account this is isn't known yet — the
+     * same shape as the /password route, and only the password half of the
+     * answer is used.
+     */
+    const password = String(req.body?.password ?? '');
+    const problem = validateCredentials('placeholder', password);
+    if (problem) return res.status(400).json({ error: problem });
+
+    const record = await claimChange(String(req.body?.token || ''), ['reset']);
+    if (!record) {
+      limits.login.fail(key);
+      return res.status(400).json({ error: 'That link has expired, or has already been used.' });
+    }
+    limits.login.clear(key);
+
+    const user = await store.get(USERS, record.userId);
+    if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
+
+    // Every session goes, this one included — there is no "this one". Somebody
+    // who has just had to prove they own the mailbox should not leave behind a
+    // browser still signed in from whenever the password was last known.
+    await applyPassword(req, user, await hashPassword(password));
+    res.json({ ok: true, username: user.username || '' });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /**
  * Whether the signup code was given, and was right.
@@ -447,7 +582,10 @@ router.post('/confirm', async (req, res, next) => {
     const blocked = limits.login.retryAfter(key);
     if (blocked) return limits.refuse(res, blocked);
 
-    const record = await claimChange(String(req.body?.token || ''));
+    // Only the two kinds this route can actually finish. A reset token arriving
+    // here is somebody who edited the query parameter, and refusing it without
+    // spending it leaves their real link — the one in the letter — still good.
+    const record = await claimChange(String(req.body?.token || ''), ['password', 'email']);
     if (!record) {
       limits.login.fail(key);
       return res.status(400).json({ error: 'That link has expired, or has already been used.' });

@@ -1745,6 +1745,29 @@ button.token-tile:hover {
   background: #6ee787;
 }
 
+/* A reset link the admin has been handed. Boxed and set apart from the list
+   because it is about one person while sitting under all of them, and amber
+   rather than the usual border since it is a live credential on screen — the
+   one thing in this tab worth being slightly alarmed by. */
+.reset-issued {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #6b5320;
+  border-radius: 8px;
+  background: #211c11;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Monospaced and full width: this gets copied, and a link that wraps mid-token
+   in a proportional face is one somebody will select by hand and get wrong. */
+.reset-issued input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+}
+
 .swatch {
   width: 1rem;
   height: 1rem;

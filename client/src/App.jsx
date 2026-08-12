@@ -15,8 +15,27 @@ import Music from './Music.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
 import Auth from './Auth.jsx';
+import ResetPassword from './ResetPassword.jsx';
 
 const ANON = { globalRole: 'anon', userId: null, name: '' };
+
+/**
+ * Read a token out of the address bar, and take it out of the address bar.
+ *
+ * The same care api.js takes with the old invite key, and for the same reasons:
+ * a credential in a URL is one a reload spends twice, and one that ends up in
+ * bookmarks, in history and in whatever screenshot gets pasted into chat when
+ * somebody asks why the page looks odd. It lives in React state for the life of
+ * the tab instead, which is exactly as long as it is needed.
+ */
+function takeToken(param) {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get(param);
+  if (!token) return '';
+  url.searchParams.delete(param);
+  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  return token;
+}
 
 export default function App() {
   const [actor, setActor] = useState(ANON);
@@ -42,20 +61,16 @@ export default function App() {
   // What this server offers an account screen: a signup code to type instead of
   // answering a letter, and whether it can send one at all.
   const [authConfig, setAuthConfig] = useState({});
+  // A confirmation token from a link in an email: the answer to a change this
+  // account already asked for.
+  const [confirmToken, setConfirmToken] = useState(() => takeToken('confirm'));
   /**
-   * A confirmation token from a link in an email, taken out of the address bar
-   * at once — the same care api.js takes with an invite key, and for the same
-   * reasons: it shouldn't be bookmarked, shared in a screenshot, or left where
-   * a reload would spend it twice.
+   * The other half of the same idea: a reset link, which opens a form rather
+   * than a yes/no. Two parameters instead of one flag, so the page knows which
+   * of the two it is without having to ask the server — and so presenting one
+   * at the other's route, which would waste the token, can't happen by accident.
    */
-  const [confirmToken, setConfirmToken] = useState(() => {
-    const url = new URL(window.location.href);
-    const token = url.searchParams.get('confirm');
-    if (!token) return '';
-    url.searchParams.delete('confirm');
-    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-    return token;
-  });
+  const [resetToken, setResetToken] = useState(() => takeToken('reset'));
 
   const offline = !reachable;
   const authed = actor.globalRole !== 'anon';
@@ -269,6 +284,28 @@ export default function App() {
         token={confirmToken}
         onDone={() => {
           setConfirmToken('');
+          loadIdentity();
+        }}
+      />
+    );
+  }
+
+  /**
+   * A reset link, likewise, and ahead of the sign-in screen for a blunter
+   * reason than its sibling: the person holding this one cannot sign in, so a
+   * door asking them to would be the door they are standing here about.
+   *
+   * Finishing reloads the identity too. The reset signed out every session on
+   * that account — including, if the mail happened to be read in this browser,
+   * the one this tab is holding — so what /me says afterwards is a question
+   * worth asking again rather than assuming.
+   */
+  if (resetToken) {
+    return (
+      <ResetPassword
+        token={resetToken}
+        onDone={() => {
+          setResetToken('');
           loadIdentity();
         }}
       />

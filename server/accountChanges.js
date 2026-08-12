@@ -40,10 +40,16 @@ const isExpired = (record) => !record?.expiresAt || Date.parse(record.expiresAt)
 /**
  * Put a change on hold and return the token that will finish it.
  *
- * `kind` is 'password' or 'email'; `change` is the fields to apply to the user
- * when it's confirmed — a `passwordHash`, or an `email`. Any earlier request of
- * the same kind by the same person is dropped: two live links to two different
- * new passwords is a question nobody wants to have to answer.
+ * `kind` is 'password', 'email' or 'reset'; `change` is the fields to apply to
+ * the user when it's confirmed — a `passwordHash`, or an `email`. Any earlier
+ * request of the same kind by the same person is dropped: two live links to two
+ * different new passwords is a question nobody wants to have to answer.
+ *
+ * 'reset' carries no change at all, and that is the point of it rather than an
+ * omission. The other two are decisions already made, waiting to be agreed to;
+ * a reset is only permission to make one, and what it becomes is typed on the
+ * page the link opens. Storing a password *somebody who is not the owner* chose
+ * would mean a letter whose click-through hands the account to whoever asked.
  */
 async function holdChange(userId, kind, change) {
   const waiting = await store.list(PENDING);
@@ -73,12 +79,19 @@ async function holdChange(userId, kind, change) {
  * is nothing to apply, which is the same answer for a token that never
  * existed, one already used and one too old: which of the three it was is not
  * information a stranger guessing at links should be given.
+ *
+ * `kinds` is the list this caller is willing to act on. A token of some other
+ * kind is refused *without* being spent — it belongs to a route that hasn't
+ * been asked yet, and burning somebody's live email-change link because they
+ * hand-edited a query parameter would be a small cruelty for no gain. Only a
+ * token this door can actually open is consumed by knocking on it.
  */
-async function claimChange(token) {
+async function claimChange(token, kinds) {
   if (!token) return null;
   const id = fingerprint(token);
   const record = await store.get(PENDING, id);
   if (!record) return null;
+  if (kinds && !kinds.includes(record.kind)) return null;
   await store.remove(PENDING, id);
   if (isExpired(record)) return null;
   return record;

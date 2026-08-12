@@ -149,11 +149,20 @@ export const api = {
     post('/api/auth/password', { current, password, code }),
   changeEmail: (email, code) => post('/api/auth/email', { email, code }),
   confirmChange: (token) => post('/api/auth/confirm', { token }),
+  // Getting back in. `who` is a username or an address — somebody who has
+  // forgotten their password may not remember which they signed up with. The
+  // answer is the same either way and says nothing about whether the account
+  // exists, so there is nothing here for the caller to branch on.
+  forgotPassword: (who) => post('/api/auth/forgot', { who }),
+  resetPassword: (token, password) => post('/api/auth/reset', { token, password }),
 
   // --- global: people, and the campaigns they belong to ---
   listUsers: () => get('/api/users'),
   updateUser: (id, data) => put(`/api/users/${id}`, data),
   deleteUser: (id) => del(`/api/users/${id}`),
+  // Admin only, and it answers with the link rather than posting it: this is
+  // for the person the server has no address for, so there is nowhere to post.
+  resetUserPassword: (id) => post(`/api/users/${id}/reset`, {}),
 
   // Only ever the campaigns you're a member of — someone else's table doesn't
   // appear at all, admin included.

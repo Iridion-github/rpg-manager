@@ -22,6 +22,9 @@ export default function Roster({ isAdmin, onUsersChanged }) {
   const [error, setError] = useState('');
   // The person a confirmation dialog is currently asking about.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  // A reset link the admin has just been handed: { name, link, minutes }. One
+  // at a time — two on screen is two chances to send the wrong person's.
+  const [issued, setIssued] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +72,25 @@ export default function Roster({ isAdmin, onUsersChanged }) {
     }
   }
 
+  /**
+   * Get a reset link for somebody the server can't write to.
+   *
+   * The last resort, and only that. Anybody with an address on file gets their
+   * own link from the sign-in screen without the admin ever hearing about it —
+   * this is for the account registered under a signup code, which was never
+   * asked for a mailbox and so has nowhere for a letter to go.
+   */
+  async function issueReset(user) {
+    setError('');
+    setIssued(null);
+    try {
+      const { link, minutes } = await api.resetUserPassword(user.id);
+      setIssued({ name: user.name, link, minutes });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   return (
     <div className="roster">
       {error && <p className="error">{error}</p>}
@@ -105,18 +127,54 @@ export default function Roster({ isAdmin, onUsersChanged }) {
                 from anyone else regardless; hiding it only means not offering a
                 button whose whole answer would be "no". */}
             {isAdmin && u.globalRole !== 'admin' && (
-              <button
-                className="del"
-                onClick={() => setConfirmDeleteId(u.id)}
-                title={`Remove ${u.name}`}
-              >
-                ✕
-              </button>
+              <>
+                {/* The admin's half of password recovery. Not hidden behind a
+                    confirmation the way removal is: nothing is destroyed by
+                    asking, the link expires on its own, and issuing a second
+                    one silently retires the first. */}
+                <button
+                  className="linky"
+                  onClick={() => issueReset(u)}
+                  title={`Get a password reset link for ${u.name}`}
+                >
+                  🔑
+                </button>
+                <button
+                  className="del"
+                  onClick={() => setConfirmDeleteId(u.id)}
+                  title={`Remove ${u.name}`}
+                >
+                  ✕
+                </button>
+              </>
             )}
           </li>
         ))}
         {rows.length === 0 && <li className="empty">Nobody yet.</li>}
       </ul>
+
+      {/* Said plainly rather than softened: for the next hour this string is
+          that account. The admin could already reach into the files on the
+          machine and do worse, so this isn't a new power — but a button is
+          easier to press than a text editor is to open, and the screen offering
+          it should be the thing that says so. */}
+      {issued && (
+        <div className="reset-issued">
+          <p className="hint">
+            A reset link for <strong>{issued.name}</strong>. Send it to them however you normally
+            reach them. Whoever opens it can set the password on that account, so don't post it
+            anywhere you wouldn't post the password itself. It works once, and expires in{' '}
+            {issued.minutes} minutes.
+          </p>
+          <input readOnly value={issued.link} onFocus={(e) => e.target.select()} />
+          <div className="confirm-actions">
+            <button onClick={() => navigator.clipboard?.writeText(issued.link)}>Copy link</button>
+            <button type="button" className="linky" onClick={() => setIssued(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* By name: this is a person, not a thing they own. Their account goes and
           their place at every table goes with it, and with a column of identical

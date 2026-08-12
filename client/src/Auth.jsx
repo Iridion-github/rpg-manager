@@ -18,6 +18,8 @@ export default function Auth({ onSignedIn }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Whether the "we've sent it, if there was anywhere to send it" note is up.
+  const [asked, setAsked] = useState(false);
 
   useEffect(() => {
     api.authConfig().then(setConfig).catch(() => {});
@@ -40,6 +42,98 @@ export default function Auth({ onSignedIn }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Ask for a reset link.
+   *
+   * The screen is written to match a server that will not say whether the
+   * account exists: it claims nothing was sent, only that if there was
+   * somewhere to send to, something has gone. Anything more definite here would
+   * put back the account-enumeration leak the route goes out of its way to
+   * avoid — and would be a lie in the two cases where nothing was posted.
+   */
+  async function askForReset(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api.forgotPassword(username);
+      setAsked(true);
+    } catch (err) {
+      // Only a rate limit or a dead server reaches this; a request that got
+      // through is a success by definition.
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const backToLogin = () => {
+    setMode('login');
+    setAsked(false);
+    setError('');
+    setPassword('');
+  };
+
+  /**
+   * Recovery takes over the screen rather than sitting under the form.
+   *
+   * The two tabs offer the two things you do when you *can* get in; this is
+   * what you do when you can't, and leaving them up with neither one lit invites
+   * the click that loses whatever has just been typed here.
+   */
+  if (mode === 'forgot') {
+    return (
+      <div className="auth">
+        <h1>⚔️ RPG Manager</h1>
+        <h2>Forgotten your password</h2>
+
+        {asked ? (
+          <>
+            <p className="hint">
+              If that account exists and has an email address on it, a link to set a new password is
+              on its way. It works once and expires in an hour.
+            </p>
+            <p className="hint">
+              {config.canSendMail
+                ? 'Nothing arrived? An account registered with a signup code may have no address on file — there is no way to reach it, and the server admin can hand you a reset link instead.'
+                : "This server has no mail set up, so nothing was actually posted — the link is in the server's outbox file. Ask whoever runs it."}
+            </p>
+            <button onClick={backToLogin}>Back to signing in</button>
+          </>
+        ) : (
+          <>
+            <p className="hint">
+              Tell us who you are and we'll send a link to set a new one. Nothing changes until you
+              open it and choose the new password yourself.
+            </p>
+            <form className="auth-form" onSubmit={askForReset}>
+              <label>
+                Username or email
+                <input
+                  value={username}
+                  autoComplete="username"
+                  autoFocus
+                  required
+                  maxLength={254}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </label>
+              {error && <p className="error">{error}</p>}
+              <button type="submit" disabled={busy || !username.trim()}>
+                {busy ? 'Sending…' : 'Send me a link'}
+              </button>
+            </form>
+            <p className="hint">
+              <button type="button" className="linky" onClick={backToLogin}>
+                Back to signing in
+              </button>
+            </p>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -160,6 +254,22 @@ export default function Auth({ onSignedIn }) {
         >
           {registering ? 'Create account' : 'Log in'}
         </button>
+
+        {/* Under the button, and only when signing in. On the register form it
+            would be an offer to recover an account you are in the middle of
+            saying you don't have. */}
+        {!registering && (
+          <button
+            type="button"
+            className="linky"
+            onClick={() => {
+              setMode('forgot');
+              setError('');
+            }}
+          >
+            Forgotten your password?
+          </button>
+        )}
       </form>
 
       <p className="hint">

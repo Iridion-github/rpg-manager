@@ -186,6 +186,52 @@ later, at the sign-in screen, with no way back to the password you meant. The
 two are compared untrimmed: a space at either end is a character like any other,
 and quietly removing it would set a password you could never type again.
 
+### Forgotten passwords
+**Forgotten your password?** on the sign-in screen asks for a username or an
+address — whichever you remember — and posts a link to the address on the
+account. Opening it gives you a form to choose a new password, typed twice. The
+link works once and expires in an hour, and asking again retires the last one.
+
+Three things about it are deliberate and look like gaps if you don't know why.
+
+**The screen never says whether the account exists.** Ask about a name nobody
+has and you get the same words, the same status and the same delay as asking
+about your own. A form that answered honestly would be a way to read this
+server's membership list one guess at a time, and who plays here isn't something
+a stranger gets to establish from the front door.
+
+**The request carries no new password.** It buys only the right to type one on
+the page the link opens. Were it the other way round — choose the password
+first, confirm it by mail — then anyone could pick a password for your account
+and send you a letter asking you to approve it, and the whole security of the
+thing would rest on your reading that letter carefully. Nothing is decided until
+somebody holding the mailbox decides it.
+
+**The signup code is not accepted here**, and this is the one place in the app
+where it isn't. Everywhere else the code stands in for answering a letter on top
+of something only you have — being signed in, knowing the current password.
+Recovery has nothing underneath it, so honouring the code would make one shared
+string a master key to every account at the table, the DM's included.
+
+Completing a reset signs out every session on that account, everywhere. Somebody
+who has just had to prove they own the mailbox shouldn't leave a browser signed
+in from whenever the password was last known.
+
+**An account with no address** — one registered under a signup code, which never
+had to give one — cannot be reached this way, and the sign-in screen says so
+without saying which kind of account you asked about. The remedy is the 🔑 beside
+that person in the **Users** tab: the admin gets a reset link handed back to them
+to pass on however they already talk to that person. It is the same link the
+letter would have carried, so for the hour it lasts it *is* that account —
+worth sending the way you'd send a password, not the way you'd send a meeting
+time. The admin can already read the database off the disk, so this grants no
+power that wasn't there; a button is just easier to press than a text editor is
+to open, which is why the screen offering it says all this out loud too.
+
+The admin's own password is not resettable by any of this. It's `ADMIN_PASSWORD`
+in the environment — server configuration, not an account secret — and both
+routes refuse it and say so.
+
 ### Sending mail
 Nothing is sent unless you configure SMTP, and you don't need an account with
 anyone — any mailbox you already have will do, usually with an app password:
@@ -295,7 +341,12 @@ Everyone signed in can read the list — it's the same one a DM reads when picki
 members, and it carries names and colours and nothing else; the server strips
 email, password hash and the rest before it leaves. Only the admin sees a way to
 remove anybody, and the routes behind it refuse everyone else regardless of what
-the page draws. It doesn't mint accounts and doesn't hand out credentials.
+the page draws. It doesn't mint accounts.
+
+The admin does have one credential to hand out here, and only one: the 🔑 beside
+a person issues a **password reset link** for them, for the case where the server
+has no address to post one to. See *Forgotten passwords* above for what that link
+is worth and how to treat it.
 
 **Getting them to your table** is the DM's job: **Campaigns → Members**, and
 pick Player or DM for each person. Being on the server gets you nothing on its
@@ -849,7 +900,15 @@ is minutes of scripting.
 Only *failures* count and a success clears the counter, so an evening of
 mistyping never adds up to a lockout. Login is keyed by address **and** by
 account, because one address trying every account and every address trying one
-account are both brute force.
+account are both brute force. Presenting a confirmation or reset token is
+counted the same way: a link is a secret in a URL, and guessing at one is
+guessing like any other.
+
+Asking for a reset link is the exception that counts *everything*, ten in
+fifteen minutes by address and by account named. It has no failures to count —
+it answers identically whoever asks, which is the point of it — and what needs a
+ceiling there isn't guessing but the asking itself, since every request that
+finds a real account posts a letter to somebody who didn't ask for one.
 
 The counters live in memory. A restart forgets them, which is the right trade
 here: the alternative is a table of failed logins on disk, and the thing being

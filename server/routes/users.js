@@ -23,6 +23,8 @@
 const express = require('express');
 const store = require('../store');
 const { notifyUser, onlineUserIds } = require('../realtime');
+const { resetLink } = require('../links');
+const { holdChange, TTL_MS } = require('../accountChanges');
 const {
   USERS,
   requireUser,
@@ -83,9 +85,53 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
   }
 });
 
+/**
+ * A reset link for somebody the server cannot write to.
+ *
+ * The gap this fills: an account registered under a signup code was never made
+ * to give an address, and /auth/forgot can only post a letter. Without this the
+ * only remedy for a forgotten password is deleting the account, which takes
+ * every campaign membership with it — a person losing their seat at four tables
+ * because they mistyped something eight characters long.
+ *
+ * The link is handed back to the *admin* rather than sent anywhere, because
+ * there is by definition nowhere to send it. They pass it on however they
+ * already talk to that person, which is the same channel the signup code
+ * travelled down.
+ *
+ * Worth being plain about what this is: for as long as it lasts, whoever holds
+ * this link can set that account's password and sign in as them. That is not a
+ * power the admin didn't already have — this database is a directory of JSON
+ * files on a machine they own, and there is no arrangement of routes that
+ * changes it — but a button is not the same as a text editor, so the screen
+ * offering it says so out loud, and the link expires in an hour like every
+ * other one.
+ *
+ * Deliberately not restricted to accounts with no address. A player whose
+ * mailbox is the thing they've lost is exactly as stuck, and telling the admin
+ * "delete them and start again" because the system disapproves of the reason
+ * would be a rule serving itself.
+ */
+router.post('/:id/reset', requireAdmin, async (req, res, next) => {
+  try {
+    const user = await store.get(USERS, req.params.id);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    if (user.globalRole === 'admin') {
+      return res.status(400).json({
+        error: 'The admin password is server configuration — change ADMIN_PASSWORD instead.',
+      });
+    }
+    const token = await holdChange(user.id, 'reset', {});
+    res.json({ link: resetLink(req, token), minutes: Math.round(TTL_MS / 60000) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Nothing to rotate any more: an account is reached by signing in, and a
 // password is the owner's to change (routes/auth.js). The admin's lever for a
-// compromised account is to delete it, which takes its sessions with it.
+// compromised account is to delete it, which takes its sessions with it — or,
+// where the account is worth keeping, the reset link above.
 
 router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {

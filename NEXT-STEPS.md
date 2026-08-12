@@ -70,41 +70,42 @@ nobody else can, and the map shows whose is whose without anybody having to ask.
 
 ---
 
-## 2. Password recovery
+## 2. Password recovery — ✅ done
 
-**The state of it.** The account system now collects an address, confirms a
-change of one by emailed link, and lets the signup code stand in for that link.
-The reason to have an address at all — getting back in — does not exist. Nor can
-the admin help: they can rename and delete a person, and nothing else. The only
-remedy for a forgotten password today is deleting the account and registering
-again, which takes the person's campaign memberships with it.
+Built. **Forgotten your password?** on the sign-in screen takes a username or an
+address, `POST /api/auth/forgot` answers `202 {ok:true}` to every caller alike,
+and the link in the letter opens `ResetPassword.jsx` — a new page rather than the
+existing confirm screen, because this one is where the password gets *chosen*.
+`accountChanges.js` took a third `kind` and one new argument, as predicted.
 
-**Prerequisite.** `SMTP_PASS` — the app password for `rpgmanageradmin@gmail.com`.
-Until that's set, mail goes to `data/outbox.log` and none of this can be tested
-for real.
+Four decisions worth not reversing, each of which looks like an omission:
 
-**Steps**
+- **The reset request carries no password.** The plan's step 4 implied it, and
+  it turned out to be the whole security argument: if a password were chosen at
+  request time, anyone could pick one for your account and mail you a letter
+  asking you to approve it. Nothing is decided until the mailbox holder decides.
+- **The signup code is refused here** — the only place in the app that refuses
+  it. Elsewhere it sits on top of something only the owner has; in recovery
+  there is nothing underneath, so it would be a master key to every account.
+- **`claimChange` now takes the kinds a route will accept**, and refuses others
+  *without spending them*. A hand-edited query parameter shouldn't burn the live
+  link somebody is holding.
+- **A rejected password doesn't spend the link.** The validation runs before the
+  claim: a mistyped eight-character rule must not cost somebody their only way
+  back in, on the very screen that can no longer help them.
 
-1. **A "forgot your password" link** on the sign-in screen, asking for a username
-   or address.
-2. **The reset request**, deliberately answering the same way whether or not the
-   account exists — otherwise the form becomes a way to discover who has an
-   account here.
-3. **A held reset**, reusing `accountChanges.js` as it stands: the token hashed
-   in the database, single use, expiring in an hour, superseded by a newer
-   request. That module was written for this shape of problem and needs a third
-   `kind`, not a rewrite.
-4. **The reset page** — the existing `ConfirmChange` screen, which already asks
-   before acting rather than acting on the GET, plus a field for the new
-   password typed twice.
-5. **Rate limits** on the request endpoint, keyed both by address and by caller,
-   like the login route.
-6. **Decide the no-address case.** An account registered under a signup code may
-   have no address, so it can have no reset. The honest answer is probably an
-   admin-triggered reset link, which is a small addition to the Users tab.
+The no-address case (step 6) went the way the plan guessed: `POST
+/api/users/:id/reset`, admin only, hands the link back rather than posting it,
+behind the 🔑 in the Users tab. Not restricted to address-less accounts —
+somebody who has lost the mailbox itself is exactly as stuck.
 
-**Done when** somebody who has forgotten their password can get back into their
-own account without an admin deleting anything.
+Ten suites cover it (see the note under item 3; they are in a scratchpad again).
+`SMTP_PASS` was never actually a blocker: the outbox is a complete test channel,
+and that is what everything was verified through. It is still needed before any
+of this reaches a real player.
+
+**Done when** — met: somebody who has forgotten their password gets back into
+their own account without an admin deleting anything.
 
 ---
 
@@ -116,9 +117,11 @@ rules, presence and last-seen, the account and confirmation flows, invite-key
 removal, compression coverage — and every one of them lives in a scratchpad that
 gets thrown away. They caught real bugs, including several of mine.
 
-**Why it's third rather than first.** It changes nothing a player sees. It is
-still the best engineering investment available, and it would have caught at
-least three of the regressions hit while building the last few features.
+**Why it was third, and is now first.** It changes nothing a player sees, which
+is why it kept losing to things that did. With the two above it built and
+thrown away, it is what's left — and the argument for it has got stronger each
+time: the recovery suites caught the spent-link-on-a-rejected-password bug, and
+they are already gone too.
 
 **Steps**
 
