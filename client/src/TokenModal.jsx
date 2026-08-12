@@ -36,7 +36,23 @@ function rolledTotal(die, mod) {
   return d === null || m === null || Number.isNaN(d) || Number.isNaN(m) ? null : d + m;
 }
 
-export default function TokenModal({ token, onSubmit, onClose }) {
+/**
+ * `stats` decides whether this form is about a token in play or a token in the
+ * cast list. On the tabletop it asks for everything; in the campaign's Tokens
+ * tab it asks for what a token *is* and leaves out what a token is *doing* —
+ * hit points and initiative are decided in the moment by whoever is looking at
+ * the fight, and a form you fill in before the session has no business holding
+ * them. `canAssign` is the DM's: handing a token to somebody is theirs alone.
+ */
+export default function TokenModal({
+  token,
+  players = [],
+  stats = true,
+  canAssign = true,
+  title,
+  onSubmit,
+  onClose,
+}) {
   const editing = Boolean(token);
   const [label, setLabel] = useState(token?.label ?? 'NPC');
   const [color, setColor] = useState(token?.color ?? '#e5534b');
@@ -45,6 +61,15 @@ export default function TokenModal({ token, onSubmit, onClose }) {
   const [borderColor, setBorderColor] = useState(token?.borderColor ?? null);
   const [imageUrl, setImageUrl] = useState(token?.imageUrl ?? '');
   const [size, setSize] = useState(token?.size ?? 1);
+  /**
+   * Whose token this is, and therefore who may drag it.
+   *
+   * The empty string is "nobody" rather than null so the select has a value to
+   * match against — it becomes null again on the way out. Null is what the
+   * server stores for a token the DM keeps: the monsters, the doors, the pile
+   * of crates.
+   */
+  const [ownerId, setOwnerId] = useState(token?.ownerId ?? '');
   // Kept as the strings the inputs hold rather than as numbers: blank is a
   // meaningful answer here — "not tracking this" — and Number('') is 0, which
   // would quietly turn an empty box into a token with no hit points left.
@@ -127,6 +152,9 @@ export default function TokenModal({ token, onSubmit, onClose }) {
         initiativeMod: blankToNull(initMod),
         hp: blankToNull(hp),
         maxHp: blankToNull(maxHp),
+        // Back to null for "nobody" — the server reads a falsy owner as a token
+        // that belongs to the table rather than to a person.
+        ownerId: ownerId || null,
       });
       onClose();
     } catch (err) {
@@ -147,11 +175,11 @@ export default function TokenModal({ token, onSubmit, onClose }) {
         className="modal token-form"
         role="dialog"
         aria-modal="true"
-        aria-label={editing ? 'Edit token' : 'Create token'}
+        aria-label={title || (editing ? 'Edit token' : 'Create token')}
         onSubmit={submit}
       >
         <div className="modal-head">
-          <h2>{editing ? 'Edit token' : 'Create token'}</h2>
+          <h2>{title || (editing ? 'Edit token' : 'Create token')}</h2>
           <button type="button" className="linky" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -168,6 +196,28 @@ export default function TokenModal({ token, onSubmit, onClose }) {
           />
         </label>
 
+        {/* The one field that hands something over. Everything else here is
+            what a token looks like; this is who may move it, and it is the
+            difference between a board the DM drives and a table people play at.
+
+            Listed by shown name, with the DM in the list too: a DM's own
+            character is a token they'd want to own as a person rather than as
+            the table, and the rule that follows is the same either way. */}
+        {canAssign && (
+        <label className="token-field">
+          Belongs to
+          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+            <option value="">Nobody — the DM moves it</option>
+            {players.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.role === 'dm' ? ' (DM)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        )}
+
         {/* Left blank on the tokens nobody rolls for — scenery, a door, a pile
             of crates. An empty stat prints no line in the tooltip at all.
 
@@ -175,6 +225,7 @@ export default function TokenModal({ token, onSubmit, onClose }) {
             modifier: 25 and 25 are the same, but 18+7 beats 22+3. Fill both and
             the total is worked out for you; fill neither and you can still type
             a bare total, which is what the tokens made before this had. */}
+        {stats && (
         <div className="token-field">
           <span>Initiative</span>
           <span className="token-stat">
@@ -208,7 +259,10 @@ export default function TokenModal({ token, onSubmit, onClose }) {
           </span>
         </div>
 
+        )}
+
         {/* Two controls, so not a <label>: it can only speak for the first. */}
+        {stats && (
         <div className="token-field">
           <span>Hit points</span>
           <span className="token-stat">
@@ -231,6 +285,7 @@ export default function TokenModal({ token, onSubmit, onClose }) {
             />
           </span>
         </div>
+        )}
 
         <label className="token-field">
           Colour

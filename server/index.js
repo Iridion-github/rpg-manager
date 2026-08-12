@@ -28,6 +28,7 @@ const usersRouter = require('./routes/users');
 const campaignsRouter = require('./routes/campaigns');
 const sheetsRouter = require('./routes/sheets');
 const scenesRouter = require('./routes/scenes');
+const campaignTokensRouter = require('./routes/campaignTokens');
 const { router: chatRouter } = require('./routes/chat');
 const notesRouter = require('./routes/notes');
 const musicRouter = require('./routes/music');
@@ -247,6 +248,10 @@ app.use('/api/campaigns', campaignsRouter);
  */
 app.use('/api/campaigns/:campaignId/sheets', attachCampaign, sheetsRouter);
 app.use('/api/campaigns/:campaignId/scenes', attachCampaign, scenesRouter);
+// The campaign's own cast: every token it has, on a map or waiting off one.
+// Campaign-level, because that is what lets a token be made before there is a
+// scene for it and come back on a different map from the one it left.
+app.use('/api/campaigns/:campaignId/tokens', attachCampaign, campaignTokensRouter);
 app.use('/api/campaigns/:campaignId/chat', attachCampaign, chatRouter);
 app.use('/api/campaigns/:campaignId/notes', attachCampaign, notesRouter);
 app.use('/api/campaigns/:campaignId/music', attachCampaign, musicRouter);

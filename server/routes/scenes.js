@@ -314,7 +314,14 @@ router.delete('/:id', requireDm, async (req, res, next) => {
 
 router.post('/:id/tokens', requireDm, async (req, res, next) => {
   try {
-    const wanted = { id: crypto.randomUUID(), ...sanitizeToken(req.body) };
+    const wanted = {
+      id: crypto.randomUUID(),
+      ...sanitizeToken(req.body),
+      // Who made it, which is a different question from who owns it — see
+      // routes/campaignTokens.js, where it decides whether a player may make
+      // another. Read off the session, never the request.
+      createdBy: req.actor?.userId || null,
+    };
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       let token = wanted;
       // Asking for an occupied cell isn't an error when adding — slide the new
@@ -358,6 +365,43 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
   }
 });
 
+/**
+ * Initiative — the second write a player is allowed to make, on their own
+ * token.
+ *
+ * Its own route rather than a hole in the edit above, because the difference
+ * matters: what a creature rolled is the player's to say, and what it looks
+ * like, how big it is and who it belongs to are the DM's. A carve-out in the
+ * full edit would have to be maintained field by field forever; a route that
+ * can only reach three numbers cannot grow one by accident.
+ */
+router.put('/:id/tokens/:tokenId/initiative', async (req, res, next) => {
+  try {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = tokenIn(current, req.params.tokenId);
+      if (!canMoveToken(req.actor, req.campaignRole, existing)) {
+        throw new HttpError(403, 'You can only set initiative on your own token.');
+      }
+      // Through the same derivation the full edit uses, so a die and a modifier
+      // still decide the total and a lone half still falls back to a bare one.
+      const rolled = rolledInitiative(
+        req.body?.initiative,
+        req.body?.initiativeDie,
+        req.body?.initiativeMod
+      );
+      return {
+        ...current,
+        tokens: current.tokens.map((t) => (t.id === existing.id ? { ...t, ...rolled } : t)),
+      };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'token:update', scene);
+    res.json(scene.tokens.find((t) => t.id === req.params.tokenId));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Move — the one write a player is allowed to make. Position only: a player
 // can't repaint or rename a token by POSTing extra fields here.
 router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
@@ -377,6 +421,106 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
     if (!scene) return res.status(404).json({ error: 'Not found' });
     announce(req, 'token:move', scene);
     res.json(scene.tokens.find((t) => t.id === req.params.tokenId));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- The bench ----
+
+/**
+ * Off the table, but not gone.
+ *
+ * A token lives in exactly one place at a time: in a scene's `tokens`, or in
+ * the campaign's bench. Moving between the two keeps its id, which is what lets
+ * a character keep its sheet link, its place in an undo entry and its identity
+ * across a change of map. Two copies with one id — a "placed" flag on a token
+ * that also sits in a scene — would be the same thing said twice, and the two
+ * would eventually disagree.
+ *
+ * The bench is campaign-level on purpose. A token taken off a map has to be
+ * placeable on a *different* map, and it has to survive the deletion of the
+ * scene it came from, which a scene-shaped home could not promise.
+ *
+ * Who may move a token between the two is exactly who may move it about on the
+ * map: the DM, or the player it belongs to. Taking your own character off the
+ * board and bringing it back next session is the same authority as walking it
+ * across the room.
+ */
+const benchOf = (req) => scoped(req.campaignId, 'bench');
+
+router.put('/:id/tokens/:tokenId/bench', async (req, res, next) => {
+  try {
+    let taken = null;
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = tokenIn(current, req.params.tokenId);
+      if (!canMoveToken(req.actor, req.campaignRole, existing)) {
+        throw new HttpError(403, 'You can only take your own token off the table.');
+      }
+      taken = existing;
+      return {
+        ...current,
+        tokens: current.tokens.filter((t) => t.id !== existing.id),
+        // A token that was taking its turn isn't taking it any more. Cleared
+        // rather than advanced: whose turn it is next is a decision about the
+        // fight, and the DM has a button for it.
+        turnTokenId: current.turnTokenId === existing.id ? null : current.turnTokenId,
+      };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+
+    // Position goes. It described a square on a map this token is no longer on,
+    // and keeping it would mean a token that remembers where it used to stand
+    // on a scene that may not exist by the time it comes back.
+    const { x, y, ...rest } = taken;
+    await store.put(benchOf(req), { ...rest, benchedAt: new Date().toISOString() });
+    announce(req, 'token:benched', scene);
+    res.json({ benched: rest });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Back onto a table, at the spot that was right-clicked.
+ *
+ * Takes the same courtesy `POST /tokens` does with an occupied cell: slide to
+ * the first free one rather than refuse. Somebody placing a character is
+ * pointing at a room, not at a square.
+ */
+router.post('/:id/tokens/from-bench', async (req, res, next) => {
+  try {
+    const benched = await store.get(benchOf(req), String(req.body?.tokenId || ''));
+    if (!benched) return res.status(404).json({ error: 'That token is not on the bench.' });
+    if (!canMoveToken(req.actor, req.campaignRole, benched)) {
+      throw new HttpError(403, 'You can only place a token that belongs to you.');
+    }
+
+    const wanted = {
+      ...benched,
+      x: num(req.body?.x, 0),
+      y: num(req.body?.y, 0),
+    };
+    delete wanted.benchedAt;
+
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      let token = wanted;
+      if (blockerFor(current, token, null)) {
+        const free = firstFreeCell(current, token.size, null);
+        if (!free) throw new HttpError(409, 'No free cell left on this scene.');
+        token = { ...token, ...free };
+      }
+      return { ...current, tokens: [...(current.tokens || []), token] };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+
+    // Only once it is standing somewhere. A crash between the two leaves a
+    // token on the bench and on the table, which is a duplicate you can delete
+    // — the other order loses it entirely.
+    await store.remove(benchOf(req), benched.id);
+    const placed = scene.tokens.find((t) => t.id === benched.id);
+    announce(req, 'token:add', scene, { token: placed });
+    res.status(201).json(placed);
   } catch (err) {
     next(err);
   }

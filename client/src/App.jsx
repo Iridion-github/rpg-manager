@@ -530,7 +530,15 @@ export default function App() {
         {insideCampaign && activeTab === 'music' && isDm && (
           <Music key={`music-${campaignId}`} canControl={isDm} offline={offline} />
         )}
-        {insideCampaign && activeTab === 'tokens' && <Tokens key={`tokens-${campaignId}`} />}
+        {insideCampaign && activeTab === 'tokens' && (
+          <Tokens
+            key={`tokens-${campaignId}`}
+            actor={actor}
+            players={members}
+            isDm={isDm}
+            offline={offline}
+          />
+        )}
         {insideCampaign && activeTab === 'players' && (
           <Players
             key={`players-${campaignId}`}

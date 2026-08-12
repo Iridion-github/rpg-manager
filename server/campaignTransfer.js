@@ -25,7 +25,9 @@ const VERSION = 1;
 
 // Every collection a campaign owns. The scoped() prefix is the campaign id, so
 // these names are the whole of what "inside a campaign" means.
-const COLLECTIONS = ['scenes', 'sheets', 'notes', 'chat', 'music', 'musicState'];
+// 'bench' rides along with the scenes: a campaign's tokens that are off the
+// table are as much a part of it as the ones standing on one.
+const COLLECTIONS = ['scenes', 'bench', 'sheets', 'notes', 'chat', 'music', 'musicState'];
 
 /** Everything under one campaign, as a plain object ready to be JSON. */
 async function exportCampaign(campaign) {

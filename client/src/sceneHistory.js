@@ -247,6 +247,42 @@ export function recordShapeEdit({ sceneId, shapeId, before, after }) {
   record({ label: 'change that shape', sceneId, undo: step(after, before), redo: step(before, after) });
 }
 
+/**
+ * Taking a token off the table, and putting it back.
+ *
+ * These two are each other's opposite, so one pair of calls serves both — which
+ * is only true because a token keeps its id across the move. It is the same
+ * token in both places, and undo can therefore name it without having to guess
+ * which of several look-alikes it meant.
+ */
+export function recordTokenBench({ sceneId, token }) {
+  const name = token.label || 'that token';
+  record({
+    label: `take ${name} off the table`,
+    sceneId,
+    // Back to the square it was standing on. The server slides it to the
+    // nearest free one if somebody has since parked there.
+    undo: () => api.spawnToken(sceneId, token.id, token.x, token.y),
+    redo: async () => {
+      await tokenNow(sceneId, token.id);
+      await api.benchToken(sceneId, token.id);
+    },
+  });
+}
+
+export function recordTokenSpawn({ sceneId, token }) {
+  const name = token.label || 'that token';
+  record({
+    label: `put ${name} on the table`,
+    sceneId,
+    undo: async () => {
+      await tokenNow(sceneId, token.id);
+      await api.benchToken(sceneId, token.id);
+    },
+    redo: () => api.spawnToken(sceneId, token.id, token.x, token.y),
+  });
+}
+
 // What to call a scene change in a message, by the field it touched. Several
 // fields can move together — a new map brings its own width and height — so the
 // first one named is the one that gets to speak for the change.

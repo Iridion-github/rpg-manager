@@ -5,6 +5,8 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
 import TokenTooltip from './TokenTooltip.jsx';
+import InitiativeModal from './InitiativeModal.jsx';
+import SpawnModal from './SpawnModal.jsx';
 import ShapeTools from './ShapeTools.jsx';
 import {
   DEFAULT_STYLE,
@@ -36,9 +38,11 @@ import {
   recordShapeEdit,
   recordShapesCleared,
   recordTokenAdd,
+  recordTokenBench,
   recordTokenDelete,
   recordTokenEdit,
   recordTokenMove,
+  recordTokenSpawn,
 } from './sceneHistory.js';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
@@ -111,11 +115,12 @@ const PING_MS = 2400;
 // Roughly the menu's own size, used only to stop it opening past the edge of
 // the window. Approximate on purpose — measuring it properly means rendering it
 // somewhere invisible first, for a few pixels nobody will ever notice. Sized
-// for the longest of the three menus, which is the map's own: five items and a
-// rule. The shorter ones open a little further from the bottom edge than they
-// strictly need to, which nobody has ever complained about.
+// for the longest of the three menus, which is the map's own: six items and a
+// rule, once there is something on the bench to spawn. The shorter ones open a
+// little further from the bottom edge than they strictly need to, which nobody
+// has ever complained about.
 const MENU_W = 140;
-const MENU_H = 156;
+const MENU_H = 182;
 
 /**
  * One shape on the board: a fill, an outline, and its name if it was given one.
@@ -282,6 +287,16 @@ export default function Tabletop({ actor, players, offline }) {
   // that decided it is closed by the time the modal opens — the choice has to
   // outlive the thing that made it.
   const [tokenForm, setTokenForm] = useState(null);
+  // Every token of this campaign the viewer may touch: the DM's whole cast, or
+  // your own. Each carries the scene it stands on, or null for one waiting to
+  // be placed. Filtered by the server, so nothing here is unusable.
+  const [roster, setRoster] = useState([]);
+  // Where a token is about to be put back, in cells. Non-null means the picker
+  // is open; the spot was decided by the right-click that opened it, exactly as
+  // it is for a brand new token.
+  const [spawnAt, setSpawnAt] = useState(null);
+  // The token whose initiative is being set, if any.
+  const [initiativeFor, setInitiativeFor] = useState(null);
   // The token the pointer is resting on, with the element to hang its tooltip
   // on. The element is kept rather than looked up again because the event that
   // told us about the hover is holding it already.
@@ -400,10 +415,28 @@ export default function Tabletop({ actor, players, offline }) {
     }
   }, [offline]);
 
+  /**
+   * The campaign's cast, as this person may see it.
+   *
+   * Re-read whenever the board changes, because the two move together: a token
+   * stops being placeable exactly when it arrives on a scene. A failure is
+   * silent — the map is the point of this screen, and a list we couldn't read
+   * is simply not offered.
+   */
+  const loadRoster = useCallback(async () => {
+    if (offline) return;
+    try {
+      setRoster(await api.listCampaignTokens());
+    } catch {
+      /* the map still works without it */
+    }
+  }, [offline]);
+
   useEffect(() => {
     refresh();
+    loadRoster();
     api.listMaps().then(setMaps).catch(() => setMaps([]));
-  }, [refresh]);
+  }, [refresh, loadRoster]);
 
   // --- undo and redo ---
   // The stack outlives this component — it's a module, so walking off to the
@@ -502,14 +535,18 @@ export default function Tabletop({ actor, players, offline }) {
     };
 
     socket.on('scenes:changed', onSceneChange);
+    // A token leaving the bench is a token arriving on a scene, and the other
+    // way about — so whatever moved the board may have moved the bench too.
+    socket.on('scenes:changed', loadRoster);
     socket.on('token:dragging', onDragging);
     socket.on('token:drag:ended', onDragEnded);
     return () => {
+      socket.off('scenes:changed', loadRoster);
       socket.off('scenes:changed', onSceneChange);
       socket.off('token:dragging', onDragging);
       socket.off('token:drag:ended', onDragEnded);
     };
-  }, []);
+  }, [loadRoster]);
 
   // --- pings and focus pulls ---
   // Both are ignored unless they're about the scene on screen: a pulse on a map
@@ -614,6 +651,10 @@ export default function Tabletop({ actor, players, offline }) {
    * a *new* shape out of the map.
    */
   const drawing = canDraw && shapeWindow;
+  // What could be put on the board right now. A token already standing on a
+  // scene — this one or another — is not a thing you can place; it is a thing
+  // you can go and look at.
+  const placeable = roster.filter((t) => !t.sceneId);
   const shapes = scene?.shapes || [];
   const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
   // Yours if you drew it, anyone's if you're the DM — the rule the server keeps.
@@ -1255,11 +1296,14 @@ export default function Tabletop({ actor, players, offline }) {
       return;
     }
     // A token gets a menu about *that token* rather than about the map under
-    // it. Only for the DM, since both items are things only a DM may do —
-    // anyone else keeps the browser's own menu, exactly as before.
+    // it. The DM gets one on any token; a player gets one on their own, where
+    // there is now something on it for them — their initiative, and taking the
+    // token off the table. On anybody else's they keep the browser's own menu,
+    // because a menu of things you may not do is worse than no menu.
     const el = e.target.closest?.('.token');
     if (el) {
-      if (!isDm || offline) return;
+      const token = scene?.tokens.find((t) => t.id === el.dataset.tokenId);
+      if (offline || !(isDm || canMove(token))) return;
       e.preventDefault();
       setMenu({
         clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
@@ -1348,14 +1392,22 @@ export default function Tabletop({ actor, players, offline }) {
   // is settled here, not there: a token summoned into the top-left corner is one
   // you then have to go and find, and the point of asking for it *here* is that
   // here is where you want it.
+  /**
+   * Where a right-click landed, in cells.
+   *
+   * Measured from the grid's own corner, so it follows the grid when that has
+   * been slid across the map. Rounded to a square where there is a grid to
+   * round to, and clamped to the board — you can right-click beside a map that
+   * is narrower than its scroller.
+   */
+  const cellAt = (mx, my) => ({
+    x: clamp(gridOn ? Math.round((mx - gridOffX) / gridSize) : round2((mx - gridOffX) / gridSize), 0, cols - 1),
+    y: clamp(gridOn ? Math.round((my - gridOffY) / gridSize) : round2((my - gridOffY) / gridSize), 0, rows - 1),
+  });
+
   function openTokenModal() {
     if (!menu || !scene) return;
-    const cellX = (menu.mx - gridOffX) / gridSize;
-    const cellY = (menu.my - gridOffY) / gridSize;
-    setTokenForm({
-      x: clamp(gridOn ? Math.round(cellX) : round2(cellX), 0, cols - 1),
-      y: clamp(gridOn ? Math.round(cellY) : round2(cellY), 0, rows - 1),
-    });
+    setTokenForm(cellAt(menu.mx, menu.my));
     setMenu(null);
   }
 
@@ -1386,6 +1438,79 @@ export default function Tabletop({ actor, players, offline }) {
     if (!menuToken) return;
     setConfirmDelete({ kind: 'token', id: menuToken.id, name: menuToken.label || 'Token' });
     setMenu(null);
+  }
+
+  /**
+   * Take a token off the table without destroying it.
+   *
+   * The difference from Delete is the whole point: this one is reversible by
+   * anybody who could have done it, tomorrow, on a different map. What comes
+   * off keeps its name, its picture, its hit points and its owner, and waits on
+   * the campaign's bench until somebody puts it back.
+   */
+  async function benchToken() {
+    const token = menuToken;
+    setMenu(null);
+    if (!token || !scene) return;
+    setError('');
+    try {
+      await api.benchToken(scene.id, token.id);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id ? { ...s, tokens: s.tokens.filter((t) => t.id !== token.id) } : s
+        )
+      );
+      loadRoster();
+      recordTokenBench({ sceneId: scene.id, token });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  /** And back again, onto the square the right-click chose. */
+  async function spawnFromBench(token) {
+    const at = spawnAt;
+    setSpawnAt(null);
+    if (!at || !scene) return;
+    setError('');
+    try {
+      const placed = await api.spawnToken(scene.id, token.id, at.x, at.y);
+      setScenes((prev) =>
+        prev.map((s) => (s.id === scene.id ? { ...s, tokens: [...s.tokens, placed] } : s))
+      );
+      loadRoster();
+      recordTokenSpawn({ sceneId: scene.id, token: placed });
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  /**
+   * What this creature rolled — the one number about a token that belongs to
+   * the person playing it rather than to the person running the table.
+   *
+   * Not wrapped in guard(): the dialog is open, and an error belongs in front
+   * of whoever is still looking at it. Throwing is how it gets there.
+   */
+  async function saveInitiative(roll) {
+    const token = initiativeFor;
+    if (!token || !scene) return;
+    const updated = await api.setInitiative(scene.id, token.id, roll);
+    setScenes((prev) =>
+      prev.map((s) =>
+        s.id === scene.id
+          ? { ...s, tokens: s.tokens.map((t) => (t.id === updated.id ? updated : t)) }
+          : s
+      )
+    );
+    const fields = ['initiative', 'initiativeDie', 'initiativeMod'];
+    recordTokenEdit({
+      sceneId: scene.id,
+      tokenId: updated.id,
+      label: updated.label,
+      before: pick(token, fields),
+      after: pick(updated, fields),
+    });
   }
 
   async function removeToken(tokenId) {
@@ -1728,8 +1853,11 @@ export default function Tabletop({ actor, players, offline }) {
       borderColor,
       size,
       imageUrl,
+      // `stats` carries the owner the form chose. It used to be overwritten
+      // with null here, which is why nothing in the app could hand a token to
+      // anybody — every permission check behind it worked, and nothing ever
+      // set the field they all read.
       ...stats,
-      ownerId: null,
       x: tokenForm.x,
       y: tokenForm.y,
     });
@@ -2041,6 +2169,11 @@ export default function Tabletop({ actor, players, offline }) {
             const ghost = ghosts[token.id];
             const pos = mine || ghost || token;
             const movable = canMove(token);
+            // Whose token this is. A token can name somebody who has since left
+            // the table, and an owner nobody can find is drawn as no owner at
+            // all rather than as a blank pip nobody can explain.
+            const owner = token.ownerId ? players.find((p) => p.id === token.ownerId) : null;
+            const ownedByMe = Boolean(owner) && owner.id === actor?.userId;
             // Warn while dragging over a square that's already taken, so the
             // refusal isn't a surprise at the moment of release.
             const blocked =
@@ -2063,7 +2196,7 @@ export default function Tabletop({ actor, players, offline }) {
                   blocked ? ' blocked' : ''
                 }${ghost && !mine ? ' remote' : ''}${
                   token.id === spotlitId ? ' spotlit' : ''
-                }`}
+                }${ownedByMe ? ' own' : ''}`}
                 style={{
                   // Tokens ride the grid rather than the picture: a token in a
                   // cell stays in that cell when the grid is moved onto the one
@@ -2090,6 +2223,20 @@ export default function Tabletop({ actor, players, offline }) {
                 {/* The picture stands in for the name. Printing both would put
                     text over a face at the size a token actually is. */}
                 {!token.imageUrl && <span className="token-label">{token.label}</span>}
+
+                {/* Whose it is, in their own colour — the same colour that
+                    names them in the chat and marks them in the roster, so the
+                    map can be read against either without learning a third
+                    thing. A pip rather than a border: `borderColor` is already
+                    the DM's to choose per token, and ownership must not quietly
+                    overrule a decision somebody made about how a token looks. */}
+                {owner && (
+                  <span
+                    className="token-owner"
+                    style={{ background: owner.color }}
+                    title={`${owner.name}'s token`}
+                  />
+                )}
               </div>
             );
           })}
@@ -2279,6 +2426,9 @@ export default function Tabletop({ actor, players, offline }) {
         <TokenTooltip
           anchor={hovered.el}
           token={hoveredToken}
+          owner={
+            hoveredToken.ownerId ? players.find((p) => p.id === hoveredToken.ownerId) : null
+          }
           showHp={isDm}
           status={
             ghosts[hoveredToken.id]
@@ -2299,15 +2449,46 @@ export default function Tabletop({ actor, players, offline }) {
             </>
           ) : menu.tokenId ? (
             <>
-              <button onClick={editToken}>Edit</button>
-              <button className="danger" onClick={askDeleteToken}>
-                Delete
+              {/* Editing everything about a token stays the DM's. What a player
+                  gets on their own token is what is theirs to say: what it
+                  rolled, and whether it's on the table at all. */}
+              {isDm && <button onClick={editToken}>Edit</button>}
+              <button
+                onClick={() => {
+                  setInitiativeFor(menuToken);
+                  setMenu(null);
+                }}
+              >
+                Set initiative
               </button>
+              {/* Above Delete and worded plainly, because these two look alike
+                  and one of them can't be undone. This is the reversible one. */}
+              <button onClick={benchToken}>Remove from table</button>
+              {isDm && (
+                <button className="danger" onClick={askDeleteToken}>
+                  Delete
+                </button>
+              )}
             </>
           ) : (
             <>
               <button onClick={ping}>Ping</button>
               <button onClick={focusEveryone}>Focus</button>
+              {/* Above Create token, and shown to anybody with a token of
+                  their own waiting: placing one you already have is the common
+                  act, and making a new one is the occasional one. Only when
+                  there is something to place — an empty list behind a menu item
+                  is a promise the menu couldn't keep. */}
+              {placeable.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSpawnAt(cellAt(menu.mx, menu.my));
+                    setMenu(null);
+                  }}
+                >
+                  Place Token
+                </button>
+              )}
               {isDm && <button onClick={openTokenModal}>Create token</button>}
               {/* Below the line: not things to do to the map, but things to do
                   to what you have already done to it. Everyone has these — a
@@ -2355,9 +2536,29 @@ export default function Tabletop({ actor, players, offline }) {
         />
       )}
 
+      {initiativeFor && (
+        <InitiativeModal
+          token={initiativeFor}
+          onSubmit={saveInitiative}
+          onClose={() => setInitiativeFor(null)}
+        />
+      )}
+
+      {spawnAt && (
+        <SpawnModal
+          bench={placeable}
+          owners={players}
+          onPick={spawnFromBench}
+          onClose={() => setSpawnAt(null)}
+        />
+      )}
+
       {tokenForm && (
         <TokenModal
           token={tokenForm.token}
+          // Who there is to hand a token to: this table's members, which is the
+          // same list the Players tab reads.
+          players={players}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />

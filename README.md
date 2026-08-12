@@ -96,15 +96,18 @@ The app is in one of two modes, and the tab bar shows only the one you're in:
 
 | | Tabs |
 | --- | --- |
-| **Outside** a campaign | Campaigns, People |
-| **Inside** one | Tabletop, Characters, Notes, Music, Close campaign |
+| **Outside** a campaign | Campaigns, Users, My account |
+| **Inside** one | Tabletop, Characters, Notes, Music *(DM)*, Tokens, Players, Close campaign |
 
-Tabletop, Characters, Notes, Music and the chat are views onto a *single*
-campaign's data, so without one there is nothing for them to be views of — the
-tabs aren't greyed out, they're absent, and the chat column doesn't reserve its
-space either. Campaigns and People are the mirror image: they belong to the
-shell rather than to any table, so while you're at one the way back is **Close
-campaign**, not a tab sitting alongside its own contents.
+The inside tabs and the chat are views onto a *single* campaign's data, so
+without one there is nothing for them to be views of — the tabs aren't greyed
+out, they're absent, and the chat column doesn't reserve its space either. The
+outside ones are the mirror image: they belong to the shell rather than to any
+table, so while you're at one the way back is **Close campaign**, not a tab
+sitting alongside its own contents.
+
+Music is the DM's alone — for everyone else the soundtrack is scenery, and a
+playlist they could read would name what they're only meant to hear.
 
 Because of that the app always starts **outside** any campaign. It deliberately
 doesn't reopen the one you had last: that would drop you inside a table on
@@ -176,6 +179,12 @@ the old address: the person losing it is the one who gets to agree.
 
 An account with no address on file has only the code. That's the same bargain it
 made when it registered without one.
+
+A new password is typed twice, because a password field shows you nothing and a
+typo in a change you confirm by email is a lockout that only becomes apparent
+later, at the sign-in screen, with no way back to the password you meant. The
+two are compared untrimmed: a space at either end is a character like any other,
+and quietly removing it would set a password you could never type again.
 
 ### Sending mail
 Nothing is sent unless you configure SMTP, and you don't need an account with
@@ -273,12 +282,20 @@ Two separate steps, because they answer two different questions.
 code is what stops an open registration endpoint on a tunnel-exposed machine
 being an invitation to anyone who finds the URL.
 
-The **Users** tab lists who has registered. Everyone signed in can read it —
-it's the same list a DM reads when picking members, and it carries names and
-colours and nothing else; the server strips email, password hash and the rest
-before it leaves. Only the admin sees a way to remove anybody, and the routes
-behind it refuse everyone else regardless of what the page draws. It doesn't
-mint accounts and doesn't hand out credentials.
+The **Users** tab lists who has registered, with a green dot for the people
+connected right now and a red one for everybody else, and a **Last online**
+column reading "5 minutes ago" or "last week" for the ones who aren't. Presence
+is read from the live sockets on every request and stored nowhere — a saved copy
+would survive a crash as a list of people the server *believes* are connected —
+while `lastSeenAt` is written when a connection opens and again when it closes,
+which is a different question from `lastLoginAt` and parts company with it the
+moment somebody leaves a tab open for a fortnight.
+
+Everyone signed in can read the list — it's the same one a DM reads when picking
+members, and it carries names and colours and nothing else; the server strips
+email, password hash and the rest before it leaves. Only the admin sees a way to
+remove anybody, and the routes behind it refuse everyone else regardless of what
+the page draws. It doesn't mint accounts and doesn't hand out credentials.
 
 **Getting them to your table** is the DM's job: **Campaigns → Members**, and
 pick Player or DM for each person. Being on the server gets you nothing on its
@@ -290,15 +307,37 @@ appeal to.
 
 ## Tabletop
 The **Tabletop** tab holds scenes: a map image, a grid, and tokens. The DM picks
-maps and creates tokens; dragging is live — everyone sees a token move as it
-moves. Everything a DM does to a scene's tokens happens through the map's own
-right-click menu.
+maps; dragging is live — everyone sees a token move as it moves. Almost
+everything done to a scene's tokens happens through the map's own right-click
+menu.
 
 A token carries an `ownerId`, and a player may drag a token that belongs to
-them — but **nothing in the UI assigns one**. Tokens made through the right-click
-menu are unowned, so today they are DM/NPC tokens. The field is still honoured
-by every permission check and by the API; this is a missing form, not a missing
-feature.
+them. The token form's **Belongs to** picker is what hands one over: choose a
+member of this table, or "Nobody", which is what scenery and monsters are. Only
+the DM sees that field, because handing a token to somebody is theirs alone.
+
+What an owner may then do to their own token is a short list, and it is the
+whole of what a player can do to the board:
+
+| | Owner | DM |
+| --- | --- | --- |
+| Drag it about | ✅ | any token |
+| Set its initiative | ✅ | any token |
+| Take it off the table | ✅ | any token |
+| Place it from the cast list | ✅ | any token |
+| Rename, recolour, resize | their own, from the Tokens tab | any token |
+| Assign it to somebody | — | ✅ |
+| Delete it for good | their own, from the Tokens tab | ✅ |
+
+Ownership is readable on the map without asking anyone. A token that belongs to
+somebody carries a small pip in **their** colour — the same colour that names
+them in the chat and marks them in the roster — and **your own** tokens also
+carry a pale ring inside the edge. Those answer two different questions: whose
+is that, and which of these is mine. The hover tooltip names the owner outright.
+
+The pip is deliberately not the token's border: `borderColor` is the DM's to
+choose per token, and ownership must not quietly overrule a decision somebody
+made about how a token looks.
 
 ### Maps
 Two ways to give a scene a background:
@@ -348,7 +387,7 @@ The map runs to the bottom of the window, finishing level with the chat column
 beside it, rather than stopping at a fixed fraction of the screen.
 
 ### Right-click menus
-Right-clicking the **map** offers three things:
+Right-clicking the **map** offers:
 
 - **Ping** — coloured rings pulse at that spot on everyone's screen for a couple
   of seconds, in your own colour. Any member may ping.
@@ -358,6 +397,10 @@ Right-clicking the **map** offers three things:
   spot ends up off-centre rather than the map being padded with nothing. Anyone
   reading a *different* scene is left alone: moving their view to somewhere they
   can't see would be motion with no meaning.
+- **Place Token** — put a token you already have onto this spot. The DM is
+  offered every token in the campaign that isn't standing somewhere; everyone
+  else is offered their own. Only shown when there is something to place, since
+  an empty list behind a menu item is a promise the menu can't keep.
 - **Create token** (DM only) — a form for name, colour and size. It never asks
   for a position, because the right-click already answered that; the token
   appears where you clicked, sliding to the first free cell if that one is
@@ -367,12 +410,36 @@ Right-clicking the **map** offers three things:
   hidden when there's nothing left to take back, so where they *are* stays worth
   knowing. **Ctrl+Z** and **Ctrl+Shift+Z** do the same. See below.
 
-Right-clicking a **token** offers **Edit** — the same form, prefilled — and
-**Delete**, which removes it at once with no confirmation. Editing sends only
-name, colour and size, so the token keeps where it stands and who owns it. Both
-are DM-only, because the routes behind them are: offering a player a button that
-comes back 403 is worse than not offering it, so they keep the browser's own
-menu on a token.
+Right-clicking a **token** offers:
+
+- **Edit** (DM only) — the same form, prefilled.
+- **Set initiative** — what this creature rolled, as a total or as a die plus a
+  modifier. Open to the token's owner, because what you rolled is yours to say.
+  It's a route of its own rather than a hole in the DM's edit: a form that can
+  only reach three numbers can't grow a fourth by accident, and a player using
+  it cannot rename their token through it.
+- **Remove from table** — takes the token off this map and keeps it. Open to the
+  owner. See below.
+- **Delete** (DM only) — gone for good, at once, with no confirmation.
+
+The last two look alike and only one can be undone, which is why the reversible
+one is listed above the permanent one and named for what it does.
+
+A player gets this menu on **their own** tokens only; on anybody else's they
+keep the browser's own. Offering somebody a button that comes back 403 is worse
+than not offering it.
+
+### Off the table, but not gone
+**Remove from table** doesn't delete anything. The token moves to the campaign's
+own list of tokens and waits there — with its name, its picture, its owner, and
+the hit points and initiative it earned in play. A character parked between
+sessions comes back wounded, and comes back wherever you like: the same map or a
+different one.
+
+A token is therefore in exactly one place at any moment — standing on a scene,
+or waiting off one — and keeps its id across the move, which is what lets it
+keep its sheet link and its identity. It survives the deletion of the scene it
+came from, because the list belongs to the campaign rather than to any map.
 
 Positions in both signals travel as **map pixels**, not screen coordinates and
 not cells — screen coordinates would send people with different window sizes to
@@ -466,6 +533,51 @@ can't keep.
 Movement is deliberately split in two: while you drag, positions go over the
 WebSocket only and never touch the disk; on drop, one request persists the final
 square. A drag would otherwise mean dozens of file writes a second.
+
+## Tokens
+The **Tokens** tab holds two things that share a word, one above the other.
+
+### The artwork library
+Every picture that can go on a token, read straight off `public/tokens/` —
+nearly two thousand of them in nested folders. Browse by folder or search across
+the lot by name. Everyone at the table can read it: knowing what art exists is
+not the DM's secret, and a player who has seen it can ask for the right goblin
+by name rather than describing it.
+
+Adding art is a file copy. The listing is cached for a minute, so new pictures
+appear without a restart, and thumbnails load only as they come into view.
+
+The first look at it fetches a list of every file, which is the one genuinely
+large answer in this app — so it says so while it loads, and doesn't block
+anything else while it does. The list is then remembered for the rest of the
+visit.
+
+### This campaign's tokens
+Below the library: the actual pieces this table plays with, made in advance of
+needing them. Each belongs to somebody, and each is either standing on a map or
+waiting to be placed on one — the row says which, naming the scene.
+
+| | Player | DM |
+| --- | --- | --- |
+| Sees | their own tokens | every token in the campaign |
+| Creates | **one** — after that the button is gone | as many as they like |
+| Edits, deletes | their own | anybody's |
+| Assigns an owner | — | any token |
+
+The one-token limit counts who **created** a token, not who owns one. A DM
+handing you a second character shouldn't cost you the right to have made your
+own, and being given three tokens shouldn't mean you were never allowed one — so
+a token remembers both `createdBy` and `ownerId`, and they answer different
+questions.
+
+**No hit points and no initiative here.** Those are decided in the moment, on
+the tabletop, by whoever is looking at the fight — this form is about what a
+token *is*, not what it is doing. Values earned in play ride along untouched by
+anything on this screen.
+
+Editing works wherever the token is. Rename one that's standing on a map and it
+keeps its square, its wounds and its place in the turn order; the map shows the
+new name at once.
 
 ## Character sheets
 
@@ -676,6 +788,26 @@ credentials file.
 - **The table is only up while the tunnel is.** Close it and the site is gone —
   that's the design, not a failure. Friends who've loaded it keep a read-only
   cached view.
+
+### When it decides you're offline
+The read-only cached view is what everyone falls back to when the server can't
+be reached, so what counts as "can't be reached" matters. It is an HTTP request
+actually failing — not the WebSocket dropping.
+
+The two used to share a flag, and that was a real fault on a busy tunnel: a
+connection carrying a few hundred token thumbnails starves the socket's
+heartbeat long before it troubles a request, so a live socket timing out emptied
+the whole app into its cache while everything was in fact working. A dropped
+socket now means *live updates have stopped*, and prompts one small request to
+find out about the rest. A server that really has gone still lands you in the
+cached view a moment later — it just has to be true first.
+
+Responses are gzipped on the way out, which matters most on that same link:
+`cloudflared` forwards the browser's `Accept-Encoding`, so without it the hop
+from this server to Cloudflare carries every byte uncompressed. Artwork is left
+alone (a `.webp` comes out of gzip larger than it went in) and so is anything
+under `/api/auth`, where a response carrying a session token beside a
+caller-chosen username is the shape BREACH reads secrets from.
 
 ## Putting it online (Render)
 The tunnel needs your PC switched on. To have the table reachable all the time,
@@ -897,5 +1029,13 @@ configuration rather than anything stored on the account.
 16. ✅ My account: change your shown name, password and email — the last two
     confirmed by an emailed link, or by the signup code
 17. ✅ Invite links removed: registration and sessions are the only way in
-18. ⬜ Assign a token to a player from the UI (`ownerId` exists; no form does)
-19. ⬜ Restore a backup through the app, so `/api/admin/backup` round-trips
+18. ✅ Assign a token to a player from the UI, so per-player ownership is reachable
+19. ✅ A campaign's own tokens: made in advance, taken off the table without
+    being destroyed, and placed again on any map
+20. ⬜ Password recovery, so a forgotten password isn't a deleted account
+21. ⬜ The test suites in the repo, behind `npm test`
+22. ⬜ Restore a backup through the app, so `/api/admin/backup` round-trips
+
+**[NEXT-STEPS.md](NEXT-STEPS.md)** takes the remaining ones in order and says what
+each involves, what's already built underneath it, and how we'd know it was
+finished.

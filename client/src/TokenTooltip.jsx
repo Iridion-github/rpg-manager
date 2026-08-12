@@ -20,7 +20,7 @@ const GAP = 10;
 // Closest the bubble may come to the window's edge before it is pushed back in.
 const MARGIN = 4;
 
-export default function TokenTooltip({ anchor, token, showHp, status }) {
+export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
   const ref = useRef(null);
 
   /**
@@ -66,6 +66,19 @@ export default function TokenTooltip({ anchor, token, showHp, status }) {
   return createPortal(
     <div className="token-tip" ref={ref} role="tooltip">
       <strong>{token.label}</strong>
+
+      {/* Whose it is, said in words. The colour on the token itself is the
+          glance; this is the answer when the glance isn't enough — two players
+          with similar colours, or somebody new to the table. */}
+      {owner && (
+        <span className="token-tip-row">
+          Belongs to{' '}
+          <b>
+            <span className="token-tip-swatch" style={{ background: owner.color }} />
+            {owner.name}
+          </b>
+        </span>
+      )}
 
       {hasInitiative && (
         <span className="token-tip-row">

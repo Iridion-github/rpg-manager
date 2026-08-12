@@ -1092,6 +1092,39 @@ button.linky:hover {
   transition: left 0.06s linear, top 0.06s linear;
 }
 
+/* --- whose token is whose ---
+   A pip in the owner's own colour, sitting on the token's edge. Their colour is
+   already what names them in the chat and marks them in the roster, so the map
+   can be read against either without learning a third thing.
+
+   A pip rather than a border: `borderColor` is the DM's to choose per token,
+   and ownership must not quietly overrule a decision somebody made about how a
+   token looks. Sized in pixels rather than as a fraction of the token, because
+   it has to stay legible on a half-cell rat and not become a dinner plate on a
+   size-3 giant. */
+.token-owner {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  border: 2px solid #10131a;
+  box-sizing: content-box;
+  pointer-events: none;
+}
+
+/* Your own, marked more strongly than anyone else's: a player scanning a busy
+   map is looking for one token, and "which of these is mine" is the question
+   the board gets asked most. Inside the token rather than around it, so it
+   can't be mistaken for the outlines that mean something is happening — a
+   remote drag, a refused drop, a spotlight from the turn list. */
+.token.own {
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.85),
+    0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
 /* Hovering a square that's already taken — this drop will be refused. */
 /* Hovering a row in the turn tracker lights its token up on the map. Placed
    after the dashed remote-drag ring so it wins that one — while you are
@@ -3103,6 +3136,133 @@ button.token-tile:hover {
 
 .shape-erase {
   margin-top: 0.2rem;
+}
+
+/* The owner's colour beside their name in a token's tooltip — the same mark as
+   the pip on the token, so the two are plainly the same fact. */
+.token-tip-swatch {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+
+/* --- the campaign's own tokens ---
+   Below the artwork library and separated from it by a rule, because they are
+   two different things that share a word: pictures, and the pieces this table
+   plays with. */
+.campaign-tokens {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #262b38;
+  max-width: 900px;
+}
+
+.cast-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.cast-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+}
+
+/* The face it wears on the board, so a row is recognised the way the map is. */
+.cast-face {
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+}
+
+.cast-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cast-who small {
+  color: #8b90a0;
+  font-size: 0.76rem;
+}
+
+/* The owner's own colour, the same mark the map puts on their tokens. */
+.cast-owner-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  margin-right: 0.3rem;
+  vertical-align: 0;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+}
+
+/* --- putting a token back on the table --- */
+.spawn-modal {
+  max-width: 26rem;
+}
+
+.spawn-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  /* Long enough to hold a party and their monsters without the dialog running
+     off the screen. */
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.spawn-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  padding: 0.4rem 0.55rem;
+}
+
+.spawn-list button:hover {
+  background: #24304a;
+  border-color: #35406a;
+}
+
+/* The face it will wear on the board, so the list is read by recognition
+   rather than by name. */
+.spawn-face {
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+}
+
+.spawn-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.spawn-who small {
+  color: #8b90a0;
+  font-size: 0.75rem;
 }
 
 /* --- roll results --- */

@@ -230,6 +230,19 @@ export const api = {
   moveToken: (sceneId, tokenId, x, y) =>
     put(table(`/scenes/${sceneId}/tokens/${tokenId}/position`), { x, y }),
   deleteToken: (sceneId, tokenId) => del(table(`/scenes/${sceneId}/tokens/${tokenId}`)),
+  // The three writes an owner may make to their own token: where it stands,
+  // what it rolled, and whether it's on the table at all.
+  setInitiative: (sceneId, tokenId, roll) =>
+    put(table(`/scenes/${sceneId}/tokens/${tokenId}/initiative`), roll),
+  benchToken: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/tokens/${tokenId}/bench`), {}),
+  spawnToken: (sceneId, tokenId, x, y) =>
+    post(table(`/scenes/${sceneId}/tokens/from-bench`), { tokenId, x, y }),
+  // This campaign's cast: every token the caller may see, whether it is
+  // standing on a scene (sceneId set) or waiting off one (sceneId null).
+  listCampaignTokens: () => get(table('/tokens')),
+  createCampaignToken: (data) => post(table('/tokens'), data),
+  updateCampaignToken: (tokenId, data) => put(table(`/tokens/${tokenId}`), data),
+  deleteCampaignToken: (tokenId) => del(table(`/tokens/${tokenId}`)),
 
   // The drawing layer. Anyone playing may add one; the server decides whose is
   // whose from the session, so there is no owner to pass here.

@@ -19,6 +19,11 @@ secrets/
 # Personal scratch — half-formed ideas, not documentation.
 notes.txt
 
+# Where a Claude session leaves its context for the next one to pick up. A
+# handoff note between sittings, not a record of the project — what matters
+# ends up in the README, the code comments, or NEXT-STEPS.md.
+last-session.txt
+
 # Your real tunnel config names your hostname and points at credentials.
 # config.example.yml is the one that's committed.
 cloudflared/config.yml
