@@ -1186,16 +1186,17 @@ button.linky:hover {
   pointer-events: none;
 }
 
-/* Your own, marked more strongly than anyone else's: a player scanning a busy
-   map is looking for one token, and "which of these is mine" is the question
-   the board gets asked most. Inside the token rather than around it, so it
-   can't be mistaken for the outlines that mean something is happening — a
-   remote drag, a refused drop, a spotlight from the turn list. */
-.token.own {
-  box-shadow:
-    inset 0 0 0 3px rgba(255, 255, 255, 0.85),
-    0 2px 6px rgba(0, 0, 0, 0.5);
-}
+/* There was a second marker here: a white ring inside your *own* tokens, on the
+   theory that "which of these is mine" is the question a player asks most. It
+   is gone, because it answered that question by talking over a different one.
+   With no border chosen it read as a white border nobody had asked for, and
+   with one chosen it drew a second ring inside the first — so a token the DM
+   had deliberately outlined in green came out green-on-white, which looks like
+   a rendering fault rather than a fact about ownership.
+
+   The pip is enough. On your own token it is your own colour, which is the
+   colour naming you in the chat and marking you in the roster, so "mine" is
+   still readable at a glance without the map having to shout it. */
 
 /* Hovering a square that's already taken — this drop will be refused. */
 /* Hovering a row in the turn tracker lights its token up on the map. Placed

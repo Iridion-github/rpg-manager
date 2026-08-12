@@ -382,13 +382,19 @@ whole of what a player can do to the board:
 
 Ownership is readable on the map without asking anyone. A token that belongs to
 somebody carries a small pip in **their** colour — the same colour that names
-them in the chat and marks them in the roster — and **your own** tokens also
-carry a pale ring inside the edge. Those answer two different questions: whose
-is that, and which of these is mine. The hover tooltip names the owner outright.
+them in the chat and marks them in the roster — so on your own tokens the pip is
+yours, and "which of these is mine" is answered by the same mark that answers
+"whose is that". The hover tooltip names the owner outright.
 
 The pip is deliberately not the token's border: `borderColor` is the DM's to
 choose per token, and ownership must not quietly overrule a decision somebody
 made about how a token looks.
+
+Your own tokens briefly carried a second marker as well — a pale ring inside the
+edge — and it is gone. It broke the rule in the paragraph above by the back door:
+on a token with no border chosen it read as a white border nobody had asked for,
+and on one the DM had outlined in a colour it drew a second ring inside the
+first, which looks like a rendering fault rather than a fact about ownership.
 
 ### Maps
 Two ways to give a scene a background:

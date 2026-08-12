@@ -12,15 +12,20 @@ new**, and prefer the thing a player at the table would notice.
 ## 1. Assign a token to a player — ✅ done
 
 Built. A **Belongs to** picker in the token form, the owner's colour as a pip on
-the token, a white ring on your own, and the owner named in the hover tooltip.
-No server change was needed: `sanitizeToken` already accepted and validated
-`ownerId`, which was the whole point — the field every check read was the one
-field nothing ever set.
+the token, and the owner named in the hover tooltip. No server change was needed:
+`sanitizeToken` already accepted and validated `ownerId`, which was the whole
+point — the field every check read was the one field nothing ever set.
 
-The open question below was settled this way: **both**. A pip in the owner's
-colour says *whose* to everybody, and a ring inside the token says *yours* to
-you. They're different questions and a player asks the second one far more
-often.
+The open question below was settled as **both** — a pip for *whose*, a ring
+inside your own for *yours* — and the ring was **taken out again** once it met a
+real board. It could not tell itself apart from a border: with no border chosen
+it looked like a white one nobody had asked for, and with one chosen it sat
+inside it as a second ring, so a token deliberately outlined in colour came out
+looking broken. The answer is the pip alone, which on your own token is your own
+colour and so answers both questions with one mark.
+
+The lesson is worth keeping: an ownership marker that shares an edge with the
+DM's `borderColor` will be read as `borderColor`, however it is drawn.
 
 <details>
 <summary>The original plan, kept for the record</summary>

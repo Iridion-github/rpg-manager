@@ -53,15 +53,40 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * change it and it is the one field that hands something over.
  */
 function sanitizeLook(body = {}, existing = {}) {
+  /**
+   * Did the caller mention this field at all?
+   *
+   * The distinction this exists to make: **saying null is not the same as
+   * saying nothing**. For `borderColor`, null is a real answer — "no colour,
+   * draw the default dark ring" — and it is exactly what the form sends when
+   * the border checkbox is unticked.
+   *
+   * This used to be written with `??`, which cannot tell the two apart: it
+   * falls through on null as readily as on undefined, so `body.borderColor ??
+   * existing.borderColor` read an explicit "remove the border" as silence and
+   * handed back the colour already on the token. Removing a border from the
+   * Tokens tab was therefore impossible — the request was accepted, answered
+   * 200, and changed nothing. `hasOwnProperty` asks the question actually being
+   * asked, which is about the *key*, not about its value.
+   *
+   * The tabletop's own editor (routes/scenes.js) never had the bug: it uses
+   * destructuring defaults, which fire only on undefined and so let a null
+   * through intact.
+   */
+  const said = (key) => Object.prototype.hasOwnProperty.call(body, key);
+  const pick = (key, fallback) => (said(key) ? body[key] : fallback);
+
   return {
-    label: String(body.label ?? existing.label ?? 'Token').slice(0, 60),
-    color: hexOr(body.color ?? existing.color, '#58a6ff'),
-    borderColor:
-      (body.borderColor ?? existing.borderColor) === null
-        ? null
-        : hexOr(body.borderColor ?? existing.borderColor, null),
-    imageUrl: String(body.imageUrl ?? existing.imageUrl ?? '').slice(0, 500),
-    size: clamp(num(body.size ?? existing.size, 1), 0.5, 10),
+    label: String(pick('label', existing.label) ?? 'Token').slice(0, 60),
+    color: hexOr(pick('color', existing.color), '#58a6ff'),
+    // No null branch needed: hexOr already answers null for anything that isn't
+    // a colour, which includes the null meaning "no border".
+    borderColor: hexOr(pick('borderColor', existing.borderColor), null),
+    imageUrl: String(pick('imageUrl', existing.imageUrl) ?? '').slice(0, 500),
+    // `?? 1` before num(), because Number(null) is 0 rather than NaN — so a null
+    // size would slip past the finite check and be clamped to the minimum
+    // instead of falling back to one cell.
+    size: clamp(num(pick('size', existing.size) ?? 1, 1), 0.5, 10),
   };
 }
 

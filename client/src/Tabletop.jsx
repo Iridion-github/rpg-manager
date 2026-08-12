@@ -2696,7 +2696,6 @@ export default function Tabletop({ actor, players, offline }) {
             // the table, and an owner nobody can find is drawn as no owner at
             // all rather than as a blank pip nobody can explain.
             const owner = token.ownerId ? players.find((p) => p.id === token.ownerId) : null;
-            const ownedByMe = Boolean(owner) && owner.id === actor?.userId;
             // Warn while dragging over a square that's already taken, so the
             // refusal isn't a surprise at the moment of release.
             const blocked =
@@ -2715,11 +2714,13 @@ export default function Tabletop({ actor, players, offline }) {
                 // Read back by the right-click handler: the event knows which
                 // element was hit, not which token that element stands for.
                 data-token-id={token.id}
+                // No 'own' class any more: the ring it drew inside your own
+                // tokens read as an unasked-for white border, and as a second
+                // border inside whichever one the DM had chosen. The pip below
+                // says whose a token is, and on yours it is your own colour.
                 className={`token${movable ? ' movable' : ''}${mine ? ' dragging' : ''}${
                   blocked ? ' blocked' : ''
-                }${ghost && !mine ? ' remote' : ''}${
-                  token.id === spotlitId ? ' spotlit' : ''
-                }${ownedByMe ? ' own' : ''}`}
+                }${ghost && !mine ? ' remote' : ''}${token.id === spotlitId ? ' spotlit' : ''}`}
                 style={{
                   // Tokens ride the grid rather than the picture: a token in a
                   // cell stays in that cell when the grid is moved onto the one

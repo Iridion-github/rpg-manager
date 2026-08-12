@@ -128,6 +128,13 @@ function sanitizeToken(body = {}, existing = {}) {
     // Null means "whatever the stylesheet draws" — the dark ring every token
     // had before this was a choice. Kept nullable so old tokens don't have to
     // be migrated into an explicit colour they never picked.
+    //
+    // Note that these are *destructuring defaults*, which apply only when the
+    // key is absent or undefined. That is load-bearing here: an explicit null
+    // has to survive, because it is how the form says "remove the border".
+    // Rewriting this row as `body.borderColor ?? existing.borderColor` would
+    // look equivalent and quietly make removal impossible — which is precisely
+    // the bug the Tokens tab had (see sanitizeLook in routes/campaignTokens.js).
     borderColor = existing.borderColor ?? null,
     // A token's face. Empty means it shows its name instead.
     imageUrl = existing.imageUrl ?? '',
