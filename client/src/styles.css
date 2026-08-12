@@ -837,6 +837,78 @@ button.linky:hover {
   pointer-events: none;
 }
 
+/* --- the ruler ---
+   Over everything, and deaf to the pointer. A shape is ground and belongs under
+   the tokens; a measurement is a question *about* the tokens, and one hidden
+   behind the ogre you were measuring to has not been answered. Nothing in here
+   is clickable: the right-click menu works out what was hit from the
+   coordinates instead, because a two-pixel line is not a thing a hand can aim
+   at, and because a layer over the whole board that ate clicks would be a layer
+   that broke the board. */
+.measure-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* While the ruler is out the map is read, not handled. The cursor says so
+   before the first click does. */
+.surface.measuring {
+  cursor: crosshair;
+}
+
+.surface.measuring .token,
+.surface.measuring .shape [data-grip] {
+  pointer-events: none;
+}
+
+/* Each chain carries its owner's colour in --ink, so two people measuring at
+   once are telling each other apart without a label. */
+.measure-line {
+  fill: none;
+  stroke: var(--ink, #ffd479);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* A dark seam under the bright line, so it survives a pale map. Cheaper than
+     drawing every line twice and does the same job. */
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+.measure-pending {
+  opacity: 0.75;
+}
+
+.measure-dot {
+  fill: var(--ink, #ffd479);
+  stroke: #10131a;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+/* Painted twice over: a dark stroke behind the glyphs and the fill on top. A
+   number that can land on anything from a snowfield to a dungeon floor needs to
+   carry its own contrast, and paint-order is what lets one element do it. */
+.measure-text {
+  fill: #ffffff;
+  stroke: #10131a;
+  paint-order: stroke;
+  stroke-linejoin: round;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-weight: 600;
+  /* The map is a picture; letters on it should never be selectable text that a
+     drag across the board turns blue. */
+  user-select: none;
+}
+
+/* The chain's running total, which is the answer to the question actually being
+   asked. Tinted to its owner's colour so it reads as part of that ruler rather
+   than as one more leg. */
+.measure-sum {
+  fill: var(--ink, #ffd479);
+}
+
 /* --- the centre mark ---
    A dot on the shape's own centre with half a turn drawn clockwise around it,
    arrowhead at the end so which way it goes can be read without moving
@@ -3116,7 +3188,9 @@ button.token-tile:hover {
 }
 
 .shape-field input[type='range'],
-.shape-field input[type='text'] {
+.shape-field input[type='text'],
+.shape-field input[type='number'],
+.shape-field select {
   flex: 1;
   min-width: 0;
 }
@@ -3151,6 +3225,35 @@ button.token-tile:hover {
 
 .shape-check > span {
   width: auto;
+}
+
+/* --- the measuring panel ---
+   The drawing box's shape and spacing, with two things of its own. */
+.measure-shared-note {
+  margin: -0.35rem 0 0;
+  font-size: 0.78rem;
+}
+
+/* The number the whole panel exists to produce, so it is the one thing in here
+   set apart from the rows of controls and the one thing given size. */
+.measure-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  background: #171b24;
+  font-size: 0.8rem;
+  color: #8b90a0;
+}
+
+.measure-total strong {
+  font-size: 1.05rem;
+  color: #e7e9ee;
+  font-variant-numeric: tabular-nums;
 }
 
 .shape-state {

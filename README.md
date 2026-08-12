@@ -480,6 +480,10 @@ A player gets this menu on **their own** tokens only; on anybody else's they
 keep the browser's own. Offering somebody a button that comes back 403 is worse
 than not offering it.
 
+While **measuring mode** is on, both of these are replaced by a menu about the
+ruler — the board is inert, so a menu offering to edit a token you can't even
+drag would be describing a different mode. See *Measuring* below.
+
 ### Off the table, but not gone
 **Remove from table** doesn't delete anything. The token moves to the campaign's
 own list of tokens and waits there — with its name, its picture, its owner, and
@@ -560,6 +564,66 @@ Shapes are measured in **cells**, like tokens, so they keep their meaning when
 the grid is retuned. Anyone playing may draw; what you drew stays yours to
 change, and the DM may change anyone's — the same ownership rule tokens have.
 
+### Measuring
+**Tools → Measuring mode** opens a ruler. Left-click the map to drop a point;
+every point after the first measures back to the one before it, and the leg's
+distance is written beside the line. A chain of three or more also carries its
+running total at the far end, and the panel adds up everything on the board
+under **Total distance**. The leg you're still deciding follows the pointer as a
+dashed line, labelled, so the number you're about to commit to is the one you're
+already reading.
+
+**Escape ends the line**, and the next click starts a separate one. Press it
+again with no line open and the window closes, which is the same key doing the
+same thing twice: put the pen down, then put the box away.
+
+Points land in the **middle of the cell** you clicked, and diagonals are counted
+the **5e** way — a diagonal step costs exactly what a straight one does, so three
+across and two down is three cells rather than 3.6. Between them those two
+decisions mean every distance is a whole number of cells: the only question a leg
+asks is *which cell*, so the answer is never a fraction of a hand's width.
+
+| Unit | One cell is |
+| --- | --- |
+| Cells | 1 |
+| Feet | 5 |
+| Meters | 1.5 |
+
+The scale is editable — a map drawn at ten feet to the square is a normal thing
+to be handed — and changing the unit brings that unit's own default with it,
+rather than silently reinterpreting the number that was there.
+
+**Shared** is off by default. On, everyone at the table sees your ruler in your
+own colour, and the labels read the way *yours* do: the unit and the scale travel
+with the measurement, so a line can't say 15 ft on one screen and 4.5 m on
+another. Off, nothing is sent anywhere at all.
+
+While measuring, the board is inert — no dragging tokens, no picking up shapes,
+no token menus. That's the mode rather than a side effect of it: a ruler is used
+*over* a board you're reading, and a click that measured sometimes and moved an
+ogre other times is a ruler nobody would trust near a crowded map. Right-drag
+still moves your view, and the wheel still zooms.
+
+Right-click offers what you actually pointed at: **Delete this point** on a
+point, **Delete entire measurement** on a point or the line between two, and
+**Delete all measurements** on bare map. Ctrl+Z takes any of it back.
+
+**The grid switches itself on, locally.** Counting cells you can't see is
+guessing, but `gridOn` belongs to the *scene* — it's saved, it's the same for
+everybody, and only the DM may change it. So the grid is drawn on your own screen
+instead, for as long as there's a measurement to read against, and for exactly
+the people who can see that measurement: you, plus everyone else if it's shared.
+Nothing is written and nothing is sent; when the last ruler goes, the grid goes
+back to whatever the scene actually says.
+
+Nothing here is saved, by design. A measurement is a question somebody asked out
+loud — *can I reach him from here?* — and the answer stops being interesting the
+moment it's been given. Closing the window discards every measurement, and it
+takes their undo entries with it. Like pings and focus pulls, a shared ruler
+lives entirely on the socket and never touches the disk; if the person measuring
+drops off, the server takes their ruler off everyone else's board rather than
+leaving it stranded there.
+
 ### Undo and redo
 The map's right-click menu carries **Undo** and **Redo**, and **Ctrl+Z** /
 **Ctrl+Shift+Z** do the same while the tabletop is on screen. (A browser can't
@@ -567,8 +631,14 @@ tell the left Shift from the right one on a keypress, so either hand redoes.)
 Both are ignored while you're typing in a text box, which keeps its own undo.
 
 It reaches token moves, creations, edits and deletions; scene changes — cell
-size, grid on/off, grid position, map image, name; and everything on the drawing
-layer, with a cleared board coming back in one step.
+size, grid on/off, grid position, map image, name; everything on the drawing
+layer, with a cleared board coming back in one step; and measuring, point by
+point.
+
+Measuring is the one thing on that list that can stop existing while the tab
+stays open: leaving the mode throws every ruler away, so its entries are dropped
+at the same moment. Otherwise a Ctrl+Z ten minutes later would reach past a token
+move to redraw a tape measure in a mode that is switched off.
 
 Two rules make it safe at a shared table. The stack lives **in your browser
 tab**, so it only ever holds your own actions — there is no way to reach

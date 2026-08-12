@@ -8,6 +8,18 @@ import TokenTooltip from './TokenTooltip.jsx';
 import InitiativeModal from './InitiativeModal.jsx';
 import SpawnModal from './SpawnModal.jsx';
 import ShapeTools from './ShapeTools.jsx';
+import MeasureTools from './MeasureTools.jsx';
+import {
+  cellCentre,
+  cellsBetween,
+  formatDistance,
+  labelSpot,
+  legsOf,
+  pointIndexAt,
+  totalCells,
+  touches,
+  unitNamed,
+} from './measure.js';
 import {
   DEFAULT_STYLE,
   angleTo,
@@ -28,7 +40,7 @@ import {
   turnedTo,
 } from './shapes.js';
 import { initiativeText, turnOrderOf } from './initiative.js';
-import { canRedo, canUndo, redo, subscribe, undo } from './history.js';
+import { canRedo, canUndo, forget, record, redo, subscribe, undo } from './history.js';
 import {
   matches,
   pick,
@@ -66,6 +78,19 @@ const SHAPE_STYLE_KEY = 'rpg:shape-style';
 // How long a shape's sliders settle before the change is saved. The same
 // bargain the grid slider makes: one write per adjustment, not per pixel.
 const SHAPE_SAVE_MS = 400;
+
+// How the ruler was last set up. Which unit a table counts in is a fact about
+// the campaign that doesn't change from one evening to the next, so having to
+// say it again every time the box is opened would be a small tax on every use.
+const MEASURE_KEY = 'rpg:measure-setup';
+
+// How near a right-click has to land, in cells, to be about a measurement
+// rather than about the bare map — and, inside that, to be about one of its
+// points rather than the line between two. The point radius is the smaller
+// because it sits *on* the line: a hand aiming at the line near a point would
+// otherwise always be told it meant the point.
+const MEASURE_GRAB = 0.4;
+const MEASURE_POINT_GRAB = 0.25;
 
 // How wide a shape's outline is to *grab*, in screen pixels, as against the one
 // or two it may be drawn as. A border you have to hit exactly is a border you
@@ -212,6 +237,103 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
 }
 
 // Fields that a Delete or a Ctrl+Z belongs to before it belongs to the map.
+/**
+ * One measured chain: the line, its points, and what each leg comes to.
+ *
+ * Drawn in cells and scaled into map pixels here, so the numbers it is handed
+ * are the numbers that travel between clients. Everything that should keep its
+ * size on screen — the stroke, the dots, the type — is divided by the zoom,
+ * because the layer it sits in is scaled as a whole and a ruler whose lettering
+ * grew with the map would be unreadable at both ends of the range.
+ *
+ * `pending` is the leg still following the pointer: dashed, and labelled like
+ * any other, since the number you are about to commit to is the one you are
+ * actually reading.
+ */
+function MeasureMark({ chain, cell, origin, zoom, color, unit, perCell, pending }) {
+  const at = (p) => ({ x: origin.x + p.x * cell, y: origin.y + p.y * cell });
+  const points = chain.points.map(at);
+  const legs = legsOf(chain.points);
+  const scale = 1 / zoom;
+
+  // The leg in flight is measured from the last committed point, and drawn
+  // exactly like the others so that what you see is what you'll get.
+  const tip = pending ? at(pending) : null;
+  const tipCells = pending ? cellsBetween(chain.points[chain.points.length - 1], pending) : 0;
+
+  return (
+    <g className="measure-mark" style={{ '--ink': color }}>
+      {points.length > 1 && (
+        <polyline
+          className="measure-line"
+          points={points.map((p) => `${p.x},${p.y}`).join(' ')}
+          strokeWidth={2 * scale}
+        />
+      )}
+      {tip && (
+        <line
+          className="measure-line measure-pending"
+          x1={points[points.length - 1].x}
+          y1={points[points.length - 1].y}
+          x2={tip.x}
+          y2={tip.y}
+          strokeWidth={2 * scale}
+          strokeDasharray={`${6 * scale} ${5 * scale}`}
+        />
+      )}
+
+      {points.map((p, i) => (
+        <circle key={i} className="measure-dot" cx={p.x} cy={p.y} r={4 * scale} strokeWidth={1.5 * scale} />
+      ))}
+
+      {/* One label per leg, beside the line rather than along it. A chain that
+          doubles back would otherwise stack two numbers in the same place. */}
+      {legs.map((leg, i) => {
+        const spot = labelSpot(chain.points[i], chain.points[i + 1]);
+        const px = at(spot);
+        return (
+          <text
+            key={`leg-${i}`}
+            className="measure-text"
+            x={px.x}
+            y={px.y}
+            fontSize={13 * scale}
+            strokeWidth={3 * scale}
+          >
+            {formatDistance(leg, unit, perCell)}
+          </text>
+        );
+      })}
+      {tip && (
+        <text
+          className="measure-text"
+          x={at(labelSpot(chain.points[chain.points.length - 1], pending)).x}
+          y={at(labelSpot(chain.points[chain.points.length - 1], pending)).y}
+          fontSize={13 * scale}
+          strokeWidth={3 * scale}
+        >
+          {formatDistance(tipCells, unit, perCell)}
+        </text>
+      )}
+
+      {/* The chain's own running total, at its far end — the answer to "how far
+          have I come", which for a route with a corner in it is not any of the
+          leg numbers. Only once there is more than one leg to add up. */}
+      {legs.length > 1 && (
+        <text
+          className="measure-text measure-sum"
+          x={points[points.length - 1].x}
+          y={points[points.length - 1].y - 12 * scale}
+          fontSize={14 * scale}
+          strokeWidth={3.5 * scale}
+        >
+          {formatDistance(totalCells(chain.points), unit, perCell)}
+        </text>
+      )}
+    </g>
+  );
+}
+
 const TEXT_ENTRY = /^(|text|search|url|email|tel|password|number)$/;
 
 /**
@@ -377,6 +499,65 @@ export default function Tabletop({ actor, players, offline }) {
   // The shape the panel is pointing at, and the drag drawing one right now.
   const [selectedShapeId, setSelectedShapeId] = useState(null);
   const [sketch, setSketch] = useState(null);
+
+  // --- the ruler ---
+  /**
+   * Measuring mode: the box being open, exactly as drawing mode is.
+   *
+   * Nothing it produces is saved and nothing it produces is a change to the
+   * board. A measurement is a question somebody is asking out loud — "can I
+   * reach him from here?" — and the answer stops being interesting the moment
+   * it has been given, so it lives in this component's state and dies with it.
+   */
+  const [measureWindow, setMeasureWindow] = useState(false);
+  /**
+   * The ruler: the chains on the board and which one is still taking points.
+   *
+   * One piece of state holding both, because every change touches both — a
+   * click that starts a chain also makes it the open one, and deleting the open
+   * chain closes it. As two they could be updated out of step, and the code
+   * that had to keep them in step would be every caller.
+   *
+   * Points are in cells: `{ id, points: [{ x, y }] }`, the same coordinates a
+   * token stands on. Escape is what clears `openChainId`; see the key handler.
+   */
+  const [ruler, setRuler] = useState({ measurements: [], openChainId: null });
+  /**
+   * The same thing, readable *now*.
+   *
+   * Two clicks inside one frame — a double-click, or an impatient tap-tap — are
+   * both handled before React has re-rendered, so both would read the same
+   * stale state from their closure and the second would overwrite the first
+   * rather than extend it. That cost a point every time somebody clicked
+   * quickly. The ref is written synchronously, so each click sees the one
+   * before it however fast they come.
+   */
+  const rulerRef = useRef(ruler);
+  const { measurements, openChainId } = ruler;
+  const applyRuler = useCallback((next) => {
+    rulerRef.current = next;
+    setRuler(next);
+  }, []);
+  // Where the pointer is, in cells, so the leg being drawn can follow it before
+  // its far end has been decided. Null when the pointer is off the map.
+  const [measureAt, setMeasureAt] = useState(null);
+  // What the ruler counts in, and whether anybody else can see it. Remembered
+  // per browser — except for Shared, which is deliberately not: showing the
+  // table your working is a decision about *this* measurement, and one that
+  // silently persisted from a fortnight ago is one nobody made.
+  const [measureSetup, setMeasureSetup] = useState(() => {
+    const fallback = { unit: 'cells', perCell: 1 };
+    try {
+      const saved = JSON.parse(localStorage.getItem(MEASURE_KEY) || 'null');
+      return saved && typeof saved === 'object' ? { ...fallback, ...saved } : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+  const [measureShared, setMeasureShared] = useState(false);
+  // Other people's shared rulers, keyed by whose they are. One each: a fresh
+  // set from somebody replaces the last one they sent rather than joining it.
+  const [remoteMeasures, setRemoteMeasures] = useState({});
 
   const isDm = actor?.role === 'dm';
   /**
@@ -671,6 +852,96 @@ export default function Tabletop({ actor, players, offline }) {
   // beside the list it filters, because that's the order it can be read in.
   const clearableShapes = shapes.filter((s) => canEditShape(s));
 
+  // --- the ruler ---
+  /**
+   * Your own colour, on anything of yours that appears on somebody else's
+   * screen — a ping, and now a shared ruler. It carries who it is from without
+   * a name having to be read mid-combat.
+   *
+   * Declared up here rather than beside the ping that first needed it: the
+   * measuring effects below send it, and a const used above its own line is a
+   * crash rather than a warning.
+   */
+  const myColor = players.find((p) => p.id === actor?.userId)?.color || '#ffd479';
+
+  /**
+   * Measuring mode, and what it takes away from the map.
+   *
+   * While it's on, the board stops answering to hands: no token drags, no shape
+   * grips, no menu on a token. That is the mode rather than a side effect of it
+   * — a ruler is used *over* a board you are reading, and a click that measured
+   * sometimes and dragged an ogre other times would be a ruler nobody trusted
+   * near a crowded map. Everything is still visible, and still moves when
+   * somebody else moves it; it just isn't yours to touch for the moment.
+   */
+  const measuring = measureWindow;
+  const openChain = measurements.find((m) => m.id === openChainId) || null;
+  // The legs of every chain added together. Total distance in the panel: it is
+  // asked about a route, and a route is usually more than one leg.
+  const measuredCells = measurements.reduce((sum, m) => sum + totalCells(m.points), 0);
+  // Somebody else's ruler, but only the ones about the board on screen — a line
+  // measured on another map is a line drawn in another map's coordinates.
+  const remoteRulers = Object.values(remoteMeasures).filter(
+    (r) => r.sceneId === selectedId && r.measurements.length > 0
+  );
+
+  /**
+   * The grid, borrowed rather than switched on.
+   *
+   * Measuring is counting cells, and counting what you cannot see is guessing.
+   * But `gridOn` is a property of the *scene*: it is saved, it is the same for
+   * everybody, and only the DM may change it — so a player entering this mode
+   * could not turn it on, and a DM entering it would be turning it on for the
+   * whole table and leaving it on afterwards.
+   *
+   * So the grid is drawn locally instead, for exactly as long as there is a
+   * measurement to read against it, and for exactly the people who can see that
+   * measurement: the measurer, and — when it's shared — everyone else. Nothing
+   * is written, nothing is sent, and when the last ruler goes the grid goes back
+   * to whatever the scene actually says.
+   */
+  const gridShown = gridOn || measuring || remoteRulers.length > 0;
+
+  /**
+   * Snapshot the ruler so an action can be taken back.
+   *
+   * Measuring actions go on the same undo stack as everything else, because
+   * "Ctrl+Z takes back the last thing you did" is a promise about the last
+   * thing you did, not about the last thing you did to the server. They're
+   * tagged so leaving the mode can drop them — the measurements are gone by
+   * then, and an entry that would put one back is a promise it can't keep.
+   */
+  const recordMeasure = useCallback(
+    (label, before, after) => {
+      record({
+        kind: 'measure',
+        label,
+        sceneId: selectedId,
+        undo: async () => applyRuler(before),
+        redo: async () => applyRuler(after),
+      });
+    },
+    [selectedId, applyRuler]
+  );
+
+  /**
+   * The one way the ruler changes, so every change is undoable by construction
+   * rather than by each caller remembering to write an entry.
+   *
+   * `next` is handed the current state and returns the next one, or null to
+   * mean "nothing to do". Read from the ref rather than from this render, so a
+   * second click arriving in the same frame builds on the first — and written
+   * outside a state updater, since recording history inside one would write the
+   * entry twice the first time React chose to call it twice.
+   */
+  function changeMeasure(label, next) {
+    const before = rulerRef.current;
+    const after = next(before);
+    if (!after) return;
+    applyRuler(after);
+    recordMeasure(label, before, after);
+  }
+
   /**
    * While a tool is in hand the wheel belongs to the zoom.
    *
@@ -681,15 +952,15 @@ export default function Tabletop({ actor, players, offline }) {
    */
   const pickWheel = useCallback(
     (target) => {
-      if (target === 'grid' && drawing) return;
+      if (target === 'grid' && (drawing || measuring)) return;
       setWheelTarget(target);
     },
-    [drawing]
+    [drawing, measuring]
   );
 
   useEffect(() => {
-    if (drawing) setWheelTarget('zoom');
-  }, [drawing]);
+    if (drawing || measuring) setWheelTarget('zoom');
+  }, [drawing, measuring]);
 
   // A tool put down, or the box closed, leaves nothing selected: the panel is
   // what the selection was for.
@@ -704,6 +975,90 @@ export default function Tabletop({ actor, players, offline }) {
       // Private mode, or a full quota. It still draws; it just won't remember.
     }
   }, [shapeStyle]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEASURE_KEY, JSON.stringify(measureSetup));
+    } catch {
+      // Same bargain: it still measures, it just won't remember how.
+    }
+  }, [measureSetup]);
+
+  /**
+   * Leaving measuring mode takes the measurements with it.
+   *
+   * Said in the panel, and true: they are not saved anywhere, so there is no
+   * version of this where closing the box and reopening it finds them again.
+   * The undo entries go at the same moment — an entry that would put back a
+   * ruler in a mode that is switched off is a promise the stack can't keep, and
+   * Ctrl+Z reaching past a token move to redraw one would be baffling.
+   */
+  useEffect(() => {
+    if (measuring) return;
+    applyRuler({ measurements: [], openChainId: null });
+    setMeasureAt(null);
+    forget((entry) => entry.kind === 'measure');
+  }, [measuring, applyRuler]);
+
+  // A measurement is in the cells of the map it was drawn on, so it can no more
+  // survive a change of scene than a shape selection can.
+  useEffect(() => {
+    applyRuler({ measurements: [], openChainId: null });
+    setMeasureAt(null);
+    setRemoteMeasures({});
+    forget((entry) => entry.kind === 'measure');
+  }, [selectedId, applyRuler]);
+
+  /**
+   * Show the table what you're measuring, or stop showing them.
+   *
+   * The whole set goes on every change rather than the change itself — see the
+   * note on the server side. It is at most a few dozen numbers, and a stream of
+   * states cannot get out of order in a way that leaves a line on somebody's
+   * screen that was never on yours.
+   *
+   * Unsharing sends the empty set rather than merely stopping: silence would
+   * leave the last thing sent standing on every other screen forever.
+   */
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    if (!measuring || !measureShared || offline) {
+      socket.emit('scene:measure:end');
+      return undefined;
+    }
+    socket.emit('scene:measure', {
+      sceneId: selectedId,
+      measurements: measurements.map((m) => ({ id: m.id, points: m.points })),
+      unit: measureSetup.unit,
+      perCell: measureSetup.perCell,
+      color: myColor,
+    });
+    // On the way out too: closing the tab, walking off to the notes tab, or
+    // switching scenes all have to take the ruler off other people's boards.
+    return () => socket.emit('scene:measure:end');
+  }, [measuring, measureShared, offline, selectedId, measurements, measureSetup, myColor]);
+
+  // Somebody else's ruler arriving. Keyed by whose it is, so a new set from one
+  // person replaces theirs and leaves everybody else's alone — and an empty set
+  // is how a ruler is taken down, which the same line handles.
+  useEffect(() => {
+    const onMeasured = ({ sceneId, userId, by, measurements: theirs, unit, perCell, color }) => {
+      if (!userId) return;
+      setRemoteMeasures((prev) => {
+        if (!theirs?.length) {
+          if (!prev[userId]) return prev;
+          const { [userId]: gone, ...rest } = prev;
+          return rest;
+        }
+        return {
+          ...prev,
+          [userId]: { sceneId, by, measurements: theirs, unit, perCell, color },
+        };
+      });
+    };
+    socket.on('scene:measured', onMeasured);
+    return () => socket.off('scene:measured', onMeasured);
+  }, []);
 
   useEffect(() => () => clearTimeout(shapeTimer.current), []);
 
@@ -768,7 +1123,42 @@ export default function Tabletop({ actor, players, offline }) {
    * how every drawing tool worth using behaves, and it means the panel never
    * has to carry a row of "now do this instead" buttons.
    */
+  /**
+   * A click while measuring: drop a point in the middle of the cell it landed
+   * in, extending the open chain or starting one.
+   *
+   * Cell centres rather than the pointer, so every distance is a whole number
+   * of cells. With the 5e count the only question a leg asks is *which cell*,
+   * and a point sitting three pixels inside a boundary would make the answer
+   * depend on the hand rather than on the board.
+   */
+  function addMeasurePoint(e) {
+    const { px, py } = pointerCell(e);
+    const at = cellCentre(px, py);
+    changeMeasure('measure', ({ measurements: was, openChainId: open }) => {
+      const chain = was.find((m) => m.id === open);
+      if (!chain) {
+        const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        return { measurements: [...was, { id, points: [at] }], openChainId: id };
+      }
+      return {
+        measurements: was.map((m) => (m.id === open ? { ...m, points: [...m.points, at] } : m)),
+        openChainId: open,
+      };
+    });
+  }
+
   function onDrawStart(e) {
+    // Measuring takes the map over entirely: a left-click is a point and
+    // nothing else can be picked up. Before the drawing check, because the two
+    // modes are mutually exclusive and this is the one that's on.
+    if (measuring) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.currentTarget.focus?.({ preventScroll: true });
+      addMeasurePoint(e);
+      return;
+    }
     if (!drawing || e.button !== 0) return;
     const hit = e.target?.closest?.('[data-shape-id]')?.dataset.shapeId;
     e.preventDefault();
@@ -1262,6 +1652,37 @@ export default function Tabletop({ actor, players, offline }) {
   }, [runHistory, tokenForm, confirmDelete]);
 
   /**
+   * Escape ends the line you're drawing, and only that.
+   *
+   * In the *capture* phase on the document, which is the whole trick: the
+   * measuring window listens for Escape too, on the document, to close itself.
+   * A bubbling listener would run after that one and find the window already
+   * shut. Capture runs first, so this gets to decide — and stops the event
+   * where it stands when there was a line to end.
+   *
+   * With no line open the key falls through untouched, and Escape closes the
+   * window as it does for every other window in the app. That is the right
+   * order of surrender: the first press puts the pen down, the second puts the
+   * box away.
+   */
+  useEffect(() => {
+    if (!measuring) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || !openChainId) return;
+      if (isTyping(e.target)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      // Not recorded as an undoable action. Nothing about the board changed —
+      // this only says the next click starts somewhere new, and a Ctrl+Z that
+      // silently reopened a line for appending would be an invisible edit.
+      applyRuler({ ...rulerRef.current, openChainId: null });
+      setMeasureAt(null);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [measuring, openChainId, applyRuler]);
+
+  /**
    * Delete rubs out the shape you have hold of.
    *
    * Only while a tool is in hand and something is picked — the same two
@@ -1295,6 +1716,42 @@ export default function Tabletop({ actor, players, offline }) {
       e.preventDefault();
       return;
     }
+    /**
+     * While measuring, the menu is about the ruler and nothing else.
+     *
+     * Before the token check, because the board is inert: offering to edit a
+     * token you cannot so much as drag would be a menu describing a different
+     * mode. What it offers depends on what the click landed on, and the
+     * hit-testing is done here in cells rather than by the DOM, so the drawn
+     * layer can stay untouchable to the pointer — a line one pixel wide is not
+     * a thing anybody can be asked to hit.
+     */
+    if (measuring) {
+      e.preventDefault();
+      const surf = surfaceRef.current;
+      if (!surf) return;
+      const box = surf.getBoundingClientRect();
+      const at = {
+        x: (e.clientX - box.left - offXPx) / cellPx,
+        y: (e.clientY - box.top - offYPx) / cellPx,
+      };
+      // The topmost first: a later chain is drawn over an earlier one, so it is
+      // the one the eye thinks it is pointing at.
+      let hit = null;
+      for (let i = measurements.length - 1; i >= 0 && !hit; i -= 1) {
+        const m = measurements[i];
+        const pointIndex = pointIndexAt(m.points, at, MEASURE_POINT_GRAB);
+        if (pointIndex >= 0) hit = { chainId: m.id, pointIndex };
+        else if (touches(m.points, at, MEASURE_GRAB)) hit = { chainId: m.id, pointIndex: -1 };
+      }
+      setMenu({
+        clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+        clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+        measure: hit || {},
+      });
+      return;
+    }
+
     // A token gets a menu about *that token* rather than about the map under
     // it. The DM gets one on any token; a player gets one on their own, where
     // there is now something on it for them — their initiative, and taking the
@@ -1333,9 +1790,54 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   // --- right-click actions ---
-  // Your own colour, so a ping is recognisably yours without carrying a name
-  // across the wire for the eye to read mid-combat.
-  const myColor = players.find((p) => p.id === actor?.userId)?.color || '#ffd479';
+
+  /**
+   * The three things the ruler's menu can do.
+   *
+   * All local, all undoable, none of them asking first. Nothing here can lose
+   * work — a measurement is a question, not a drawing — and a confirmation
+   * dialog in front of something Ctrl+Z puts straight back is a dialog that
+   * only ever gets in the way.
+   */
+  function deleteMeasurePoint() {
+    const { chainId, pointIndex } = menu?.measure || {};
+    setMenu(null);
+    if (!chainId || pointIndex == null || pointIndex < 0) return;
+    changeMeasure('delete point', ({ measurements: was, openChainId: open }) => {
+      const chain = was.find((m) => m.id === chainId);
+      if (!chain) return null;
+      const points = chain.points.filter((_, i) => i !== pointIndex);
+      // A chain with nothing left in it is not a chain. Taking the last point
+      // out of one removes it, rather than leaving an invisible entry that the
+      // "delete all" count would still be counting.
+      if (!points.length) {
+        return {
+          measurements: was.filter((m) => m.id !== chainId),
+          openChainId: open === chainId ? null : open,
+        };
+      }
+      return {
+        measurements: was.map((m) => (m.id === chainId ? { ...m, points } : m)),
+        openChainId: open,
+      };
+    });
+  }
+
+  function deleteMeasurement() {
+    const { chainId } = menu?.measure || {};
+    setMenu(null);
+    if (!chainId) return;
+    changeMeasure('delete measurement', ({ measurements: was, openChainId: open }) => ({
+      measurements: was.filter((m) => m.id !== chainId),
+      openChainId: open === chainId ? null : open,
+    }));
+  }
+
+  function deleteAllMeasurements() {
+    setMenu(null);
+    if (!measurements.length) return;
+    changeMeasure('delete all measurements', () => ({ measurements: [], openChainId: null }));
+  }
 
   function ping() {
     if (!menu || !scene) return;
@@ -1598,6 +2100,10 @@ export default function Tabletop({ actor, players, offline }) {
     // between them there is no arrangement where a stray press moves a figure
     // somebody meant to draw around.
     if (drawing) return;
+    // Nor while measuring, and for a stronger reason: a ruler is used over a
+    // board you are reading, so the press that was meant to mark a spot must
+    // never turn out to have picked up the ogre standing on it.
+    if (measuring) return;
     if (!canMove(token)) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -1628,6 +2134,15 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   function onPointerMove(e) {
+    // The leg being drawn follows the pointer, so the distance is readable
+    // before the far end has been decided — which is most of what a ruler is
+    // for. The cell centre rather than the pointer itself, so the number on
+    // screen is the number the next click will commit.
+    if (measuring) {
+      const { px, py } = pointerCell(e);
+      setMeasureAt(cellCentre(px, py));
+      return;
+    }
     if (onDrawMove(e)) return;
     const d = dragRef.current;
     if (!d) return;
@@ -1982,14 +2497,17 @@ export default function Tabletop({ actor, players, offline }) {
                 className="wheel-pick"
                 aria-pressed={wheelTarget === 'grid'}
                 onClick={() => pickWheel('grid')}
-                // Held still while a drawing tool is in hand: the gauge's own
-                // gesture is a right-drag, and that is how you move the view
-                // while you draw. Said out loud rather than left to be noticed.
-                disabled={drawing}
+                // Held still while a drawing tool is in hand, and while the
+                // ruler is out: the gauge's own gesture is a right-drag, and
+                // that is how you move the view in both of those modes. Said
+                // out loud rather than left to be noticed.
+                disabled={drawing || measuring}
                 title={
                   drawing
                     ? 'Put the drawing tool down to retune the grid'
-                    : 'Scroll over the map to resize the cells, right-drag to move the grid'
+                    : measuring
+                      ? 'Leave measuring mode to retune the grid'
+                      : 'Scroll over the map to resize the cells, right-drag to move the grid'
                 }
               >
                 Grid
@@ -2088,8 +2606,11 @@ export default function Tabletop({ actor, players, offline }) {
         onContextMenu={onContextMenu}
       >
         <div
-          className={`surface${drawing ? ' drawing' : ''}`}
+          className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}`}
           ref={surfaceRef}
+          // A pointer that leaves the map has no cell to be in, so the leg in
+          // flight stops following it rather than freezing at the edge.
+          onPointerLeave={() => setMeasureAt(null)}
           // Focusable on purpose but never in the tab order: it's here so a
           // press on the map can hand it the keyboard, not so that tabbing
           // through the page stops on the picture.
@@ -2147,7 +2668,9 @@ export default function Tabletop({ actor, players, offline }) {
             )}
           </svg>
 
-          {gridOn && <div className="grid-overlay" />}
+          {/* Borrowed while a ruler is on the board, whoever's it is — see
+              gridShown. The scene's own setting is untouched. */}
+          {gridShown && <div className="grid-overlay" />}
 
           {/* Inside the surface, so a ping sits at its map position and stays
               there through panning and zooming rather than at a point on glass. */}
@@ -2240,6 +2763,58 @@ export default function Tabletop({ actor, players, offline }) {
               </div>
             );
           })}
+
+          {/* The ruler, over everything.
+
+              Above the tokens rather than under them, unlike the drawing layer:
+              a shape is ground that things stand on, but a measurement is a
+              question about the things themselves, and one whose answer
+              disappears behind the very ogre you were measuring to is no
+              answer. Untouchable by the pointer — the right-click menu works
+              out what was hit from the coordinates instead (see onContextMenu),
+              which is the only way a line two pixels wide can be aimed at. */}
+          {(measurements.length > 0 || remoteRulers.length > 0) && (
+            <svg
+              className="measure-layer"
+              width={width}
+              height={height}
+              viewBox={`0 0 ${mapW} ${mapH}`}
+              aria-hidden="true"
+            >
+              {/* Other people's first, so yours is the one on top: it is the one
+                  you are working on, and the one your own right-click will
+                  find. */}
+              {remoteRulers.map((ruler) =>
+                ruler.measurements.map((chain) => (
+                  <MeasureMark
+                    key={`${ruler.by}-${chain.id}`}
+                    chain={chain}
+                    cell={gridSize}
+                    origin={{ x: gridOffX, y: gridOffY }}
+                    zoom={zoom}
+                    color={ruler.color}
+                    unit={ruler.unit}
+                    perCell={ruler.perCell}
+                  />
+                ))
+              )}
+              {measurements.map((chain) => (
+                <MeasureMark
+                  key={chain.id}
+                  chain={chain}
+                  cell={gridSize}
+                  origin={{ x: gridOffX, y: gridOffY }}
+                  zoom={zoom}
+                  color={myColor}
+                  unit={measureSetup.unit}
+                  perCell={measureSetup.perCell}
+                  // Only the chain still open follows the pointer, and only
+                  // while the pointer is over the map.
+                  pending={chain.id === openChainId ? measureAt : null}
+                />
+              ))}
+            </svg>
+          )}
         </div>
       </div>
 
@@ -2284,14 +2859,34 @@ export default function Tabletop({ actor, players, offline }) {
                   token. What you drew stays yours to change. */}
               {canDraw && (
                 <button
-                  onClick={() => setShapeWindow((open) => !open)}
+                  onClick={() => {
+                    // The two modes are exclusive: each one takes the map over,
+                    // and a board that was both a drawing surface and a ruler
+                    // would have to guess what a click meant.
+                    setMeasureWindow(false);
+                    setShapeWindow((open) => !open);
+                  }}
                   aria-pressed={shapeWindow}
                   className={shapeWindow ? 'active' : ''}
                 >
                   {shapeWindow ? 'Standard mode' : 'Draw mode'}
                 </button>
               )}
-              {!isDm && !canDraw && <small>Nothing here for you yet.</small>}
+              {/* Everybody's, including a spectator's. Measuring changes
+                  nothing and is sent nowhere unless you tick Shared, so there
+                  is no permission it could need — and "how far is that?" is a
+                  question the person who *isn't* running the fight asks most. */}
+              <button
+                onClick={() => {
+                  setShapeTool(null);
+                  setShapeWindow(false);
+                  setMeasureWindow((open) => !open);
+                }}
+                aria-pressed={measureWindow}
+                className={measureWindow ? 'active' : ''}
+              >
+                {measureWindow ? 'Standard mode' : 'Measuring mode'}
+              </button>
             </div>
           </div>
         )}
@@ -2319,6 +2914,30 @@ export default function Tabletop({ actor, players, offline }) {
             setShapeTool(null);
             setShapeWindow(false);
           }}
+          offline={offline}
+        />
+      )}
+
+      {/* The measuring box. Yours alone even when the ruler isn't: what it
+          holds is how *you* are reading the board, and Shared decides only
+          whether the lines are on anybody else's. */}
+      {measureWindow && (
+        <MeasureTools
+          unit={measureSetup.unit}
+          perCell={measureSetup.perCell}
+          // A change of unit brings that unit's own default with it — see the
+          // note in the panel. Keeping the old number would quietly reinterpret
+          // it, and the field that would say so is the one being changed.
+          onUnit={(unit) => setMeasureSetup({ unit, perCell: unitNamed(unit).perCell })}
+          onPerCell={(perCell) =>
+            setMeasureSetup((s) => ({ ...s, perCell: Number.isFinite(perCell) ? perCell : 1 }))
+          }
+          shared={measureShared}
+          onShared={setMeasureShared}
+          total={measuredCells}
+          chains={measurements.length}
+          onClearAll={deleteAllMeasurements}
+          onClose={() => setMeasureWindow(false)}
           offline={offline}
         />
       )}
@@ -2442,7 +3061,29 @@ export default function Tabletop({ actor, players, offline }) {
 
       {menu && (
         <div className="map-menu" ref={menuRef} style={{ left: menu.clientX, top: menu.clientY }}>
-          {menu.turnTokenId ? (
+          {menu.measure ? (
+            /* Three offers, narrowing to what the hand actually landed on. On a
+               point you get both it and its chain, rather than only the
+               smaller act: the point is the harder thing to hit, so hitting it
+               is weak evidence that the whole line wasn't what was meant. */
+            <>
+              {menu.measure.pointIndex >= 0 && (
+                <button onClick={deleteMeasurePoint}>Delete this point</button>
+              )}
+              {menu.measure.chainId && (
+                <button onClick={deleteMeasurement}>Delete entire measurement</button>
+              )}
+              {!menu.measure.chainId && (
+                <button
+                  className="danger"
+                  onClick={deleteAllMeasurements}
+                  disabled={measurements.length === 0}
+                >
+                  Delete all measurements
+                </button>
+              )}
+            </>
+          ) : menu.turnTokenId ? (
             <>
               <button onClick={focusFromTurnList}>Focus</button>
               {isDm && <button onClick={giveTurnTo}>Give turn</button>}

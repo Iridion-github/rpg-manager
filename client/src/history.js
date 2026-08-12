@@ -62,6 +62,32 @@ export function clear() {
 }
 
 /**
+ * Forget the entries a predicate picks out.
+ *
+ * For actions whose subject can stop existing while the tab stays open.
+ * Measuring is the one: leaving the mode throws every ruler away, so the
+ * entries that would put them back have to go at the same moment — otherwise a
+ * Ctrl+Z ten minutes later reaches past a token move to redraw a tape measure
+ * in a mode that is switched off.
+ *
+ * `clear()` is the blunt version of this and stays, because leaving the table
+ * invalidates everything rather than one kind of thing.
+ */
+export function forget(predicate) {
+  const keep = (stack) => {
+    const kept = stack.filter((entry) => !predicate(entry));
+    if (kept.length === stack.length) return false;
+    stack.length = 0;
+    stack.push(...kept);
+    return true;
+  };
+  // Both, and with no short-circuit: an entry can be sitting in either stack,
+  // and `||` would skip the second whenever the first had something to drop.
+  const changed = [keep(done), keep(undone)].some(Boolean);
+  if (changed) notify();
+}
+
+/**
  * An error saying the board has moved on: what this entry describes is no
  * longer the thing that's there, so reversing it would be reversing someone
  * else's work rather than your own. Marked so `run` knows to drop the entry

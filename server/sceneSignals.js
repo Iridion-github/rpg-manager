@@ -34,6 +34,48 @@ const inBounds = (v) => Number.isFinite(v) && v >= -20000 && v <= 20000;
 
 const isHexColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 
+/**
+ * A ruler is measured in *cells*, not map pixels — the same coordinates tokens
+ * stand on. Wider bounds than a map has cells, since a measurement is allowed
+ * to run off the edge of the picture.
+ */
+const inCells = (v) => Number.isFinite(v) && v >= -500 && v <= 500;
+
+// Ceilings on the shape of the thing, since this is relayed rather than stored
+// and so has no schema anywhere else to stop it growing. Generous next to any
+// real use — a dozen chains of fifty points is far past the point where a
+// board becomes unreadable — and small enough that the worst a crafted client
+// can put on somebody else's screen is a mess they can clear by leaving.
+const MAX_CHAINS = 12;
+const MAX_POINTS = 50;
+
+/**
+ * The measurements as they may be passed on, or null if they may not be.
+ *
+ * Null rather than an empty list for a malformed payload: empty is a real and
+ * meaningful state — it is how a ruler gets taken down — and answering a bad
+ * message with it would let a garbled packet wipe the sender's own board.
+ */
+function sanitizeMeasurements(list) {
+  if (!Array.isArray(list) || list.length > MAX_CHAINS) return null;
+  const clean = [];
+  for (const item of list) {
+    const points = item?.points;
+    if (!Array.isArray(points) || points.length > MAX_POINTS) return null;
+    const kept = [];
+    for (const p of points) {
+      const x = Number(p?.x);
+      const y = Number(p?.y);
+      if (!inCells(x) || !inCells(y)) return null;
+      kept.push({ x, y });
+    }
+    // A chain of one point is a click somebody hasn't finished; it draws
+    // nothing and is worth carrying, so the far end sees it appear as it grows.
+    if (kept.length) clean.push({ id: String(item?.id || '').slice(0, 40), points: kept });
+  }
+  return clean;
+}
+
 function registerSceneSignals(io) {
   io.on('connection', (socket) => {
     /**
@@ -88,6 +130,85 @@ function registerSceneSignals(io) {
      * sees. Clients that aren't on this scene ignore it — moving the viewport of
      * someone reading a different map would be motion with no meaning.
      */
+    /**
+     * "Here is what I am measuring." A ruler somebody has left on the board.
+     *
+     * The third ephemeral signal, and the one that lasts longest: a ping is a
+     * flash and a focus is a jump, but a shared measurement stands on other
+     * people's screens until its owner takes it down. It is still not data —
+     * nobody wants yesterday's tape measure restored with the map — so it lives
+     * here with the other two and never reaches the disk.
+     *
+     * The whole set travels on every change rather than one point at a time.
+     * There are at most a handful of points, and a stream of increments is a
+     * stream that can arrive out of order or with a gap in the middle, leaving
+     * a line on somebody's screen that was never drawn on anyone's. Sending the
+     * state instead of the change makes a lost message a frame of staleness
+     * rather than a lasting disagreement.
+     *
+     * `unit` and `perCell` travel with it so every viewer's labels read the way
+     * the *measurer's* do. Two people at one table can have the panel set
+     * differently, and a shared ruler that said 15 ft to one of them and 4.5 m
+     * to the other would be two different claims about the same line.
+     */
+    socket.on('scene:measure', async ({ sceneId, measurements, unit, perCell, color } = {}) => {
+      const campaignId = socket.data.campaignId;
+      if (!campaignId) return;
+      if (typeof sceneId !== 'string' || !sceneId) return;
+
+      // Not run through `cleared()`. That gate exists to stop a loop flashing
+      // pings faster than a hand could, and it drops what it refuses — which
+      // for a stream of states would mean silently keeping an old ruler on
+      // screen after the newer one that replaced it was thrown away. Dragging a
+      // pointer across the map legitimately produces changes faster than four a
+      // second, so this is capped by shape instead: a short list of short
+      // lists, and no disk touched whatever arrives.
+      const campaign = await store.get(CAMPAIGNS, campaignId);
+      if (!roleIn(campaign, socket.data.actor)) return;
+
+      const clean = sanitizeMeasurements(measurements);
+      if (clean === null) return;
+
+      // Remembered so a dropped connection can take the ruler down with it.
+      socket.data.measuring = clean.length ? { campaignId, sceneId } : null;
+
+      socket.to(roomFor(campaignId)).emit('scene:measured', {
+        sceneId,
+        // The sender's own id, so a viewer can key one ruler per person and
+        // replace it rather than accumulating every state ever sent. From the
+        // socket's identity, never the payload — a measurement that could name
+        // its own author would be a way to wipe somebody else's off the board.
+        userId: socket.data.actor?.userId || '',
+        by: socket.data.actor?.name || '',
+        measurements: clean,
+        unit: typeof unit === 'string' ? unit.slice(0, 12) : 'cells',
+        perCell: Number.isFinite(Number(perCell)) ? Number(perCell) : 1,
+        color: isHexColor(color) ? color : '#ffd479',
+      });
+    });
+
+    /**
+     * Take it down: on unsharing, on leaving the mode, and on dropping off.
+     *
+     * The last is why this is a function rather than three copies of an emit.
+     * Somebody whose laptop closes mid-measurement would otherwise leave a
+     * ruler on everybody else's board with nobody left who could clear it.
+     */
+    const stopMeasuring = () => {
+      const measuring = socket.data.measuring;
+      if (!measuring) return;
+      socket.data.measuring = null;
+      socket.to(roomFor(measuring.campaignId)).emit('scene:measured', {
+        sceneId: measuring.sceneId,
+        userId: socket.data.actor?.userId || '',
+        by: socket.data.actor?.name || '',
+        measurements: [],
+      });
+    };
+
+    socket.on('scene:measure:end', stopMeasuring);
+    socket.on('disconnect', stopMeasuring);
+
     socket.on('scene:focus', async ({ sceneId, x, y, zoom } = {}) => {
       const campaignId = await cleared();
       if (!campaignId) return;
