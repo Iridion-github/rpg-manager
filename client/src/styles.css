@@ -2721,6 +2721,27 @@ button.token-tile:hover {
   margin-top: 0;
 }
 
+/* Folded away by default. The panel is consulted when a character changes
+   hands, which happens once; the sheet under it is read every session, and it
+   should not have to start an inch further down the window for that. The
+   summary still carries the answer, so the fold costs no information — you can
+   see who has the character without opening anything. */
+.access-panel > summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #8b90a0;
+  /* The marker sits on the line rather than hanging outside the padded box. */
+  list-style-position: inside;
+}
+
+.access-panel > summary strong {
+  color: #e7e9ee;
+}
+
+.access-panel[open] > summary {
+  margin-bottom: 0.6rem;
+}
+
 .access-list {
   list-style: none;
   padding: 0;

@@ -199,10 +199,20 @@ export const api = {
   createSheet: (data) => post(table('/sheets'), data),
   updateSheet: (id, data) => put(table(`/sheets/${id}`), data),
   deleteSheet: (id) => del(table(`/sheets/${id}`)),
-  // Note: the server still has PUT /sheets/:id/access, deliberately separate
-  // from updateSheet — changing who may edit a sheet is a DM act and must not
-  // be expressible as part of editing one. Nothing in the client calls it since
-  // the per-sheet access panel was removed, so the wrapper went with it.
+  /**
+   * Who may read and change one character — the DM's call, and a route of its
+   * own rather than a field on updateSheet.
+   *
+   * That separation is the point: a player editing their own sheet sends the
+   * whole sheet back, and if access travelled in that body they could promote
+   * themselves in the act of filling in their hit points. The server refuses to
+   * read access from an edit at all (routes/sheets.js), so the only way to
+   * change it is through here, and only the DM may.
+   *
+   * `access` is the whole map, userId → 'view' | 'edit'. A player left out of it
+   * has no access, which is how access is taken away.
+   */
+  setSheetAccess: (id, access) => put(table(`/sheets/${id}/access`), { access }),
 
   listChat: () => get(table('/chat')),
   sendChat: (text) => post(table('/chat'), { text }),

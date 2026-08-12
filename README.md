@@ -708,14 +708,40 @@ new name at once.
 
 ## Character sheets
 
+### Making a character
+**Anyone at the table may**, with *+ New character* in the Characters tab — and
+who ends up holding it depends on who made it:
+
+| Made by | Starts as |
+| --- | --- |
+| a player | **theirs**, with edit access, from the moment it exists |
+| the DM | **DM only**, until they hand it out |
+
+That split is the whole rule. A character is the one thing at a table that
+belongs to the person playing it, so making a blank sheet shouldn't mean queuing
+for a piece of paper; a DM's new sheet is a villain or an NPC until they say
+otherwise, and defaulting *that* to "everyone" is the wrong way to be wrong.
+
+A player's own sheet is theirs at the server, not just in the interface: the
+access map is built from the session that made the request, so a crafted client
+cannot mint access for anybody — not for another player, and not for itself at a
+level it wasn't given.
+
+**Deleting stays the DM's**, including for a sheet a player made. Making a
+character needs no protecting from; destroying one does, and the person best
+placed to know a character is still needed is the one running the campaign.
+
 ### Who can see which sheet
 The DM decides, per sheet, what each player gets: **no access**, **can view**, or
-**can edit**. Open a character and hit *Who can see this*. The DM always sees and
-edits everything, and is the only one who can change these settings.
+**can edit**. Open a character and unfold *Who has this character*, at the top of
+the sheet. The DM always sees and edits everything, is the only one who can
+change these settings, and the roster card shows the answer without opening
+anything — *GM only*, or *Kira can edit · Tom can view*.
 
-A sheet nobody has been given is **DM only**, which is what a new character
-starts as — handing it out is a decision, and defaulting to "everyone" is the
-wrong way to be wrong. Spectators, having no identity, see no sheets at all.
+Only players appear in that list. A DM is never in a sheet's access map: they can
+already reach everything at their own table, so an entry would be a control that
+changes nothing sitting among controls that do. Spectators, having no identity,
+see no sheets at all.
 
 Access is one map of `playerId → view | edit` rather than separate viewer and
 editor lists, because those two can disagree — an editor missing from the

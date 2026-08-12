@@ -72,13 +72,38 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', requireDm, async (req, res, next) => {
+/**
+ * Make a character. Anyone at the table may — see who ends up holding it.
+ *
+ * Not `requireDm`, unlike notes and scenes, and the difference is the point: a
+ * note is the DM's material and a scene is their board, but a character is the
+ * one thing at a table that belongs to the person playing it. Making somebody
+ * ask for a blank sheet is a queue for a piece of paper.
+ *
+ * `attachCampaign` has already refused anybody who isn't at this table, so the
+ * only question left is who the new sheet answers to, and that turns on which
+ * of the two made it.
+ */
+router.post('/', async (req, res, next) => {
   try {
-    // A new sheet starts DM-only unless the DM says otherwise: handing it out
-    // is a decision, and defaulting to "everyone" is the wrong way to be wrong.
+    const dm = req.campaignRole === 'dm';
+    const access = dm
+      ? // A DM's new sheet starts DM-only unless they say otherwise: handing it
+        // out is a decision, and defaulting to "everyone" is the wrong way to
+        // be wrong. The access panel is how they then hand it over.
+        sanitizeSheetAccess(req.body.access)
+      : // A player's own character is theirs from the moment it exists —
+        // anything else would mean making one you then have to be given.
+        //
+        // Built here rather than read from the body, which is deliberate: a
+        // player must not be able to grant access to anybody, including
+        // themselves at a level they didn't earn or somebody else at any level.
+        // The DM decides who else may see this, through the route below.
+        { [req.actor.userId]: 'edit' };
+
     const record = await store.create(sheetsOf(req), {
       ...sanitizeSheet(req.body),
-      access: sanitizeSheetAccess(req.body.access),
+      access,
     });
     announce(req, record);
     res.status(201).json(record);
@@ -130,6 +155,10 @@ router.put('/:id/access', requireDm, async (req, res, next) => {
   }
 });
 
+// Deleting stays the DM's, even for a sheet a player made themselves. Making a
+// character is not a decision anybody needs protecting from; destroying one is,
+// and the person best placed to notice that a character is still needed is the
+// one running the campaign it is in.
 router.delete('/:id', requireDm, async (req, res, next) => {
   try {
     const ok = await store.remove(sheetsOf(req), req.params.id);

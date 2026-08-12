@@ -69,6 +69,31 @@ export default function CharacterSheets({
 
   const isDm = actor?.role === 'dm';
 
+  /**
+   * Who a character can be handed to.
+   *
+   * Players only. A DM is never in a sheet's access map — they can already
+   * reach everything at their own table, so an entry for one would be a control
+   * that changes nothing, sitting in a list of controls that do.
+   */
+  const assignable = players.filter((p) => p.role === 'player');
+
+  /**
+   * Access entries pointing at somebody who is no longer at this table.
+   *
+   * The map is not cleaned up when a member is removed, and deliberately so: an
+   * id that can't resolve to a role grants nothing, so a leftover entry is dead
+   * weight rather than a way in (see sanitizeSheetAccess on the server).
+   *
+   * It is still worth showing. Without this the roster card reads "former
+   * player can edit" while the panel below lists only current players, all of
+   * them set to no access — so the one line the DM wants to act on is the one
+   * line they cannot reach, and every change they *do* make silently carries
+   * the stale entry along with it.
+   */
+  const strandedIn = (sheet) =>
+    Object.keys(sheet?.access || {}).filter((id) => !players.some((p) => p.id === id));
+
   // The open sheets, in stacking order, skipping any id whose sheet has since
   // gone — deleted here, or revoked by the DM and withdrawn over the socket.
   const openSheets = openIds
@@ -221,14 +246,58 @@ export default function CharacterSheets({
     return () => clearTimeout(t);
   }, [sheets, offline, onOfflineData, campaignId]);
 
-  // Creating and deleting characters stays the DM's, whoever can edit one.
+  /**
+   * Two different permissions, deliberately not one.
+   *
+   * Anybody at the table may make a character — it is the one thing here that
+   * belongs to the person playing it, and a blank sheet you have to ask for is
+   * a queue for a piece of paper. Deleting one, and deciding who else may see
+   * it, stay the DM's: those are the acts that can take something away from
+   * somebody else.
+   */
+  const canCreate = !offline;
   const canManage = isDm && !offline;
 
-  async function addSheet() {
+  /**
+   * Hand a character to somebody, or take it back.
+   *
+   * Through its own route, never as part of an edit: a player saving their own
+   * sheet sends the whole sheet, and if access rode along in that body they
+   * could promote themselves while filling in their hit points. The server
+   * takes access from the stored record on every edit for exactly that reason,
+   * so this is the only door — and it is the DM's alone.
+   *
+   * `level` is 'view', 'edit', or '' to remove them. The whole map is sent
+   * rather than a change to it, because that is the shape the route accepts:
+   * absence from the map *is* having no access, so there is nothing else a
+   * removal could look like.
+   */
+  async function setAccess(sheet, userId, level) {
     if (!canManage) return;
+    const { [userId]: had, ...rest } = sheet.access || {};
+    const access = level ? { ...rest, [userId]: level } : rest;
+    // Optimistic: the dropdown should answer the hand that moved it rather than
+    // waiting on a round trip. Put back on failure, since a control that
+    // silently keeps a value the server rejected is worse than a slow one.
+    setSheets((prev) => prev.map((s) => (s.id === sheet.id ? { ...s, access } : s)));
+    setError('');
     try {
-      // Not optimistic: only the server can mint the record's id. It arrives
-      // visible to the DM alone.
+      await api.setSheetAccess(sheet.id, access);
+    } catch (e) {
+      setError(e.message);
+      setSheets((prev) =>
+        prev.map((s) => (s.id === sheet.id ? { ...s, access: sheet.access || {} } : s))
+      );
+    }
+  }
+
+  async function addSheet() {
+    if (!canCreate) return;
+    try {
+      // Not optimistic: only the server can mint the record's id. It also
+      // decides who the sheet answers to — DM-only for a DM's, and the maker's
+      // own for a player's — so the record that comes back is the one to keep,
+      // rather than a guess to be corrected.
       const record = await api.createSheet({ ...blankSheet(), name: 'New Character' });
       setSheets((prev) => [...prev, record]);
       openSheet(record.id);
@@ -285,11 +354,18 @@ export default function CharacterSheets({
                 place a centred window can't cover, so the way to make another
                 character is always in reach — however many there already are,
                 and whichever one is currently open. */}
-            {canManage && (
+            {canCreate && (
               <li>
                 <button className="sheet-card new" onClick={addSheet}>
                   <strong>+ New character</strong>
-                  <span>Starts as yours alone until you hand it out</span>
+                  {/* The two answers to "and then who has it?" — worth saying
+                      on the button, since it is the one thing about making a
+                      character that isn't obvious from making one. */}
+                  <span>
+                    {isDm
+                      ? 'Starts as yours alone until you hand it out'
+                      : 'Yours, from the moment you make it'}
+                  </span>
                 </button>
               </li>
             )}
@@ -329,7 +405,7 @@ export default function CharacterSheets({
             {/* Only where there's no create tile to say it better. Telling a GM
                 with an empty roster "no characters yet" next to the button that
                 makes one is just describing what they can already see. */}
-            {sheets.length === 0 && !canManage && (
+            {sheets.length === 0 && !canCreate && (
               <li className="empty">
                 {offline
                   ? 'No cached characters yet.'
@@ -371,6 +447,60 @@ export default function CharacterSheets({
               </>
             }
           >
+            {/* Above the sheet and only for the DM. Folded away by default: it
+                is consulted when a character changes hands, which is once,
+                against a sheet that is read every session. */}
+            {canManage && (
+              <details className="access-panel">
+                <summary>
+                  Who has this character — <strong>{accessSummary(sheet, players)}</strong>
+                </summary>
+                {assignable.length === 0 && strandedIn(sheet).length === 0 ? (
+                  <p className="hint">
+                    Nobody else is at this table yet. Add players under Campaigns → Members and
+                    they'll appear here.
+                  </p>
+                ) : (
+                  <>
+                    <p className="hint">
+                      A player sees only the characters given to them, and this is what gives them
+                      one. Take it back and it disappears from their screen at once, even if they
+                      have it open.
+                    </p>
+                    <ul className="access-list">
+                      {assignable.map((p) => (
+                        <li key={p.id}>
+                          <strong>{p.name}</strong>
+                          <select
+                            value={sheet.access?.[p.id] || ''}
+                            aria-label={`What ${p.name} may do with ${sheet.name || 'this character'}`}
+                            onChange={(e) => setAccess(sheet, p.id, e.target.value)}
+                          >
+                            <option value="">No access</option>
+                            <option value="view">Can view</option>
+                            <option value="edit">Can edit</option>
+                          </select>
+                        </li>
+                      ))}
+                      {/* Somebody who has since left the table. It grants them
+                          nothing — a user with no role here can't resolve one —
+                          but it is what the card is reporting, so it needs a
+                          way out rather than an explanation. No dropdown: the
+                          only useful thing to do with a ghost is forget it. */}
+                      {strandedIn(sheet).map((id) => (
+                        <li key={id}>
+                          <strong>Former player</strong>
+                          <button type="button" onClick={() => setAccess(sheet, id, '')}>
+                            Remove ({sheet.access[id]})
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </details>
+            )}
+
             <CharacterSheet sheet={sheet} onChange={queueSave} readOnly={readOnly} />
           </FloatingWindow>
         );
