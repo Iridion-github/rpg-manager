@@ -5,8 +5,8 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "dev": "node --watch index.js --open-gate",
-    "start": "node index.js"
+    "dev": "node --env-file-if-exists=../.env --watch index.js --open-gate",
+    "start": "node --env-file-if-exists=../.env index.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

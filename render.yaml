@@ -56,6 +56,17 @@ services:
       # people holding the code. Strongly recommended on a public hostname.
       - key: SIGNUP_CODE
         sync: false
+      # The sending mailbox's password, and at Gmail an *app password* rather
+      # than the account's own. Also sync: false - it is the one piece of mail
+      # configuration that is a credential, which is why the address it sends
+      # from lives in the code and this does not.
+      #
+      # Left unset the app still runs; it writes confirmation and password
+      # reset links to the log instead of posting them, which on a hosted copy
+      # nobody can read means password recovery does not work. Set it before
+      # anybody relies on getting back into their account.
+      - key: SMTP_PASS
+        sync: false
       # Cross-origin callers, comma-separated. Deliberately absent: Render
       # serves the UI and the API from one hostname, so nothing here needs CORS
       # at all. Only set it if you put the client somewhere else.

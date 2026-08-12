@@ -41,6 +41,10 @@ password every visitor is the admin, and the whole point of `npm start` is that
 something outside your machine is about to reach it. `npm run dev` keeps the
 open door for local work by passing `--open-gate` explicitly.
 
+Put it, and everything else, in a **`.env`** at the repo root: both scripts read
+it on their own. Copy `.env.example` and fill it in. See *Environment variables*
+below.
+
 The server also binds to **localhost only** unless you set `HOST`. The tunnel
 runs on this machine and dials localhost, so it loses nothing - and it means the
 tunnel is the only way in, rather than the table being on whatever wifi you
@@ -256,7 +260,7 @@ anyone - any mailbox you already have will do, usually with an app password:
 
 | variable | meaning |
 |---|---|
-| `SMTP_PASS` | the mailbox password - an *app password* at Gmail. **The only one that must stay out of the repo** |
+| `SMTP_PASS` | the mailbox password - an *app password* at Gmail. **The only one that must stay out of the repo**: put it in `.env` locally, or the dashboard when hosted |
 | `SITE_EMAIL` | the address to send from and log in as. Has a default in `server/mailer.js`, since an address isn't a secret - set this only to run from a different mailbox |
 | `SMTP_HOST` | the submission server; inferred for `@gmail.com`, required otherwise |
 | `SMTP_PORT` | `587` (default) or `465` |
@@ -1275,6 +1279,22 @@ sign in again afterwards; the admin password is unchanged, since it's server
 configuration rather than anything stored on the account.
 
 ## Environment variables
+
+**Where to put them.** Locally, in a **`.env`** at the repo root: `npm start` and
+`npm run dev` read it automatically through Node's own `--env-file-if-exists`,
+so there is no dotenv dependency and nothing to export into a shell first. Copy
+`.env.example` to get started. It is gitignored, along with `.env.local`, so
+real values never reach the repo.
+
+`if-exists` rather than `--env-file`, because a hosted copy gets its
+configuration from the platform instead and should not fail to boot for want of
+a file it was never going to have. On Render that means the dashboard: see
+`render.yaml`, where the three credentials are declared `sync: false`, which is
+Render for "ask me, don't read this from the repo".
+
+Anything already set in the real environment wins over the file, so a one-off
+`SIGNUP_CODE=... npm start` still overrides what is written down.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ADMIN_PASSWORD` | *(unset)* | The admin's login password. **Required** except under `npm run dev` |
