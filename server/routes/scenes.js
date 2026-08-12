@@ -1,14 +1,14 @@
 'use strict';
 
 /**
- * Scenes — a map image plus the tokens standing on it.
+ * Scenes - a map image plus the tokens standing on it.
  *
  * Token coordinates are stored in *grid cells*, not pixels, so the same scene
  * renders correctly at any zoom or canvas size. Snapping is the client's job.
  *
  * Permissions: this campaign's DM owns the scene (image, grid, which tokens
  * exist and who they belong to). A player may only move a token whose ownerId
- * is theirs. Both are decided by role *in this campaign* — the same person may
+ * is theirs. Both are decided by role *in this campaign* - the same person may
  * be the DM here and a player at the next table.
  */
 
@@ -38,7 +38,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * A scene is a map of a fixed pixel size with a grid laid over it.
  *
  * `width`/`height` are the map's own dimensions and `gridSize` is how many of
- * those pixels one cell spans — so the GM can retune the grid to match the art
+ * those pixels one cell spans - so the GM can retune the grid to match the art
  * without the map changing size. Column and row counts are *derived* from that
  * ratio rather than stored, which is what keeps the two from contradicting
  * each other.
@@ -54,7 +54,7 @@ function sanitizeScene(body = {}) {
   const fallbackH = num(body.rows, 0) * num(gridSize, 70) || 840;
   const cell = clamp(num(gridSize, 70), 8, 500);
   // A grid repeats, so a nudge of one whole cell in either direction reaches
-  // every alignment there is — past that you are back where you started.
+  // every alignment there is - past that you are back where you started.
   const offset = (v) => clamp(Math.round(num(v, 0)), -cell, cell);
   return {
     name: String(name).slice(0, 120),
@@ -90,7 +90,7 @@ function statOrNull(value, lo, hi) {
  * Initiative, and the roll behind it.
  *
  * The total is what the order is read from, so it stays the authoritative
- * field — but when both halves are known the total is *derived* from them
+ * field - but when both halves are known the total is *derived* from them
  * rather than trusted alongside them. Two numbers that are supposed to add up
  * to a third will eventually disagree if all three are stored independently,
  * and the one that would be wrong is the one everything else reads.
@@ -110,8 +110,8 @@ function rolledInitiative(total, die, mod) {
 /**
  * Current and total hit points, decided together.
  *
- * Current only means something measured against a total — it's what draws the
- * bar — so a token without a total has no hit points at all rather than a
+ * Current only means something measured against a total - it's what draws the
+ * bar - so a token without a total has no hit points at all rather than a
  * number floating free. Given a total but no current, it starts at full: that's
  * the state a creature is in when it walks onto the map.
  */
@@ -126,7 +126,7 @@ function sanitizeToken(body = {}, existing = {}) {
   const {
     label = existing.label ?? 'Token',
     color = existing.color ?? '#58a6ff',
-    // Null means "whatever the stylesheet draws" — the dark ring every token
+    // Null means "whatever the stylesheet draws" - the dark ring every token
     // had before this was a choice. Kept nullable so old tokens don't have to
     // be migrated into an explicit colour they never picked.
     //
@@ -134,7 +134,7 @@ function sanitizeToken(body = {}, existing = {}) {
     // key is absent or undefined. That is load-bearing here: an explicit null
     // has to survive, because it is how the form says "remove the border".
     // Rewriting this row as `body.borderColor ?? existing.borderColor` would
-    // look equivalent and quietly make removal impossible — which is precisely
+    // look equivalent and quietly make removal impossible - which is precisely
     // the bug the Tokens tab had (see sanitizeLook in routes/campaignTokens.js).
     borderColor = existing.borderColor ?? null,
     // A token's face. Empty means it shows its name instead.
@@ -144,7 +144,7 @@ function sanitizeToken(body = {}, existing = {}) {
     initiative = existing.initiative ?? null,
     // The two halves of that total, kept because the total alone can't settle a
     // tie: two creatures on 25 are separated by who had the bigger modifier,
-    // which is a fact about the creature rather than about the roll. Optional —
+    // which is a fact about the creature rather than about the roll. Optional -
     // a token whose initiative was typed in as a bare number has neither.
     initiativeDie = existing.initiativeDie ?? null,
     initiativeMod = existing.initiativeMod ?? null,
@@ -157,13 +157,13 @@ function sanitizeToken(body = {}, existing = {}) {
   } = body;
   /**
    * Which character this token is, taken from the stored token and never from
-   * the body — the same rule `access` follows on a sheet, for the same reason.
+   * the body - the same rule `access` follows on a sheet, for the same reason.
    *
    * Coupling has a route of its own (PUT /tokens/:tokenId/sheet) because it is
    * not one field: it has to release whatever else held that sheet, check that
    * the caller may edit it, and copy the character's numbers across. A `sheetId`
    * accepted here would do none of those, and would quietly leave two tokens
-   * claiming one character — which is the one thing the relation promises can't
+   * claiming one character - which is the one thing the relation promises can't
    * happen.
    */
   const sheetId = existing.sheetId ?? null;
@@ -193,7 +193,7 @@ function announce(req, action, record, extra = {}) {
  *
  * Tokens can be bigger than one cell (a size-2 ogre covers 2×2), so this is a
  * rectangle-intersection test rather than a comparison of coordinates. Every
- * check runs inside store.mutate — that is, while holding the write queue — so
+ * check runs inside store.mutate - that is, while holding the write queue - so
  * two players cannot both be told an empty cell is theirs.
  */
 function overlaps(a, b) {
@@ -209,7 +209,7 @@ function overlaps(a, b) {
  *
  * A fraction of a cell, and it exists because positions are floats: two tokens
  * dropped on the same spot are almost never bit-identical, so a literal `===`
- * would forbid nothing. It is a tolerance for arithmetic, not for stacking —
+ * would forbid nothing. It is a tolerance for arithmetic, not for stacking -
  * anywhere a human could see daylight between two tokens is allowed.
  */
 const SAME_SPOT = 0.02;
@@ -217,7 +217,7 @@ const SAME_SPOT = 0.02;
 /**
  * Is this position already taken?
  *
- * With a grid, footprints may not overlap at all — a table with squares has one
+ * With a grid, footprints may not overlap at all - a table with squares has one
  * token per square. Without one, a token goes where you put it and the only
  * refusal left is dropping it exactly where another already stands, which would
  * hide one behind the other with no way to tell they're both there.
@@ -307,7 +307,7 @@ router.post('/', requireDm, async (req, res, next) => {
 
 router.put('/:id', requireDm, async (req, res, next) => {
   try {
-    // Merge scene fields only — tokens have their own endpoints, so a stale
+    // Merge scene fields only - tokens have their own endpoints, so a stale
     // client PUT can't wipe the board.
     const record = await store.update(scenesOf(req), req.params.id, sanitizeScene(req.body));
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -336,14 +336,14 @@ router.post('/:id/tokens', requireDm, async (req, res, next) => {
     const wanted = {
       id: crypto.randomUUID(),
       ...sanitizeToken(req.body),
-      // Who made it, which is a different question from who owns it — see
+      // Who made it, which is a different question from who owns it - see
       // routes/campaignTokens.js, where it decides whether a player may make
       // another. Read off the session, never the request.
       createdBy: req.actor?.userId || null,
     };
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       let token = wanted;
-      // Asking for an occupied cell isn't an error when adding — slide the new
+      // Asking for an occupied cell isn't an error when adding - slide the new
       // token to the first free one instead. Tokens are created where the DM
       // right-clicked, and "on top of that one" is a near miss rather than a
       // mistake worth refusing.
@@ -363,7 +363,7 @@ router.post('/:id/tokens', requireDm, async (req, res, next) => {
   }
 });
 
-// Full token edit (label, colour, owner, size) — DM only.
+// Full token edit (label, colour, owner, size) - DM only.
 router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
   try {
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
@@ -380,7 +380,7 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
     const updated = scene.tokens.find((t) => t.id === req.params.tokenId);
     // Damage applied on the map is damage the character took. Hit points are
     // the one thing here that means the same at both ends, so they travel back
-    // to the sheet — the modifier does not, since on the sheet it is derived
+    // to the sheet - the modifier does not, since on the sheet it is derived
     // from dexterity and has no single number to write to.
     const movedSheet = await sheetLink.pushTokenToSheet(req.campaignId, updated);
     // And the table is told, per person: an open sheet window should show the
@@ -402,7 +402,7 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
 });
 
 /**
- * Initiative — the second write a player is allowed to make, on their own
+ * Initiative - the second write a player is allowed to make, on their own
  * token.
  *
  * Its own route rather than a hole in the edit above, because the difference
@@ -418,7 +418,7 @@ router.put('/:id/tokens/:tokenId/initiative', async (req, res, next) => {
      *
      * Read before the write, because the mutate below is synchronous and this
      * needs a second record. What a creature *rolled* is still the player's to
-     * say — only the modifier is decided elsewhere, and it is decided elsewhere
+     * say - only the modifier is decided elsewhere, and it is decided elsewhere
      * because on the sheet it is dexterity plus a bonus rather than a number
      * anybody typed.
      */
@@ -455,7 +455,7 @@ router.put('/:id/tokens/:tokenId/initiative', async (req, res, next) => {
   }
 });
 
-// Move — the one write a player is allowed to make. Position only: a player
+// Move - the one write a player is allowed to make. Position only: a player
 // can't repaint or rename a token by POSTing extra fields here.
 router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
   try {
@@ -487,8 +487,8 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
  * A token lives in exactly one place at a time: in a scene's `tokens`, or in
  * the campaign's bench. Moving between the two keeps its id, which is what lets
  * a character keep its sheet link, its place in an undo entry and its identity
- * across a change of map. Two copies with one id — a "placed" flag on a token
- * that also sits in a scene — would be the same thing said twice, and the two
+ * across a change of map. Two copies with one id - a "placed" flag on a token
+ * that also sits in a scene - would be the same thing said twice, and the two
  * would eventually disagree.
  *
  * The bench is campaign-level on purpose. A token taken off a map has to be
@@ -569,7 +569,7 @@ router.post('/:id/tokens/from-bench', async (req, res, next) => {
 
     // Only once it is standing somewhere. A crash between the two leaves a
     // token on the bench and on the table, which is a duplicate you can delete
-    // — the other order loses it entirely.
+    // - the other order loses it entirely.
     await store.remove(benchOf(req), benched.id);
     const placed = scene.tokens.find((t) => t.id === benched.id);
     announce(req, 'token:add', scene, { token: placed });
@@ -585,12 +585,12 @@ router.post('/:id/tokens/from-bench', async (req, res, next) => {
  * The drawing layer: the fireball's circle, the dragon's cone, a rectangle
  * around the room nobody has opened yet.
  *
- * Measured in *cells*, like tokens and for the same reason — a shape means "the
+ * Measured in *cells*, like tokens and for the same reason - a shape means "the
  * six squares by the door", not "these pixels of this picture", so it keeps its
  * meaning when the grid is retuned and rides the grid's offset with everything
  * else standing on the board.
  *
- * Anyone playing may draw, and everyone at the table sees what's drawn — scenes
+ * Anyone playing may draw, and everyone at the table sees what's drawn - scenes
  * go out whole to every member. A player marking where a spell lands or where
  * they mean to run is the same kind of act as moving their own token.
  *
@@ -641,8 +641,8 @@ function sanitizeShape(body = {}, existing = {}) {
  * it, and the table's owner overrules that as they overrule everything else on
  * their own board.
  *
- * A shape with no owner at all — one that arrived through an import, where the
- * ids of another server's people mean nothing — is the DM's alone. That is the
+ * A shape with no owner at all - one that arrived through an import, where the
+ * ids of another server's people mean nothing - is the DM's alone. That is the
  * safe reading: better a mark only the DM can clear than one anybody can.
  */
 function canEditShape(actor, role, shape) {
@@ -712,7 +712,7 @@ router.put('/:id/shapes/:shapeId', requireDrawer, async (req, res, next) => {
 });
 
 /**
- * Clear the board — of everything the caller may take off it.
+ * Clear the board - of everything the caller may take off it.
  *
  * One transaction rather than a delete per shape: the table would otherwise
  * watch the map empty a shape at a time, and a request that failed halfway
@@ -765,7 +765,7 @@ router.delete('/:id/shapes/:shapeId', requireDrawer, async (req, res, next) => {
 /**
  * The tokens that take a turn, in the order they take them.
  *
- * Highest initiative first, and *only* tokens that have one — a door or a pile
+ * Highest initiative first, and *only* tokens that have one - a door or a pile
  * of crates stands on the board without being in the fight. Ties keep the order
  * they already stand in, which is the order they were added and therefore the
  * same list for everyone looking at it.
@@ -784,7 +784,7 @@ function turnOrder(scene) {
  * The tie-break: level totals are settled by the bigger modifier.
  *
  * A token whose initiative was typed in as a bare total has no modifier to
- * compare, and sorts below any token that does — it can't win a contest it
+ * compare, and sorts below any token that does - it can't win a contest it
  * brought no evidence to. Compared rather than subtracted so that two unknowns
  * are equal instead of NaN, which is what `-Infinity - -Infinity` would give
  * and what a subtracting comparator would quietly scramble the order with.
@@ -801,8 +801,8 @@ function byModifier(a, b) {
 /**
  * Whose turn it is after this one. Wrapping past the end is the next round.
  *
- * A token that has since been deleted — or had its initiative cleared, which
- * takes it out of the fight just as surely — is no longer in the order, so
+ * A token that has since been deleted - or had its initiative cleared, which
+ * takes it out of the fight just as surely - is no longer in the order, so
  * there is no "next" from it. Starting again from the top beats refusing.
  */
 function nextInOrder(scene) {
@@ -817,7 +817,7 @@ function nextInOrder(scene) {
  * something each client decides for itself: the tracker everyone sees is the
  * same tracker, and a player who reloads mid-fight rejoins it where it stands.
  *
- * Deliberately not part of sanitizeScene — an ordinary scene edit (a rename, a
+ * Deliberately not part of sanitizeScene - an ordinary scene edit (a rename, a
  * new map) has no business ending combat, and a stale client PUT can't.
  */
 router.put('/:id/turn', requireDm, async (req, res, next) => {

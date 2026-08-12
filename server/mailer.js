@@ -5,7 +5,7 @@
  *
  * There is exactly one thing the app posts: a link that finalises a change
  * somebody asked for. Nothing here is a newsletter and nothing is marketing, so
- * the transport is whatever mailbox the person running the server already has —
+ * the transport is whatever mailbox the person running the server already has -
  * SMTP settings in the environment, and no account with anybody required.
  *
  * With nothing configured, mail goes to an outbox file and the log instead of
@@ -24,7 +24,7 @@ const nodemailer = require('nodemailer');
  *
  * Written here, in the open, because an address is not a secret: it goes out on
  * the front of every letter this sends. The *password* to it is a secret and is
- * never in this file — it arrives as SMTP_PASS from the environment, and with
+ * never in this file - it arrives as SMTP_PASS from the environment, and with
  * no password nothing is sent at all (see `missing`, below). Keeping the two
  * apart is the point: there is no arrangement of this file that leaks a
  * credential, and no config file next to it inviting one to be pasted in.
@@ -38,7 +38,7 @@ const DEFAULT_SITE_EMAIL = 'rpgmanageradmin@gmail.com';
  * One address for the common case: at Gmail and anywhere like it the sender,
  * the login and the account are all the same, and writing it three times is
  * three chances to write it differently. SMTP_USER and MAIL_FROM still override
- * it where they genuinely differ — a relay sending on behalf of an address it
+ * it where they genuinely differ - a relay sending on behalf of an address it
  * doesn't own, say.
  */
 const SITE_EMAIL = process.env.SITE_EMAIL || DEFAULT_SITE_EMAIL;
@@ -47,7 +47,7 @@ const MAIL_FROM = process.env.MAIL_FROM || SITE_EMAIL || SMTP_USER;
 
 // The submission server for the mailboxes people actually have. Only a default:
 // SMTP_HOST wins, and anything not listed here has to say. Kept short on
-// purpose — a guess that's wrong is worse than no guess, because it fails at
+// purpose - a guess that's wrong is worse than no guess, because it fails at
 // send time rather than at startup.
 const KNOWN_HOSTS = {
   'gmail.com': 'smtp.gmail.com',
@@ -87,8 +87,8 @@ const mailConfigured = missing.length === 0;
 
 /** One line for the startup banner: what it will do, or what it still needs. */
 const mailStatus = mailConfigured
-  ? `SMTP configured — sending as ${MAIL_FROM} via ${SMTP_HOST}:${SMTP_PORT}`
-  : `off (set ${missing.join(', ')}) — confirmation links go to ${OUTBOX}`;
+  ? `SMTP configured - sending as ${MAIL_FROM} via ${SMTP_HOST}:${SMTP_PORT}`
+  : `off (set ${missing.join(', ')}) - confirmation links go to ${OUTBOX}`;
 
 let transport = null;
 if (mailConfigured) {
@@ -128,7 +128,7 @@ function toOutbox(mail) {
  * Post one letter.
  *
  * Resolves with whether it actually went. It does not throw on a server with no
- * mail set up — that's a configuration this deployment is allowed to be in —
+ * mail set up - that's a configuration this deployment is allowed to be in -
  * but it does throw when a configured server fails to send, because then
  * something is wrong that the person asking needs to hear about.
  */

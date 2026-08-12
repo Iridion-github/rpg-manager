@@ -1,8 +1,8 @@
 /**
  * How initiative is ordered and how it reads.
  *
- * Shared because both places that show it — the turn tracker and the hover
- * tooltip — must say the same thing, and because the tie-break here has a
+ * Shared because both places that show it - the turn tracker and the hover
+ * tooltip - must say the same thing, and because the tie-break here has a
  * counterpart on the server (routes/scenes.js `byModifier`) that decides who
  * Next steps to. Three copies of one rule is two chances to disagree.
  */
@@ -12,7 +12,7 @@
  *
  * That's a fact about the creature rather than about the roll, which is exactly
  * what a tie needs. A token whose initiative was typed in as a bare total has
- * no modifier to compare and sorts below any that has one — it brought no
+ * no modifier to compare and sorts below any that has one - it brought no
  * evidence to the contest.
  *
  * Compared rather than subtracted so that two unknowns come out equal instead
@@ -36,7 +36,7 @@ export function turnOrderOf(tokens) {
 }
 
 /**
- * "25 (18+7)" — the total, and the roll it came from when that's known.
+ * "25 (18+7)" - the total, and the roll it came from when that's known.
  *
  * The breakdown is what makes a tie readable: two creatures on 25 are in that
  * order for a reason, and this is where the reason shows. A negative modifier

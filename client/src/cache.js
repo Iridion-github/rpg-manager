@@ -8,7 +8,7 @@
 //
 // Records are tagged with the campaign they came from, and every read and write
 // is scoped to one. Without that, opening a second campaign would overwrite the
-// first one's snapshot — and worse, the offline view would show you a mixture
+// first one's snapshot - and worse, the offline view would show you a mixture
 // of two tables with no way to tell which was which.
 //
 // We only ever cache what the server chose to send us, which is what keeps a
@@ -59,7 +59,7 @@ export async function cacheGetAll(kind, campaignId) {
 
 // Replace this campaign's snapshot with the latest server state. Records
 // belonging to *other* campaigns are left alone; within this one it's a
-// clear-then-fill, which is what makes deletions propagate — a record the
+// clear-then-fill, which is what makes deletions propagate - a record the
 // server no longer has must not survive in the cache.
 export async function cachePutAll(kind, campaignId, records) {
   if (!campaignId) return;
@@ -76,7 +76,7 @@ export async function cachePutAll(kind, campaignId, records) {
           cursor.continue();
           return;
         }
-        // Cursor exhausted — the old snapshot is gone, write the new one.
+        // Cursor exhausted - the old snapshot is gone, write the new one.
         for (const r of records) store.put({ ...r, [TAG]: campaignId });
       };
       cursorReq.onerror = () => reject(cursorReq.error);

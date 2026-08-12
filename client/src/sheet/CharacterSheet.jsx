@@ -44,7 +44,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   const set = (path) => (value) => onChange(setIn(sheet, path, value));
   const pb = proficiencyBonus(sheet.level);
 
-  // A d20 check against some bonus — abilities, saves and skills all share it.
+  // A d20 check against some bonus - abilities, saves and skills all share it.
   const askCheck = (what, modifier) =>
     setConfirming({
       title: what,
@@ -90,7 +90,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
     });
   };
 
-  // Posting a roll puts it in the chat — for the whole table, or for the DM
+  // Posting a roll puts it in the chat - for the whole table, or for the DM
   // alone. Each roll carries its own log label, so what appears never depends
   // on how many rolls happened to be in the batch; `secret` applies to all of
   // them, since half a hidden attack is not hidden.
@@ -200,7 +200,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
   const [confirmAttackId, setConfirmAttackId] = useState('');
   const confirmAttack = attacks.find((a) => a.id === confirmAttackId) || null;
 
-  // Death saves are three boxes each — clicking the nth sets the count to n,
+  // Death saves are three boxes each - clicking the nth sets the count to n,
   // clicking the one that's already the highest clears it back down.
   const deathBoxes = (kind) => (
     <div className="death-row">
@@ -599,8 +599,8 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
           readOnly={readOnly}
           options={ABILITIES.map((a) => ({ value: a.key, label: a.label }))}
         />
-        <Stat label="Spell save DC" value={dc ?? '—'} hint="8 + proficiency + ability modifier" />
-        <Stat label="Spell attack" value={atk === null ? '—' : signed(atk)} hint="proficiency + ability modifier" />
+        <Stat label="Spell save DC" value={dc ?? '-'} hint="8 + proficiency + ability modifier" />
+        <Stat label="Spell attack" value={atk === null ? '-' : signed(atk)} hint="proficiency + ability modifier" />
       </div>
 
       <div className="spell-levels">

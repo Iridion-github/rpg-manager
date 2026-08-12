@@ -3,13 +3,13 @@ import { api } from './api.js';
 import TokenLibrary from './TokenLibrary.jsx';
 
 /**
- * "What token?" — the step between choosing Create token on the map and a
+ * "What token?" - the step between choosing Create token on the map and a
  * token appearing there, and the same form again for editing one.
  *
  * The position isn't asked for and isn't shown as a field: it's already been
  * decided by where the right-click happened, or by where the token already
  * stands. Offering coordinates to type would be a worse way to say the same
- * thing. Everything here is what the map can't tell us — what it's called, what
+ * thing. Everything here is what the map can't tell us - what it's called, what
  * it looks like, how much room it takes.
  *
  * Pass `token` to edit it; leave it out to create a new one.
@@ -39,7 +39,7 @@ function rolledTotal(die, mod) {
 /**
  * `stats` decides whether this form is about a token in play or a token in the
  * cast list. On the tabletop it asks for everything; in the campaign's Tokens
- * tab it asks for what a token *is* and leaves out what a token is *doing* —
+ * tab it asks for what a token *is* and leaves out what a token is *doing* -
  * hit points and initiative are decided in the moment by whoever is looking at
  * the fight, and a form you fill in before the session has no business holding
  * them. `canAssign` is the DM's: handing a token to somebody is theirs alone.
@@ -65,17 +65,17 @@ export default function TokenModal({
    * Whose token this is, and therefore who may drag it.
    *
    * The empty string is "nobody" rather than null so the select has a value to
-   * match against — it becomes null again on the way out. Null is what the
+   * match against - it becomes null again on the way out. Null is what the
    * server stores for a token the DM keeps: the monsters, the doors, the pile
    * of crates.
    */
   const [ownerId, setOwnerId] = useState(token?.ownerId ?? '');
   // Kept as the strings the inputs hold rather than as numbers: blank is a
-  // meaningful answer here — "not tracking this" — and Number('') is 0, which
+  // meaningful answer here - "not tracking this" - and Number('') is 0, which
   // would quietly turn an empty box into a token with no hit points left.
   const [initiative, setInitiative] = useState(token?.initiative ?? '');
   // The two halves behind that total. Kept so a tie can be settled by the
-  // bigger modifier — with only the total, two creatures on 25 are simply
+  // bigger modifier - with only the total, two creatures on 25 are simply
   // 25 and 25.
   const [initDie, setInitDie] = useState(token?.initiativeDie ?? '');
   const [initMod, setInitMod] = useState(token?.initiativeMod ?? '');
@@ -90,7 +90,7 @@ export default function TokenModal({
   const fileRef = useRef(null);
 
   // Non-null once both halves are filled in, at which point it replaces the
-  // total field rather than sitting beside it — two editable numbers that are
+  // total field rather than sitting beside it - two editable numbers that are
   // supposed to add up to a third invite them to disagree.
   const rolled = rolledTotal(initDie, initMod);
 
@@ -98,7 +98,7 @@ export default function TokenModal({
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       // Escape closes the thing in front. With the library open that's the
-      // library — losing a half-filled form because you were done browsing
+      // library - losing a half-filled form because you were done browsing
       // would be a poor trade.
       if (browsing) setBrowsing(false);
       else onClose();
@@ -111,7 +111,7 @@ export default function TokenModal({
    * Put the chosen file on the server and keep the URL it comes back with.
    *
    * Uploaded on pick rather than on save, so the preview below is the real
-   * image at its real address — not a blob URL that would have to be swapped
+   * image at its real address - not a blob URL that would have to be swapped
    * for the true one later. The cost is an orphaned file if the form is then
    * cancelled, which is a few kilobytes on the host's own disk.
    */
@@ -137,7 +137,7 @@ export default function TokenModal({
     setBusy(true);
     setError('');
     try {
-      // An unnamed token is still a token — fall back rather than refuse, since
+      // An unnamed token is still a token - fall back rather than refuse, since
       // the name is the least important thing about a blob you're about to drag
       // somewhere. It's still worth having with a picture on: it's what the
       // tooltip says, and what the chat calls it.
@@ -152,7 +152,7 @@ export default function TokenModal({
         initiativeMod: blankToNull(initMod),
         hp: blankToNull(hp),
         maxHp: blankToNull(maxHp),
-        // Back to null for "nobody" — the server reads a falsy owner as a token
+        // Back to null for "nobody" - the server reads a falsy owner as a token
         // that belongs to the table rather than to a person.
         ownerId: ownerId || null,
       });
@@ -207,7 +207,7 @@ export default function TokenModal({
         <label className="token-field">
           Belongs to
           <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-            <option value="">Nobody — the DM moves it</option>
+            <option value="">Nobody - the DM moves it</option>
             {players.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -218,7 +218,7 @@ export default function TokenModal({
         </label>
         )}
 
-        {/* Left blank on the tokens nobody rolls for — scenery, a door, a pile
+        {/* Left blank on the tokens nobody rolls for - scenery, a door, a pile
             of crates. An empty stat prints no line in the tooltip at all.
 
             Two halves rather than one number, because a tie is settled by the
@@ -234,7 +234,7 @@ export default function TokenModal({
                 type="number"
                 value={initiative}
                 onChange={(e) => setInitiative(e.target.value)}
-                placeholder="—"
+                placeholder="-"
                 aria-label="Initiative total"
               />
             ) : (
@@ -271,7 +271,7 @@ export default function TokenModal({
               min={0}
               value={hp}
               onChange={(e) => setHp(e.target.value)}
-              placeholder="—"
+              placeholder="-"
               aria-label="Current hit points"
             />
             <small>out of</small>
@@ -280,7 +280,7 @@ export default function TokenModal({
               min={0}
               value={maxHp}
               onChange={(e) => setMaxHp(e.target.value)}
-              placeholder="—"
+              placeholder="-"
               aria-label="Total hit points"
             />
           </span>
@@ -323,7 +323,7 @@ export default function TokenModal({
         </div>
 
         {/* Two ways to the same field. The library is offered first because it
-            is the answer almost every time — a couple of thousand pictures are
+            is the answer almost every time - a couple of thousand pictures are
             already here, and uploading is for the one your table needs that
             isn't. */}
         <div className="token-field">
@@ -333,7 +333,7 @@ export default function TokenModal({
               Choose from library
             </button>
             {uploading && <small>Uploading…</small>}
-            {/* Removing it puts the name back — the picture stands in for the
+            {/* Removing it puts the name back - the picture stands in for the
                 name rather than sitting alongside it. */}
             {imageUrl && !uploading && (
               <button type="button" className="linky" onClick={() => setImageUrl('')}>
@@ -382,7 +382,7 @@ export default function TokenModal({
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
             />
-            {/* In cells, because that's the unit the map is measured in — "2"
+            {/* In cells, because that's the unit the map is measured in - "2"
                 means it covers two squares across, not two of anything else. */}
             <small>{size} {size === 1 ? 'cell' : 'cells'} across</small>
           </span>

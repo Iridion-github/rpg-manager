@@ -13,7 +13,7 @@ import {
  * Pick a number of dice, a die, and a modifier.
  *
  * Used two ways: the chat roller confirms by *rolling*, and an attack row
- * confirms by *storing* the spec for later. Same controls either way — the
+ * confirms by *storing* the spec for later. Same controls either way - the
  * caller supplies the wording and what confirming means.
  */
 export default function DiceModal({
@@ -66,13 +66,13 @@ export default function DiceModal({
 
   // Rendered into <body> rather than where it was called from. This dialog can
   // be opened from inside the floating character-sheet window, and that window
-  // is a query container — which means layout containment, which means it would
+  // is a query container - which means layout containment, which means it would
   // otherwise become the containing block for `position: fixed` and trap the
   // backdrop inside itself instead of over the page.
   return createPortal(
     <div
       className="modal-backdrop"
-      // Only a click that both starts and ends on the backdrop dismisses —
+      // Only a click that both starts and ends on the backdrop dismisses -
       // otherwise a text selection that drifts outside closes the dialog.
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -98,7 +98,7 @@ export default function DiceModal({
           />
         </label>
 
-        {/* With only one die on offer there is nothing to choose — show it, but
+        {/* With only one die on offer there is nothing to choose - show it, but
             don't pretend it's a decision. */}
         <div className="dice-field">
           <span>Which die</span>

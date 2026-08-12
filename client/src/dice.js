@@ -25,7 +25,7 @@ export const clampDice = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // quantity. Negatives already have one.
 export const signedMod = (n) => (n < 0 ? String(n) : `+${n}`);
 
-/** "2d10+3", "1d20-1", "3 coins" — how a spec reads once it's chosen. */
+/** "2d10+3", "1d20-1", "3 coins" - how a spec reads once it's chosen. */
 export function notation(spec) {
   if (!spec || !spec.sides) return '';
   const count = spec.count || 1;

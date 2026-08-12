@@ -24,7 +24,7 @@ const WIN_Z_CEILING = 400;
  * The characters at a table: a roster of cards, and one sheet open in a window
  * floating above everything.
  *
- * Mounted for as long as the campaign is, not for as long as its tab is shown —
+ * Mounted for as long as the campaign is, not for as long as its tab is shown -
  * an open sheet has to survive a trip to the map. `showRoster` is what the tab
  * actually switches: off, this renders nothing but the open window (and keeps
  * saving, syncing and caching in the background).
@@ -38,7 +38,7 @@ export default function CharacterSheets({
   showRoster = true,
 }) {
   const [sheets, setSheets] = useState([]);
-  // Every sheet currently open, back to front — the last is the one on top.
+  // Every sheet currently open, back to front - the last is the one on top.
   // An array rather than a set because the order *is* the stacking order, and
   // re-opening one that's already up is how you bring it forward.
   const [openIds, setOpenIds] = useState([]);
@@ -58,14 +58,14 @@ export default function CharacterSheets({
   // it's saving.
   const [savingIds, setSavingIds] = useState(() => new Set());
   // The sheet whose deletion is being confirmed. One at a time, however many
-  // windows are open — two of these on screen would be a way to answer the
+  // windows are open - two of these on screen would be a way to answer the
   // wrong one.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
   /**
    * This campaign's tokens, so a character can be pointed at one.
    *
    * The server sends only the tokens this person may move, which is exactly the
-   * set they may link — so the list needs no filtering here, and a player is
+   * set they may link - so the list needs no filtering here, and a player is
    * never shown somebody else's figure as an option they'd be refused.
    */
   const [tokens, setTokens] = useState([]);
@@ -84,7 +84,7 @@ export default function CharacterSheets({
   /**
    * Who a character can be handed to.
    *
-   * Players only. A DM is never in a sheet's access map — they can already
+   * Players only. A DM is never in a sheet's access map - they can already
    * reach everything at their own table, so an entry for one would be a control
    * that changes nothing, sitting in a list of controls that do.
    */
@@ -99,7 +99,7 @@ export default function CharacterSheets({
    *
    * It is still worth showing. Without this the roster card reads "former
    * player can edit" while the panel below lists only current players, all of
-   * them set to no access — so the one line the DM wants to act on is the one
+   * them set to no access - so the one line the DM wants to act on is the one
    * line they cannot reach, and every change they *do* make silently carries
    * the stale entry along with it.
    */
@@ -107,12 +107,12 @@ export default function CharacterSheets({
     Object.keys(sheet?.access || {}).filter((id) => !players.some((p) => p.id === id));
 
   // The open sheets, in stacking order, skipping any id whose sheet has since
-  // gone — deleted here, or revoked by the DM and withdrawn over the socket.
+  // gone - deleted here, or revoked by the DM and withdrawn over the socket.
   const openSheets = openIds
     .map((id) => sheets.find((s) => s.id === id))
     .filter(Boolean);
 
-  // Null once it's gone — a sheet deleted from under us takes its own dialog
+  // Null once it's gone - a sheet deleted from under us takes its own dialog
   // down rather than leaving one asking about a character that no longer is.
   const confirmSheet = sheets.find((s) => s.id === confirmDeleteId) || null;
 
@@ -152,7 +152,7 @@ export default function CharacterSheets({
   // Permission is per sheet, and the DM here may be a player at the next
   // table along. The server has already filtered the list to what we may see,
   // so the only question left is whether this particular sheet is ours to
-  // change — and the server checks that again on write regardless of what we
+  // change - and the server checks that again on write regardless of what we
   // render.
   const canEditSheet = (sheet) =>
     Boolean(sheet) && (isDm || sheet.access?.[actor?.userId] === 'edit');
@@ -209,7 +209,7 @@ export default function CharacterSheets({
   const applyRemote = useCallback(({ action, record, origin }) => {
     if (origin === clientId) return; // our own echo; already applied locally
     if (!record?.id) return;
-    // Don't overwrite a sheet the user is mid-edit on — our queued write wins.
+    // Don't overwrite a sheet the user is mid-edit on - our queued write wins.
     if (action !== 'delete' && pending.current.has(record.id)) return;
     setSheets((prev) => {
       if (action === 'delete') return prev.filter((s) => s.id !== record.id);
@@ -237,7 +237,7 @@ export default function CharacterSheets({
    * Listening to `scenes:changed` as well as loading once: a token created,
    * deleted, placed or linked from anywhere else changes what this picker
    * should offer and what it should say is already taken. Failures are
-   * swallowed — being unable to read the tokens costs the link control, not the
+   * swallowed - being unable to read the tokens costs the link control, not the
    * character sheet somebody is trying to read.
    */
   const loadTokens = useCallback(async () => {
@@ -264,7 +264,7 @@ export default function CharacterSheets({
    *
    * Not optimistic. The server may release another token in the process, and
    * guessing at which one would mean drawing a board that is briefly wrong in
-   * two places rather than one — so both lists are re-read from the answer
+   * two places rather than one - so both lists are re-read from the answer
    * instead. It is one small request against a list of a few dozen.
    */
   async function linkSheet(sheet, tokenId) {
@@ -323,7 +323,7 @@ export default function CharacterSheets({
   /**
    * Two different permissions, deliberately not one.
    *
-   * Anybody at the table may make a character — it is the one thing here that
+   * Anybody at the table may make a character - it is the one thing here that
    * belongs to the person playing it, and a blank sheet you have to ask for is
    * a queue for a piece of paper. Deleting one, and deciding who else may see
    * it, stay the DM's: those are the acts that can take something away from
@@ -339,7 +339,7 @@ export default function CharacterSheets({
    * sheet sends the whole sheet, and if access rode along in that body they
    * could promote themselves while filling in their hit points. The server
    * takes access from the stored record on every edit for exactly that reason,
-   * so this is the only door — and it is the DM's alone.
+   * so this is the only door - and it is the DM's alone.
    *
    * `level` is 'view', 'edit', or '' to remove them. The whole map is sent
    * rather than a change to it, because that is the shape the route accepts:
@@ -369,8 +369,8 @@ export default function CharacterSheets({
     if (!canCreate) return;
     try {
       // Not optimistic: only the server can mint the record's id. It also
-      // decides who the sheet answers to — DM-only for a DM's, and the maker's
-      // own for a player's — so the record that comes back is the one to keep,
+      // decides who the sheet answers to - DM-only for a DM's, and the maker's
+      // own for a player's - so the record that comes back is the one to keep,
       // rather than a guess to be corrected.
       const record = await api.createSheet({ ...blankSheet(), name: 'New Character' });
       setSheets((prev) => [...prev, record]);
@@ -426,13 +426,13 @@ export default function CharacterSheets({
                 sheet floats over this page, and anything pushed to the right of
                 a toolbar ends up underneath it. The top-left cell is the one
                 place a centred window can't cover, so the way to make another
-                character is always in reach — however many there already are,
+                character is always in reach - however many there already are,
                 and whichever one is currently open. */}
             {canCreate && (
               <li>
                 <button className="sheet-card new" onClick={addSheet}>
                   <strong>+ New character</strong>
-                  {/* The two answers to "and then who has it?" — worth saying
+                  {/* The two answers to "and then who has it?" - worth saying
                       on the button, since it is the one thing about making a
                       character that isn't obvious from making one. */}
                   <span>
@@ -446,7 +446,7 @@ export default function CharacterSheets({
             {sheets.map((s) => (
               <li key={s.id}>
                 {/* Clicking one already open brings its window to the front
-                    rather than doing nothing — the card is how you find a sheet
+                    rather than doing nothing - the card is how you find a sheet
                     you've lost behind another. */}
                 <button
                   className={`sheet-card${openIds.includes(s.id) ? ' open' : ''}`}
@@ -483,7 +483,7 @@ export default function CharacterSheets({
               <li className="empty">
                 {offline
                   ? 'No cached characters yet.'
-                  : "No characters yet — your GM hasn't given you one."}
+                  : "No characters yet - your GM hasn't given you one."}
               </li>
             )}
           </ul>
@@ -527,7 +527,7 @@ export default function CharacterSheets({
             {canManage && (
               <details className="access-panel">
                 <summary>
-                  Who has this character — <strong>{accessSummary(sheet, players)}</strong>
+                  Who has this character - <strong>{accessSummary(sheet, players)}</strong>
                 </summary>
                 {assignable.length === 0 && strandedIn(sheet).length === 0 ? (
                   <p className="hint">
@@ -557,7 +557,7 @@ export default function CharacterSheets({
                         </li>
                       ))}
                       {/* Somebody who has since left the table. It grants them
-                          nothing — a user with no role here can't resolve one —
+                          nothing - a user with no role here can't resolve one -
                           but it is what the card is reporting, so it needs a
                           way out rather than an explanation. No dropdown: the
                           only useful thing to do with a ghost is forget it. */}
@@ -594,7 +594,7 @@ export default function CharacterSheets({
                       ? sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
                       : '',
                 }))}
-                hint="Linked, the two share hit points — damage on the map lands on this sheet and healing here shows on the map — and the token takes its initiative modifier from these abilities. Its name, picture and size stay its own."
+                hint="Linked, the two share hit points - damage on the map lands on this sheet and healing here shows on the map - and the token takes its initiative modifier from these abilities. Its name, picture and size stay its own."
                 onChange={(tokenId) => linkSheet(sheet, tokenId)}
               />
             )}
@@ -619,7 +619,7 @@ export default function CharacterSheets({
   );
 }
 
-// "GM only" / "Kira can edit · Tom can view" — the GM's answer to "who's got
+// "GM only" / "Kira can edit · Tom can view" - the GM's answer to "who's got
 // this one?" without opening it.
 function accessSummary(sheet, players) {
   const entries = Object.entries(sheet.access || {});

@@ -1,6 +1,6 @@
 // The ruler: what a distance across the board comes to, and how to say it.
 //
-// Kept apart from the tabletop for the usual reason — it is arithmetic, and
+// Kept apart from the tabletop for the usual reason - it is arithmetic, and
 // arithmetic is the part worth being able to check without a browser. Nothing
 // here knows about React, the socket or the map.
 //
@@ -13,7 +13,7 @@
 /**
  * The three units, and what one cell is worth in each by default.
  *
- * Feet at 5 and metres at 1.5 are the two scales D&D is written in — a 5-foot
+ * Feet at 5 and metres at 1.5 are the two scales D&D is written in - a 5-foot
  * square, and the metric conversion the translated books use, which is 1.5 and
  * not the 1.524 the arithmetic would give you. Cells at 1 is the identity: it
  * is the unit for a table that counts squares and doesn't care what they'd be
@@ -35,7 +35,7 @@ export const unitNamed = (id) => UNITS.find((u) => u.id === id) || UNITS[0];
  *
  * The 5e rule: a diagonal step costs exactly what a straight one does, so the
  * distance is the longer of the two spans rather than the hypotenuse. Three
- * across and two down is three cells, not 3.6 — which is why a fireball's range
+ * across and two down is three cells, not 3.6 - which is why a fireball's range
  * reaches further on the diagonal than a tape measure says it should, and why
  * every table that plays 5e counts it this way.
  *
@@ -55,7 +55,7 @@ export const totalCells = (points = []) => legsOf(points).reduce((sum, leg) => s
  * Say a distance the way the panel is set to say it.
  *
  * Rounded to one decimal and then trimmed, so whole numbers read as "15 ft"
- * rather than "15.0 ft" — but a half cell at 1.5 metres to the square, which is
+ * rather than "15.0 ft" - but a half cell at 1.5 metres to the square, which is
  * a real thing to measure, still reads as 0.8 rather than 1.
  */
 export function formatDistance(cells, unit, perCell) {
@@ -68,7 +68,7 @@ export function formatDistance(cells, unit, perCell) {
 /**
  * Is this point one of the chain's own, and which?
  *
- * `within` is a radius in cells. Returns the index, or -1 — the right-click
+ * `within` is a radius in cells. Returns the index, or -1 - the right-click
  * menu asks this to tell "on a point" from "on the line between two", which are
  * two different offers.
  */
@@ -92,7 +92,7 @@ function distanceToSegment(a, b, at) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const lengthSq = dx * dx + dy * dy;
-  // A zero-length leg — two points in one cell — is just the point itself.
+  // A zero-length leg - two points in one cell - is just the point itself.
   if (lengthSq === 0) return Math.hypot(at.x - a.x, at.y - a.y);
   // How far along the segment the nearest spot is, clamped so a point beyond
   // either end measures to that end rather than to the infinite line.
@@ -100,7 +100,7 @@ function distanceToSegment(a, b, at) {
   return Math.hypot(at.x - (a.x + t * dx), at.y - (a.y + t * dy));
 }
 
-/** Is `at` on this measurement at all — a point of it, or a leg between two? */
+/** Is `at` on this measurement at all - a point of it, or a leg between two? */
 export function touches(points = [], at, within) {
   if (pointIndexAt(points, at, within) >= 0) return true;
   for (let i = 1; i < points.length; i += 1) {
@@ -113,7 +113,7 @@ export function touches(points = [], at, within) {
  * Where a leg's label wants to sit: the middle of it, nudged clear of the line.
  *
  * Perpendicular to the leg rather than always above it, so a label never lies
- * along the line it is describing — which at a diagonal is what makes the two
+ * along the line it is describing - which at a diagonal is what makes the two
  * unreadable together.
  */
 export function labelSpot(a, b, offset = 0.35) {

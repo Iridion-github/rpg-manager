@@ -8,7 +8,7 @@ import { api } from './api.js';
  *
  * One component for both places it appears: the Tokens tab, where it is a thing
  * to browse, and the token modals, where it is a thing to choose from. `onPick`
- * is the whole difference — given one, tiles become buttons.
+ * is the whole difference - given one, tiles become buttons.
  *
  * The listing is fetched once per page and kept here, module-level, rather than
  * per mount. It is two thousand entries that change when someone copies a file
@@ -94,7 +94,7 @@ export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
    * Searching is a different view, not a filter on this one.
    *
    * A match three folders away is the whole point of typing, so the current
-   * folder stops mattering the moment there is a term — and because a result
+   * folder stops mattering the moment there is a term - and because a result
    * has been torn out of its folder, it carries that folder with it.
    */
   const results = useMemo(() => {
@@ -114,8 +114,8 @@ export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
    * The wait, said out loud.
    *
    * Deliberately not a blocking overlay. This is the one screen in the app with
-   * a genuinely large answer behind it — a couple of thousand pictures to list
-   * — and everything else on the page keeps working while it arrives: the map,
+   * a genuinely large answer behind it - a couple of thousand pictures to list
+   * - and everything else on the page keeps working while it arrives: the map,
    * the chat, the sheets. Taking the whole app away to report on one tab's
    * loading would be a bigger interruption than the loading is.
    *
@@ -160,7 +160,7 @@ export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
         key={file.url}
         className={className}
         onClick={() => (onPick ? onPick(file) : setPreview(file))}
-        title={onPick ? full : `${full} — click to look closer`}
+        title={onPick ? full : `${full} - click to look closer`}
       >
         {inner}
       </button>
@@ -248,7 +248,7 @@ export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
  *
  * No zoom: the artwork is 256px square, so magnifying it only magnifies the
  * encoder. What this is for is seeing the whole picture rather than the circle
- * the map crops it into — the part outside that circle is usually where the
+ * the map crops it into - the part outside that circle is usually where the
  * artist put the rest of the creature.
  */
 function TokenPreview({ file, onClose }) {

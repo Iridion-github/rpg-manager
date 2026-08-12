@@ -5,7 +5,7 @@ import { api } from './api.js';
  * Sign in, or make an account.
  *
  * Shown in place of the app when nobody is signed in. There's nothing useful
- * behind it — every campaign endpoint needs an identity — so this is a door
+ * behind it - every campaign endpoint needs an identity - so this is a door
  * rather than a banner over a half-usable page.
  */
 export default function Auth({ onSignedIn }) {
@@ -51,7 +51,7 @@ export default function Auth({ onSignedIn }) {
    * account exists: it claims nothing was sent, only that if there was
    * somewhere to send to, something has gone. Anything more definite here would
    * put back the account-enumeration leak the route goes out of its way to
-   * avoid — and would be a lie in the two cases where nothing was posted.
+   * avoid - and would be a lie in the two cases where nothing was posted.
    */
   async function askForReset(e) {
     e.preventDefault();
@@ -97,8 +97,8 @@ export default function Auth({ onSignedIn }) {
             </p>
             <p className="hint">
               {config.canSendMail
-                ? 'Nothing arrived? An account registered with a signup code may have no address on file — there is no way to reach it, and the server admin can hand you a reset link instead.'
-                : "This server has no mail set up, so nothing was actually posted — the link is in the server's outbox file. Ask whoever runs it."}
+                ? 'Nothing arrived? An account registered with a signup code may have no address on file - there is no way to reach it, and the server admin can hand you a reset link instead.'
+                : "This server has no mail set up, so nothing was actually posted - the link is in the server's outbox file. Ask whoever runs it."}
             </p>
             <button onClick={backToLogin}>Back to signing in</button>
           </>
@@ -206,14 +206,14 @@ export default function Auth({ onSignedIn }) {
             </label>
 
             {/* type="email" gets the browser's own validation, which is both
-                better than a regex and reported in the user's language — and it
+                better than a regex and reported in the user's language - and it
                 still applies to an address that's optional, since a half-typed
                 one is a typo rather than a decision to leave it out.
 
                 Optional exactly when a signup code is being asked for: the code
                 is already something only an invited person has, so an address
                 on top of it is asking twice for the same assurance. The server
-                decides this the same way (routes/auth.js) — this only spares
+                decides this the same way (routes/auth.js) - this only spares
                 someone filling in a field that would have been accepted empty. */}
             <label>
               Email{' '}
@@ -274,7 +274,7 @@ export default function Auth({ onSignedIn }) {
 
       <p className="hint">
         {registering
-          ? `Making an account gets you onto the server — a DM still has to add you to their campaign. ${
+          ? `Making an account gets you onto the server - a DM still has to add you to their campaign. ${
               config.signupNeedsCode
                 ? 'The signup code is what gets you in, so an email is up to you; leave it blank and there is simply no way to reach you if you lose your password.'
                 : 'Your email is only ever used to get you back in; nobody else can see it.'

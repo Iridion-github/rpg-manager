@@ -4,8 +4,8 @@
  * The shape of a D&D 5e character sheet.
  *
  * Only *raw* values are stored. Everything the printed sheet asks you to work
- * out — ability modifiers, save and skill bonuses, proficiency bonus, passive
- * Perception, spell save DC — is derived when rendering. Storing a derived
+ * out - ability modifiers, save and skill bonuses, proficiency bonus, passive
+ * Perception, spell save DC - is derived when rendering. Storing a derived
  * number means it can disagree with the value it came from, and then you have
  * two answers and no way to tell which is right.
  */
@@ -43,7 +43,7 @@ function pickSaves(source = {}) {
 /**
  * Skill proficiency: 0 none, 1 proficient, 2 expertise.
  *
- * Keys aren't checked against a list of the 18 skills on purpose — that list
+ * Keys aren't checked against a list of the 18 skills on purpose - that list
  * lives in the client, which does the rendering, and duplicating it here just
  * creates two places to forget. Shape and volume are what matter for storage.
  */
@@ -76,7 +76,7 @@ function pickDice(source, allowed) {
 /**
  * Attacks used to hold free text ("+5", "1d8 + 3 slashing"). Rather than drop
  * what people already typed, read a dice spec out of it where the shape is
- * obvious — anything unparseable simply comes back empty, which is what an
+ * obvious - anything unparseable simply comes back empty, which is what an
  * unset attack looks like anyway.
  */
 function legacyToHit(value) {

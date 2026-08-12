@@ -3,12 +3,12 @@
 # The three settings that actually matter are all below, and each of them fixes
 # a failure that is otherwise silent:
 #
-#   plan: starter   — the free instance type sleeps after ~15 minutes AND has no
+#   plan: starter   - the free instance type sleeps after ~15 minutes AND has no
 #                     disk, so the database resets whenever it wakes. That looks
 #                     like it works for one evening.
-#   disk            — where the SQLite file and uploaded maps live. Without it
+#   disk            - where the SQLite file and uploaded maps live. Without it
 #                     every deploy is a factory reset.
-#   HOST=0.0.0.0    — the server binds to localhost by default so that a
+#   HOST=0.0.0.0    - the server binds to localhost by default so that a
 #                     Cloudflare Tunnel is the only way in. Inside a container
 #                     that means Render's router cannot reach it at all, and the
 #                     health check fails with nothing useful in the logs.
@@ -29,7 +29,7 @@ services:
     # rather than of whether Render happens to be signed in.
     healthCheckPath: /api/status
     # SQLite is a file. Two instances writing one file over a network disk
-    # corrupt it — this must stay at 1, and Render enforces it anyway once a
+    # corrupt it - this must stay at 1, and Render enforces it anyway once a
     # disk is attached.
     numInstances: 1
     disk:

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The people this server knows about — global, not per campaign.
+ * The people this server knows about - global, not per campaign.
  *
  * A list, not a place accounts are made. People arrive by registering
  * (routes/auth.js), and SIGNUP_CODE is what decides who may: an open
@@ -16,7 +16,7 @@
  *
  * The roster is readable by any signed-in user, because a DM needs to pick from
  * a list of people to add to their campaign. It carries names and colours and
- * nothing else — publicUser decides that, and it is the only shape a user ever
+ * nothing else - publicUser decides that, and it is the only shape a user ever
  * leaves this file in.
  */
 
@@ -50,7 +50,7 @@ router.get('/me', (req, res) => {
 });
 
 /**
- * Names and colours, for member pickers and token labels — plus who is here.
+ * Names and colours, for member pickers and token labels - plus who is here.
  *
  * `online` is read from the live sockets on every request rather than stored:
  * it is a fact about connections that exist right now, and the roster listens
@@ -68,7 +68,7 @@ router.get('/', requireUser, async (req, res, next) => {
   }
 });
 
-// No POST here on purpose. People arrive by registering — see routes/auth.js,
+// No POST here on purpose. People arrive by registering - see routes/auth.js,
 // and SIGNUP_CODE for who may. An account minted from the admin list was a name
 // and an invite key with no username or password behind it, which made it a
 // second kind of person: one who could be handed a link but could never sign
@@ -91,7 +91,7 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
  * The gap this fills: an account registered under a signup code was never made
  * to give an address, and /auth/forgot can only post a letter. Without this the
  * only remedy for a forgotten password is deleting the account, which takes
- * every campaign membership with it — a person losing their seat at four tables
+ * every campaign membership with it - a person losing their seat at four tables
  * because they mistyped something eight characters long.
  *
  * The link is handed back to the *admin* rather than sent anywhere, because
@@ -101,9 +101,9 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
  *
  * Worth being plain about what this is: for as long as it lasts, whoever holds
  * this link can set that account's password and sign in as them. That is not a
- * power the admin didn't already have — this database is a directory of JSON
+ * power the admin didn't already have - this database is a directory of JSON
  * files on a machine they own, and there is no arrangement of routes that
- * changes it — but a button is not the same as a text editor, so the screen
+ * changes it - but a button is not the same as a text editor, so the screen
  * offering it says so out loud, and the link expires in an hour like every
  * other one.
  *
@@ -118,7 +118,7 @@ router.post('/:id/reset', requireAdmin, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'Not found' });
     if (user.globalRole === 'admin') {
       return res.status(400).json({
-        error: 'The admin password is server configuration — change ADMIN_PASSWORD instead.',
+        error: 'The admin password is server configuration - change ADMIN_PASSWORD instead.',
       });
     }
     const token = await holdChange(user.id, 'reset', {});
@@ -130,7 +130,7 @@ router.post('/:id/reset', requireAdmin, async (req, res, next) => {
 
 // Nothing to rotate any more: an account is reached by signing in, and a
 // password is the owner's to change (routes/auth.js). The admin's lever for a
-// compromised account is to delete it, which takes its sessions with it — or,
+// compromised account is to delete it, which takes its sessions with it - or,
 // where the account is worth keeping, the reset link above.
 
 router.delete('/:id', requireAdmin, async (req, res, next) => {
@@ -143,7 +143,7 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'The admin account cannot be deleted.' });
     }
     await store.remove(USERS, req.params.id);
-    // A live session outlives its account otherwise — the token would still
+    // A live session outlives its account otherwise - the token would still
     // resolve until it expired on its own.
     await destroySessionsFor(req.params.id);
     notifyUser(req, req.params.id, 'identity:changed', {});

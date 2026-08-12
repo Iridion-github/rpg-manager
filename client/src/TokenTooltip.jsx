@@ -6,7 +6,7 @@ import { initiativeText } from './initiative.js';
  * What a token is, shown while the pointer rests on it.
  *
  * It replaces the browser's own `title` bubble, which can hold a line of text
- * and nothing else — no bar, no telling one reader from another. Everyone gets
+ * and nothing else - no bar, no telling one reader from another. Everyone gets
  * the name and the initiative; only the DM gets the hit points, because knowing
  * exactly how close the ogre is to dropping is the table's job to find out.
  *
@@ -26,8 +26,8 @@ export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
   /**
    * Follow the token.
    *
-   * It moves for reasons React never hears about — the map scrolling under a
-   * drag, a zoom, another player pushing it across the board — so rather than
+   * It moves for reasons React never hears about - the map scrolling under a
+   * drag, a zoom, another player pushing it across the board - so rather than
    * remembering where the pointer arrived, this re-reads the token's box every
    * frame and writes a transform straight to the node. Off the render path
    * entirely: no state changes, so hovering costs nothing in re-renders.
@@ -40,7 +40,7 @@ export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
       if (!el || !anchor?.isConnected) return;
       const box = anchor.getBoundingClientRect();
       const { offsetWidth: w, offsetHeight: h } = el;
-      // Above the token, unless that would put it off the top of the window —
+      // Above the token, unless that would put it off the top of the window -
       // then below, which is the only other place it certainly fits.
       const above = box.top - h - GAP;
       const top = above < MARGIN ? box.bottom + GAP : above;
@@ -56,7 +56,7 @@ export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
 
   const hasInitiative = token.initiative !== null && token.initiative !== undefined;
   // A total of zero is a token whose hit points nobody set up, not one at death's
-  // door — there is no bar to draw for it.
+  // door - there is no bar to draw for it.
   const total = token.maxHp ?? 0;
   const tracked = showHp && total > 0;
   // Clamped for the bar's sake: a stored value can outlive the total it was
@@ -68,7 +68,7 @@ export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
       <strong>{token.label}</strong>
 
       {/* Whose it is, said in words. The colour on the token itself is the
-          glance; this is the answer when the glance isn't enough — two players
+          glance; this is the answer when the glance isn't enough - two players
           with similar colours, or somebody new to the table. */}
       {owner && (
         <span className="token-tip-row">

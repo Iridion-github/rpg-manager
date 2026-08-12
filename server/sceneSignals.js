@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Pings and focus pulls — things one person does *to everyone's screen*.
+ * Pings and focus pulls - things one person does *to everyone's screen*.
  *
  * Neither is data. A ping is a coloured pulse at a spot on the map and a focus
  * moves everybody's camera there; a minute later there is nothing to have
@@ -14,7 +14,7 @@
  * size looks somewhere different, and cells stop being a unit at all when the
  * grid is off. Map pixels are the one frame of reference every client shares.
  *
- * The campaign comes from the socket's own state, never the payload — same rule
+ * The campaign comes from the socket's own state, never the payload - same rule
  * as tokenDrag.js. A message that could name its own campaign would be a way to
  * flash a ping on a table you aren't sitting at.
  */
@@ -35,7 +35,7 @@ const inBounds = (v) => Number.isFinite(v) && v >= -20000 && v <= 20000;
 const isHexColor = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 
 /**
- * A ruler is measured in *cells*, not map pixels — the same coordinates tokens
+ * A ruler is measured in *cells*, not map pixels - the same coordinates tokens
  * stand on. Wider bounds than a map has cells, since a measurement is allowed
  * to run off the edge of the picture.
  */
@@ -43,8 +43,8 @@ const inCells = (v) => Number.isFinite(v) && v >= -500 && v <= 500;
 
 // Ceilings on the shape of the thing, since this is relayed rather than stored
 // and so has no schema anywhere else to stop it growing. Generous next to any
-// real use — a dozen chains of fifty points is far past the point where a
-// board becomes unreadable — and small enough that the worst a crafted client
+// real use - a dozen chains of fifty points is far past the point where a
+// board becomes unreadable - and small enough that the worst a crafted client
 // can put on somebody else's screen is a mess they can clear by leaving.
 const MAX_CHAINS = 12;
 const MAX_POINTS = 50;
@@ -53,7 +53,7 @@ const MAX_POINTS = 50;
  * The measurements as they may be passed on, or null if they may not be.
  *
  * Null rather than an empty list for a malformed payload: empty is a real and
- * meaningful state — it is how a ruler gets taken down — and answering a bad
+ * meaningful state - it is how a ruler gets taken down - and answering a bad
  * message with it would let a garbled packet wipe the sender's own board.
  */
 function sanitizeMeasurements(list) {
@@ -111,7 +111,7 @@ function registerSceneSignals(io) {
       if (typeof sceneId !== 'string' || !sceneId) return;
       if (!inBounds(Number(x)) || !inBounds(Number(y))) return;
 
-      // The sender's name comes from the socket's identity, never the payload —
+      // The sender's name comes from the socket's identity, never the payload -
       // otherwise a ping could claim to be from anyone.
       io.to(roomFor(campaignId)).emit('scene:pinged', {
         sceneId,
@@ -127,7 +127,7 @@ function registerSceneSignals(io) {
      *
      * Sent to the whole room including the sender, so one code path moves every
      * camera and the person who asked for it sees exactly what everyone else
-     * sees. Clients that aren't on this scene ignore it — moving the viewport of
+     * sees. Clients that aren't on this scene ignore it - moving the viewport of
      * someone reading a different map would be motion with no meaning.
      */
     /**
@@ -135,8 +135,8 @@ function registerSceneSignals(io) {
      *
      * The third ephemeral signal, and the one that lasts longest: a ping is a
      * flash and a focus is a jump, but a shared measurement stands on other
-     * people's screens until its owner takes it down. It is still not data —
-     * nobody wants yesterday's tape measure restored with the map — so it lives
+     * people's screens until its owner takes it down. It is still not data -
+     * nobody wants yesterday's tape measure restored with the map - so it lives
      * here with the other two and never reaches the disk.
      *
      * The whole set travels on every change rather than one point at a time.
@@ -157,7 +157,7 @@ function registerSceneSignals(io) {
       if (typeof sceneId !== 'string' || !sceneId) return;
 
       // Not run through `cleared()`. That gate exists to stop a loop flashing
-      // pings faster than a hand could, and it drops what it refuses — which
+      // pings faster than a hand could, and it drops what it refuses - which
       // for a stream of states would mean silently keeping an old ruler on
       // screen after the newer one that replaced it was thrown away. Dragging a
       // pointer across the map legitimately produces changes faster than four a
@@ -176,7 +176,7 @@ function registerSceneSignals(io) {
         sceneId,
         // The sender's own id, so a viewer can key one ruler per person and
         // replace it rather than accumulating every state ever sent. From the
-        // socket's identity, never the payload — a measurement that could name
+        // socket's identity, never the payload - a measurement that could name
         // its own author would be a way to wipe somebody else's off the board.
         userId: socket.data.actor?.userId || '',
         by: socket.data.actor?.name || '',

@@ -49,7 +49,7 @@ export const abilityMod = (score) => Math.floor(((Number(score) || 10) - 10) / 2
 export const proficiencyBonus = (level) =>
   2 + Math.floor((Math.min(20, Math.max(1, Number(level) || 1)) - 1) / 4);
 
-/** Always show a sign — a bonus of 0 reads as "+0", never a bare "0". */
+/** Always show a sign - a bonus of 0 reads as "+0", never a bare "0". */
 export const signed = (n) => (n < 0 ? `${n}` : `+${n}`);
 
 export function saveBonus(sheet, ability) {

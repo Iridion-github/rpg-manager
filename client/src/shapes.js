@@ -1,14 +1,14 @@
 // The drawing layer's geometry, in one place.
 //
-// Shapes are stored in cells, like tokens, and drawn in map pixels — the SVG
+// Shapes are stored in cells, like tokens, and drawn in map pixels - the SVG
 // over the map carries a viewBox in map pixels, so one set of numbers works at
 // every zoom and nothing here has to know what the zoom is. The only conversion
 // is cells → map pixels, and it's the same one tokens make: the grid's own
 // corner, plus so many cells of it.
 //
-// The four kinds are the ones every tabletop with a template tool settles on —
+// The four kinds are the ones every tabletop with a template tool settles on -
 // a rectangle for a room, a circle for a burst, a cone for a breath weapon, a
-// line for a lightning bolt — and they carry the same handful of numbers those
+// line for a lightning bolt - and they carry the same handful of numbers those
 // tools do: a length, a direction, and how wide the cone opens.
 
 /** The tools, in the order they're offered. */
@@ -22,7 +22,7 @@ export const TOOLS = [
   {
     kind: 'circle',
     name: 'Circle',
-    hint: 'Drag from the centre outwards — the radius follows the pointer.',
+    hint: 'Drag from the centre outwards - the radius follows the pointer.',
   },
   {
     kind: 'cone',
@@ -111,7 +111,7 @@ export const angleTo = (c, p) => wrap((Math.atan2(p.y - c.y, p.x - c.x) * 180) /
 export const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 
 /**
- * The point a shape turns about, in cells — and so where its centre mark goes.
+ * The point a shape turns about, in cells - and so where its centre mark goes.
  *
  * A rectangle turns about the middle of its box and a circle has nothing but a
  * middle, but a cone and a line turn about the point they come *out* of: that's
@@ -124,7 +124,7 @@ export function shapePivot(shape) {
 }
 
 /**
- * A map point in the shape's own frame — that is, with its turn undone.
+ * A map point in the shape's own frame - that is, with its turn undone.
  *
  * A rotated rectangle's edges aren't the box's edges any more, so every
  * question about them ("is this grab on the left side?") is asked here, where
@@ -138,7 +138,7 @@ export const localPoint = (shape, p) =>
  * from the fill it's drawn on.
  *
  * Judged by relative luminance rather than by hue, because that's what
- * contrast actually is — 0.179 is the point where black and white are equally
+ * contrast actually is - 0.179 is the point where black and white are equally
  * readable against a colour, so either side of it there's a clear winner. The
  * complement of a colour would be prettier and, for anything near mid-grey,
  * nearly invisible.
@@ -159,7 +159,7 @@ export function contrastInk(hex) {
 }
 
 /**
- * The centre mark, in screen pixels — it's drawn inside a group scaled against
+ * The centre mark, in screen pixels - it's drawn inside a group scaled against
  * the zoom, so it stays this size however far in you are.
  *
  * The dot is 3px across, which is a mark rather than a blob: it's there to say
@@ -174,7 +174,7 @@ export const turnArcPath = (r = TURN_R) => `M 0 ${-r} A ${r} ${r} 0 0 1 0 ${r}`;
 
 /**
  * The head on the end of that arc. At the bottom of a clockwise turn the
- * travel is leftwards, so this points that way — which is the whole reason the
+ * travel is leftwards, so this points that way - which is the whole reason the
  * arc is there rather than a plain ring.
  */
 export const turnHeadPath = (r = TURN_R) => `M -4 ${r} L 0.3 ${r - 2.6} L 0.3 ${r + 2.6} Z`;
@@ -182,7 +182,7 @@ export const turnHeadPath = (r = TURN_R) => `M -4 ${r} L 0.3 ${r - 2.6} L 0.3 ${
 /**
  * Which sides of a rectangle a grab took hold of, in the shape's own frame.
  *
- * `tol` is how close counts as "on the edge", in cells — the caller works it
+ * `tol` is how close counts as "on the edge", in cells - the caller works it
  * out from the zoom, since what the hand was aiming at was a stroke a few
  * screen pixels wide. A grab that somehow lands on no side at all takes the
  * nearest one: the press already hit the outline, so doing nothing would be
@@ -218,7 +218,7 @@ const MIN_SIDE = 0.2;
  * The box a resize drag leaves behind, given the sides it's holding.
  *
  * The correction at the end is the part that isn't obvious. A rectangle turns
- * about the centre of its box, and moving one edge moves that centre — so
+ * about the centre of its box, and moving one edge moves that centre - so
  * without putting the box back by the difference that shift makes, pulling one
  * side of a *rotated* rectangle would swing the opposite side away from where
  * you left it.
@@ -263,7 +263,7 @@ export const resizeRadius = (shape, point, snapOn) =>
  *
  * Measured as "how far round from where you grabbed it", not "point at the
  * cursor", so the shape doesn't jump to meet the pointer the moment you touch
- * the mark. Snapping goes to fifteen degrees — a twenty-fourth of a turn, which
+ * the mark. Snapping goes to fifteen degrees - a twenty-fourth of a turn, which
  * is fine enough to aim a cone and coarse enough to land on square.
  */
 export function turnedTo(startDir, grabbedAt, nowAt, snapOn) {
@@ -284,7 +284,7 @@ export const snapCell = (value, on) => (on ? Math.round(value * 2) / 2 : round2(
 /**
  * Build the shape a drag describes: where it started, where the pointer is now.
  *
- * `from` and `to` are in cells. Every kind reads the same two points — what
+ * `from` and `to` are in cells. Every kind reads the same two points - what
  * differs is what it makes of them, which is the whole of the difference
  * between these tools.
  */
@@ -337,7 +337,7 @@ export const isDrawn = (shape) =>
  * The shape as SVG, in map pixels.
  *
  * `cell` is how many map pixels one cell spans and `origin` is where cell (0,0)
- * starts — the grid's own offset — so a shape sits on the squares it was drawn
+ * starts - the grid's own offset - so a shape sits on the squares it was drawn
  * on even after the grid has been slid across the picture.
  */
 export function shapePath(shape, cell, origin = { x: 0, y: 0 }) {
@@ -349,7 +349,7 @@ export function shapePath(shape, cell, origin = { x: 0, y: 0 }) {
     const w = px(shape.w);
     const h = px(shape.h);
     // Four corners rather than a run of h/v steps, because a rectangle can be
-    // turned — and once it is, none of its sides is horizontal any more.
+    // turned - and once it is, none of its sides is horizontal any more.
     const middle = { x: cx + w / 2, y: cy + h / 2 };
     const corners = [
       { x: cx, y: cy },

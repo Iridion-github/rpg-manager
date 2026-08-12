@@ -35,7 +35,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const chatOf = (req) => scoped(req.campaignId, COLLECTION);
 
 // The name on a message is the name of whoever's credential sent it, and the
-// role is the one they hold *at this table* — the same person is "DM" in one
+// role is the one they hold *at this table* - the same person is "DM" in one
 // campaign's log and themselves in another's.
 function speakerFor(req) {
   if (!req.campaignRole) return null;
@@ -48,12 +48,12 @@ function speakerFor(req) {
  *
  * A secret roll is for the person who made it and the DM, nobody else. The rule
  * is enforced on the way out as well as on the way in: everyone else is never
- * *sent* it, rather than sent it and asked not to look — a hidden line in the
+ * *sent* it, rather than sent it and asked not to look - a hidden line in the
  * payload is a hidden line the dev tools will happily show.
  *
  * `secretFor` is the roller's user id, recorded at the time. A player without
  * one (an invite key, no account) can't be matched, so their secret rolls are
- * the DM's alone — which is the safe way for that to be wrong.
+ * the DM's alone - which is the safe way for that to be wrong.
  */
 const canSeeMessage = (message, actor, role) =>
   !message.secret || role === 'dm' || Boolean(actor?.userId && actor.userId === message.secretFor);
@@ -74,7 +74,7 @@ function appendMessage(req, message) {
 const coinFace = (v) => (v === 1 ? 'Heads' : 'Tails');
 
 // Plain-text form of a roll, so a message still reads sensibly anywhere that
-// doesn't render the structured version — the offline cache included.
+// doesn't render the structured version - the offline cache included.
 function describeRoll({ count, sides, modifier, rolls, total, advantage, label }) {
   if (sides === COIN) {
     return `flipped ${count} coin${count === 1 ? '' : 's'}: ${rolls.map(coinFace).join(', ')}`;
@@ -87,7 +87,7 @@ function describeRoll({ count, sides, modifier, rolls, total, advantage, label }
 }
 
 /**
- * Post a line the table didn't type — "the DM shared a handout", and friends.
+ * Post a line the table didn't type - "the DM shared a handout", and friends.
  *
  * It's attributed to the DM rather than to a nameless system voice because it
  * only ever reports something the DM just did, and an unattributed line in a
@@ -124,7 +124,7 @@ router.post('/', async (req, res, next) => {
     const text = String(req.body?.text ?? '').trim().slice(0, MAX_LENGTH);
     if (!text) return res.status(400).json({ error: 'Nothing to send.' });
 
-    // The author comes from the credential, never from the request body — you
+    // The author comes from the credential, never from the request body - you
     // cannot post as somebody else by asking nicely.
     const message = {
       id: crypto.randomUUID(),
@@ -147,7 +147,7 @@ router.post('/', async (req, res, next) => {
  *
  * Rolled here, not in the browser: a client-side roll is a client-side result,
  * and at a table that's the one number nobody should be able to choose. Uses
- * crypto.randomInt, which is uniform — Math.random() * n + 1 is not.
+ * crypto.randomInt, which is uniform - Math.random() * n + 1 is not.
  */
 router.post('/roll', async (req, res, next) => {
   try {
@@ -171,7 +171,7 @@ router.post('/roll', async (req, res, next) => {
     const label = String(req.body?.label ?? '').trim().slice(0, 100);
     const rolled = advantage ? 2 : count;
 
-    // A roll the rest of the table doesn't get to see. The DM always does —
+    // A roll the rest of the table doesn't get to see. The DM always does -
     // this hides a result from the other players, it isn't a way to roll where
     // the DM can't check.
     const secret = Boolean(req.body?.secret);
@@ -192,7 +192,7 @@ router.post('/roll', async (req, res, next) => {
       role: speaker.role,
       at: new Date().toISOString(),
       // Only carried when it means something, so an ordinary roll keeps the
-      // shape it has always had — including in browsers holding an older
+      // shape it has always had - including in browsers holding an older
       // cached copy of the log.
       ...(secret ? { secret: true, secretFor: req.actor?.userId || null } : {}),
     };

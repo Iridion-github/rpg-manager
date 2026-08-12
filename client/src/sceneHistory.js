@@ -2,7 +2,7 @@
 //
 // Each recorder here turns one action into the pair of calls that take it back
 // and put it again, and hands them to the stack in history.js. They go through
-// the ordinary API — there is no special undo endpoint — so the server checks
+// the ordinary API - there is no special undo endpoint - so the server checks
 // permission on a reversal exactly as it checked the action, and a player can
 // no more undo their way into moving somebody else's token than they could move
 // it in the first place.
@@ -15,8 +15,8 @@
 import { api } from './api.js';
 import { record, stale } from './history.js';
 
-// Positions are floats — a token placed on a gridless map lands on fractions of
-// a cell — so "the same place" is a tolerance, not an equality. Matches
+// Positions are floats - a token placed on a gridless map lands on fractions of
+// a cell - so "the same place" is a tolerance, not an equality. Matches
 // SAME_SPOT on the map and on the server, for the same reason they match each
 // other: three ideas of "the same square" would eventually disagree.
 const SAME = 0.02;
@@ -42,7 +42,7 @@ export function matches(current, expected) {
  *
  * A field the record simply doesn't have stays undefined rather than becoming
  * null: JSON drops it on the way out, and the server then keeps whatever it
- * already had — which is what "this action never touched that" should mean. A
+ * already had - which is what "this action never touched that" should mean. A
  * null would instead be read as a value and written over the top of one.
  */
 export const pick = (obj, keys) => Object.fromEntries(keys.map((key) => [key, obj?.[key]]));
@@ -85,7 +85,7 @@ export function recordTokenMove({ sceneId, tokenId, label, from, to }) {
       sceneId,
       tokenId,
       expected,
-      `${name} has been moved by someone else since — that move is no longer yours to take back.`,
+      `${name} has been moved by someone else since - that move is no longer yours to take back.`,
       () => api.moveToken(sceneId, tokenId, target.x, target.y)
     );
 
@@ -105,7 +105,7 @@ export function recordTokenEdit({ sceneId, tokenId, label, before, after }) {
       sceneId,
       tokenId,
       expected,
-      `${name} has been edited by someone else since — that edit is no longer yours to take back.`,
+      `${name} has been edited by someone else since - that edit is no longer yours to take back.`,
       () => api.updateToken(sceneId, tokenId, next)
     );
 
@@ -118,7 +118,7 @@ export function recordTokenEdit({ sceneId, tokenId, label, before, after }) {
 }
 
 /**
- * Creating one. Undo takes it off the map; redo puts it back — as a *new*
+ * Creating one. Undo takes it off the map; redo puts it back - as a *new*
  * token, since the server names its own. The entry follows the id it made, or a
  * second undo would go looking for one that no longer exists.
  */
@@ -138,7 +138,7 @@ export function recordTokenAdd({ sceneId, token }) {
   });
 }
 
-/** Deleting one — the same pair the other way round. */
+/** Deleting one - the same pair the other way round. */
 export function recordTokenDelete({ sceneId, token }) {
   const live = { id: token.id };
   record({
@@ -179,7 +179,7 @@ export function recordShapeAdd({ sceneId, shape }) {
   });
 }
 
-/** Rubbing one out — the same pair the other way round. */
+/** Rubbing one out - the same pair the other way round. */
 export function recordShapeDelete({ sceneId, shape }) {
   const live = { id: shape.id };
   record({
@@ -199,8 +199,8 @@ export function recordShapeDelete({ sceneId, shape }) {
 /**
  * Clearing the board. One entry, so one Ctrl+Z brings the whole lot back.
  *
- * The shapes come back as *new* shapes — the server names every one it's given
- * — so the entry follows the ids it made, exactly as the single-shape
+ * The shapes come back as *new* shapes - the server names every one it's given
+ * - so the entry follows the ids it made, exactly as the single-shape
  * recorders do, or a second undo would go looking for shapes nobody has.
  */
 export function recordShapesCleared({ sceneId, shapes }) {
@@ -231,7 +231,7 @@ export function recordShapesCleared({ sceneId, shapes }) {
 /**
  * Changing one: moved, resized, recoloured.
  *
- * Guarded like every other reversal — if somebody else has since changed the
+ * Guarded like every other reversal - if somebody else has since changed the
  * same shape, this refuses rather than reaching into their work. A shape can
  * only be changed by the hand that drew it or by the DM, so in practice that
  * somebody is the DM tidying up behind you.
@@ -240,7 +240,7 @@ export function recordShapeEdit({ sceneId, shapeId, before, after }) {
   const step = (expected, next) => async () => {
     const shape = await shapeNow(sceneId, shapeId);
     if (!matches(shape, expected)) {
-      throw stale('That shape has been changed by someone else since — it is no longer yours to take back.');
+      throw stale('That shape has been changed by someone else since - it is no longer yours to take back.');
     }
     await api.updateShape(sceneId, shapeId, next);
   };
@@ -250,7 +250,7 @@ export function recordShapeEdit({ sceneId, shapeId, before, after }) {
 /**
  * Taking a token off the table, and putting it back.
  *
- * These two are each other's opposite, so one pair of calls serves both — which
+ * These two are each other's opposite, so one pair of calls serves both - which
  * is only true because a token keeps its id across the move. It is the same
  * token in both places, and undo can therefore name it without having to guess
  * which of several look-alikes it meant.
@@ -284,7 +284,7 @@ export function recordTokenSpawn({ sceneId, token }) {
 }
 
 // What to call a scene change in a message, by the field it touched. Several
-// fields can move together — a new map brings its own width and height — so the
+// fields can move together - a new map brings its own width and height - so the
 // first one named is the one that gets to speak for the change.
 const SCENE_FIELDS = {
   gridSize: 'cell size',
@@ -300,7 +300,7 @@ const SCENE_FIELDS = {
 /**
  * A change to the scene itself: the grid, the map under it, its name.
  *
- * `before` and `after` hold the same fields — only the ones the action touched,
+ * `before` and `after` hold the same fields - only the ones the action touched,
  * so reversing puts those back and leaves everything else on the scene exactly
  * as it is now, whoever else has been at it in the meantime.
  */
@@ -310,7 +310,7 @@ export function recordSceneEdit({ sceneId, before, after }) {
   const step = (expected, next) => async () => {
     const scene = await sceneNow(sceneId);
     if (!matches(scene, expected)) {
-      throw stale(`The ${what} has been changed by someone else since — that change is no longer yours to take back.`);
+      throw stale(`The ${what} has been changed by someone else since - that change is no longer yours to take back.`);
     }
     await api.updateScene(sceneId, { ...scene, ...next });
   };

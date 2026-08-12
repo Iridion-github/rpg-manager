@@ -8,7 +8,7 @@
  * same record into a handout the table can read. Two collections would mean
  * "publish this" was a delete-and-recreate, which loses the id and the history.
  *
- * Only the DM writes. Every member may read — but the *server* decides what
+ * Only the DM writes. Every member may read - but the *server* decides what
  * "read" returns: a player never receives an unshared note at all, rather than
  * being sent everything and trusted to hide it. A body that reaches the browser
  * has already left your control.
@@ -50,7 +50,7 @@ function announce(req, action, id) {
   broadcast(req, 'notes:changed', { action, id });
 }
 
-// Sharing is worth saying out loud — a handout nobody notices may as well not
+// Sharing is worth saying out loud - a handout nobody notices may as well not
 // exist. Only the false → true edge announces, so re-saving a shared note
 // doesn't nag the table.
 function announceShare(req, record) {
@@ -95,7 +95,7 @@ router.put('/:id', requireDm, async (req, res, next) => {
   try {
     // mutate, not update: we need the *previous* shared flag to spot the edge,
     // and reading it before an update would race with another save landing in
-    // between. No createIfMissing — a PUT to a deleted note is a 404, not a
+    // between. No createIfMissing - a PUT to a deleted note is a 404, not a
     // resurrection.
     let wasShared = false;
     const record = await store.mutate(notesOf(req), req.params.id, (current) => {

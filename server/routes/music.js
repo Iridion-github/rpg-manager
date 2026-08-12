@@ -4,7 +4,7 @@
  * Shared music for a campaign.
  *
  * The DM keeps a list of YouTube links and presses play on one; everyone at the
- * table hears it. What travels is not audio — it's an instruction: *this video,
+ * table hears it. What travels is not audio - it's an instruction: *this video,
  * started at this moment*. Each browser plays its own copy and seeks to
  * `now - startedAt`, which is what lets someone arriving late join the track
  * already in progress instead of starting it over for themselves.
@@ -14,7 +14,7 @@
  * fine; it is not a way to play a song in unison for an audience.
  *
  * The DM alone controls playback. A player hearing music they can't stop is
- * the point — it's the table's soundtrack, not a shared jukebox.
+ * the point - it's the table's soundtrack, not a shared jukebox.
  */
 
 const express = require('express');
@@ -42,7 +42,7 @@ const cleanTitle = (v) => String(v ?? '').trim().slice(0, MAX_TITLE);
  * Pull the video id out of whatever the DM pasted.
  *
  * Parsed here rather than in the browser so a bad link is rejected once, by the
- * one party every client trusts — and so what gets stored is the id, not
+ * one party every client trusts - and so what gets stored is the id, not
  * whichever of the half-dozen URL shapes happened to be in the clipboard.
  */
 function videoIdFrom(input) {
@@ -124,8 +124,8 @@ router.post('/', requireDm, async (req, res, next) => {
       return res.status(409).json({ error: "That's already in the list." });
     }
 
-    // A title you typed wins over the one YouTube reports — you know what the
-    // track is for at your table better than its uploader does — and it skips
+    // A title you typed wins over the one YouTube reports - you know what the
+    // track is for at your table better than its uploader does - and it skips
     // the lookup entirely. Failing that, ask YouTube; failing that, the id,
     // so a track added while the host is offline is still recognisable.
     const title = cleanTitle(req.body?.title) || (await fetchTitle(videoId)) || videoId;
@@ -141,7 +141,7 @@ router.post('/', requireDm, async (req, res, next) => {
   }
 });
 
-// Rename. The only thing about a track that's editable — the video it points
+// Rename. The only thing about a track that's editable - the video it points
 // at isn't a property of the entry so much as the entry itself.
 router.put('/:id', requireDm, async (req, res, next) => {
   try {
@@ -176,7 +176,7 @@ router.post('/:id/play', requireDm, async (req, res, next) => {
     const track = await store.get(tracksOf(req), req.params.id);
     if (!track) return res.status(404).json({ error: 'Not found' });
 
-    // startedAt is the server's clock, not the DM's browser's — every client
+    // startedAt is the server's clock, not the DM's browser's - every client
     // works out its seek offset against the same reference.
     const playing = {
       trackId: track.id,

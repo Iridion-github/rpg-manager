@@ -9,7 +9,7 @@
  *
  * Everything here is scoped to a campaign. A socket announces which campaign it
  * is looking at (see index.js), and these functions only ever reach sockets
- * watching the same one — otherwise a chat line from one table would land in
+ * watching the same one - otherwise a chat line from one table would land in
  * another table's log. The HTTP side gets this from the URL; the socket side
  * has to be told, and until it has been, it receives nothing.
  */
@@ -81,7 +81,7 @@ function notifyUser(req, userId, event, payload) {
  *
  * Three states, and the sockets already hold all of them: no connection is
  * offline, a connection looking elsewhere is online, and a connection that has
- * announced this campaign is present. Nothing is stored — presence is a fact
+ * announced this campaign is present. Nothing is stored - presence is a fact
  * about live connections, and a stored copy would survive a crash as a lie.
  *
  * Present beats online when someone has two tabs open: one on the map and one
@@ -104,7 +104,7 @@ function presenceIn(io, campaignId) {
  *
  * The same fact `presenceIn` reads, asked without a table in mind: the global
  * roster cares whether somebody is *here*, not which campaign they happen to be
- * looking at. Unstored for the same reason — a saved copy would survive a crash
+ * looking at. Unstored for the same reason - a saved copy would survive a crash
  * as a list of people the server believes are connected to it.
  */
 function onlineUserIds(io) {

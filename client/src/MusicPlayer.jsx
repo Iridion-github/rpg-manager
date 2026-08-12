@@ -5,7 +5,7 @@ import { socket } from './socket.js';
 /**
  * The thing that actually makes noise.
  *
- * It lives in App, beside the chat, and *not* in the Music tab — a component
+ * It lives in App, beside the chat, and *not* in the Music tab - a component
  * unmounts when you switch tabs, and an unmounted player is silence. So the tab
  * is only a list of buttons; this is what plays.
  *
@@ -15,7 +15,7 @@ import { socket } from './socket.js';
  * running, and it's why sync is within a second rather than exact.
  *
  * Only the DM sees any of it. For everyone else the music is meant to be
- * scenery — they hear it and are told nothing: no video, no title, no controls.
+ * scenery - they hear it and are told nothing: no video, no title, no controls.
  * The iframe still has to exist for them, so it's parked off-screen rather than
  * removed, because a frame that isn't rendered can have its playback suspended.
  */
@@ -48,7 +48,7 @@ function loadYouTubeApi() {
     };
     const script = document.createElement('script');
     script.src = API_SRC;
-    // The host PC is the server, so if it's off you're offline anyway — but
+    // The host PC is the server, so if it's off you're offline anyway - but
     // YouTube itself can be blocked separately, and that shouldn't hang here.
     script.onerror = () => reject(new Error('Could not reach YouTube.'));
     document.head.appendChild(script);
@@ -116,7 +116,7 @@ export default function MusicPlayer({ canControl }) {
     loadYouTubeApi()
       .then((YT) => {
         if (cancelled || !hostRef.current) return;
-        // Where the track should be by now — this is the whole sync mechanism.
+        // Where the track should be by now - this is the whole sync mechanism.
         const startSeconds = Math.max(0, (Date.now() - Date.parse(playing.startedAt)) / 1000);
 
         if (playerRef.current?.loadVideoById) {
@@ -152,7 +152,7 @@ export default function MusicPlayer({ canControl }) {
    * anything at all.
    *
    * Any click or keypress is the gesture autoplay was waiting for, and it need
-   * not be aimed at the music — switching tabs or typing in the chat will do.
+   * not be aimed at the music - switching tabs or typing in the chat will do.
    * This is what keeps the players' experience contentless: most of them get
    * sound without ever being shown a button, because they were going to click
    * something anyway.
@@ -218,7 +218,7 @@ export default function MusicPlayer({ canControl }) {
         </div>
       )}
 
-      {/* Everyone else gets nothing — except, when their browser has actually
+      {/* Everyone else gets nothing - except, when their browser has actually
           refused to play, one button that says nothing about what's playing.
           That isn't a music control, it's the browser's consent gate: without
           it a blocked player would sit in silence with no way out of it. It

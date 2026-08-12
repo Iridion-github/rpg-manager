@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 /**
  * What a creature rolled, asked on its own.
  *
- * The token form already has these three fields, but that form is the DM's —
+ * The token form already has these three fields, but that form is the DM's -
  * it also sets what a token looks like, how big it is and who it belongs to.
  * This is the part a player may answer about their own character, so it is its
  * own small dialog rather than a version of the big one with most of it greyed
@@ -55,7 +55,7 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
     >
       <form className="modal token-form" role="dialog" aria-modal="true" onSubmit={submit}>
         <div className="modal-head">
-          <h2>Initiative — {token.label}</h2>
+          <h2>Initiative - {token.label}</h2>
           <button type="button" className="linky" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -70,7 +70,7 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
                 type="number"
                 value={total}
                 onChange={(e) => setTotal(e.target.value)}
-                placeholder="—"
+                placeholder="-"
                 aria-label="Initiative total"
               />
             ) : (
@@ -96,7 +96,7 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
         </div>
 
         <p className="hint">
-          Leave it empty and this token isn't in the fight at all — the turn order only holds
+          Leave it empty and this token isn't in the fight at all - the turn order only holds
           what has a score.
         </p>
 

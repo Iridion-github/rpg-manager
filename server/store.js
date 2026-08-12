@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The store — now SQLite, with the same six verbs it always had.
+ * The store - now SQLite, with the same six verbs it always had.
  *
  * Everything above this file (71 call sites, at last count) speaks in
  * collections and records and knows nothing about how they're kept. That was
@@ -11,7 +11,7 @@
  * ## Why the table looks like this
  *
  * One `records` table of (collection, id, JSON), not a normalised schema. A
- * character sheet is a document — nested abilities, skills, a spell list — and
+ * character sheet is a document - nested abilities, skills, a spell list - and
  * nothing ever asks "every character with STR above 15". Shredding it across
  * eighty columns would buy joins and cost clarity. Where a *constraint* is
  * genuinely worth having, an expression index provides it: see the unique
@@ -20,7 +20,7 @@
  *
  * ## Campaign isolation
  *
- * The collection name carries the campaign — `campaigns/<uuid>/sheets` — and it
+ * The collection name carries the campaign - `campaigns/<uuid>/sheets` - and it
  * is the leading half of the primary key. That's deliberate. The obvious SQL
  * translation would have been one `sheets` table with a `campaign_id` column,
  * and then every query that forgets its WHERE clause silently serves another
@@ -53,7 +53,7 @@ const db = new Database(DB_FILE);
 
 // WAL lets reads carry on during a write, which matters when a token drop and a
 // chat message land together. FULL sync costs a little speed for the guarantee
-// that a committed write survives losing power — this is somebody's campaign on
+// that a committed write survives losing power - this is somebody's campaign on
 // a home PC, and the write volume is tiny.
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = FULL');
@@ -73,7 +73,7 @@ db.exec(`
  * Uniqueness the database enforces, rather than the application hoping for.
  *
  * Registration checks for a duplicate username and then inserts, and between
- * those two steps another registration can land — a race no amount of care in
+ * those two steps another registration can land - a race no amount of care in
  * JavaScript closes. These make the second insert fail instead. The routes keep
  * their friendly check because it gives a better message; this is the backstop
  * that makes the check honest.
@@ -112,7 +112,7 @@ const now = () => new Date().toISOString();
 const parse = (row) => (row ? JSON.parse(row.data) : null);
 
 // The record is stored whole, timestamps included, so what comes back out is
-// exactly what went in. The columns are copies for ordering — written in the
+// exactly what went in. The columns are copies for ordering - written in the
 // same statement as the JSON, so the two cannot drift.
 function write(collection, record) {
   statements.upsert.run({
@@ -174,12 +174,12 @@ async function mutate(collection, id, mutator, { createIfMissing = null } = {}) 
     // would commit before its work happened. Better to say so than to write
     // half a change.
     if (updated && typeof updated.then === 'function') {
-      throw new Error('store.mutate: the mutator must be synchronous — it runs inside a transaction.');
+      throw new Error('store.mutate: the mutator must be synchronous - it runs inside a transaction.');
     }
     if (!updated) return null;
 
-    // createdAt leads so a mutator that returns a fresh record — rather than
-    // spreading the one it was handed — keeps the original birthday instead of
+    // createdAt leads so a mutator that returns a fresh record - rather than
+    // spreading the one it was handed - keeps the original birthday instead of
     // writing NULL into a NOT NULL column. It's before the spread, not after,
     // so a mutator that genuinely means to set one still wins.
     return write(collection, { createdAt: current.createdAt, ...updated, id, updatedAt: now() });
@@ -212,7 +212,7 @@ const isEmpty = () => statements.count.get().n === 0;
  * `create` mints an id, which is right for everything a person makes here and
  * wrong for an import: the file arrives with its own ids, and a scene's tokens
  * refer to the sheet ids beside them. Renumbering on the way in would mean
- * rewriting every reference, so the ids come across intact — they only have to
+ * rewriting every reference, so the ids come across intact - they only have to
  * be unique within the campaign that now holds them, and that campaign is new.
  */
 async function put(collection, record) {

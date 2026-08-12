@@ -22,7 +22,7 @@ export default function Chat({ actor, offline }) {
 
   const listRef = useRef(null);
   // Whether to auto-scroll after the next render. We only follow along if the
-  // reader was already at the bottom — yanking someone back down while they're
+  // reader was already at the bottom - yanking someone back down while they're
   // reading history is worse than missing a line.
   const stickRef = useRef(true);
 
@@ -47,7 +47,7 @@ export default function Chat({ actor, offline }) {
       if (!message?.id) return;
       // Our own echo is welcome here: appending is keyed on the message id, so
       // a duplicate is discarded anyway. Skipping by origin would lose rolls
-      // made elsewhere in this tab — from a character sheet, say — which never
+      // made elsewhere in this tab - from a character sheet, say - which never
       // pass through this component to be appended optimistically.
       setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     };
@@ -111,7 +111,7 @@ export default function Chat({ actor, offline }) {
               <strong>{m.author}</strong>
               <span>{time(m.at)}</span>
               {/* Anyone reading this line is either the DM or the person who
-                  rolled it — the server never sends it to anybody else. Saying
+                  rolled it - the server never sends it to anybody else. Saying
                   so is what stops it being read as a public result. */}
               {m.secret && <span className="badge secret-badge">DM only</span>}
             </div>
@@ -147,7 +147,7 @@ export default function Chat({ actor, offline }) {
         </form>
       ) : (
         <p className="hint chat-readonly">
-          {offline ? 'Offline — chat is read-only.' : 'Spectators can read the chat but not post.'}
+          {offline ? 'Offline - chat is read-only.' : 'Spectators can read the chat but not post.'}
         </p>
       )}
 
@@ -165,7 +165,7 @@ export default function Chat({ actor, offline }) {
 
 const coinFace = (v) => (v === 1 ? 'Heads' : 'Tails');
 
-// Shows the working, not just the answer — at a table people want to see the
+// Shows the working, not just the answer - at a table people want to see the
 // individual dice, and the per-die modifier only makes sense spelled out.
 function RollResult({ roll }) {
   const { count, sides, modifier, rolls, total, advantage, label } = roll;

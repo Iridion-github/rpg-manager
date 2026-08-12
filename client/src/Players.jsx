@@ -4,7 +4,7 @@ import { socket } from './socket.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 
 /**
- * Who is at this table — everyone's view, not just the DM's.
+ * Who is at this table - everyone's view, not just the DM's.
  *
  * Membership has never been a secret from the people inside a campaign (the
  * members endpoint has always been readable by any of them), so this shows the
@@ -47,7 +47,7 @@ export default function Players({ campaignId, actor, isDm, offline }) {
       setRows(await api.listMembers(campaignId));
       setError('');
     } catch (e) {
-      // Offline, this list is simply unavailable — it is nothing but live
+      // Offline, this list is simply unavailable - it is nothing but live
       // facts about a server we can't reach, so there is nothing to cache.
       if (!offline) setError(e.message);
     }
@@ -70,7 +70,7 @@ export default function Players({ campaignId, actor, isDm, offline }) {
     };
   }, [load]);
 
-  // An open menu is dismissed by anything that isn't using it — the same rule
+  // An open menu is dismissed by anything that isn't using it - the same rule
   // the map's right-click menu follows.
   useEffect(() => {
     if (!menu) return;
@@ -202,7 +202,7 @@ export default function Players({ campaignId, actor, isDm, offline }) {
         <ConfirmDeleteModal
           name={removeRow.name}
           title={`Remove ${removeRow.name} from this campaign?`}
-          description="They lose access to this campaign — its map, sheets, notes and chat. Nothing of theirs is deleted, and you can add them back later."
+          description="They lose access to this campaign - its map, sheets, notes and chat. Nothing of theirs is deleted, and you can add them back later."
           confirmLabel="Remove from campaign"
           onConfirm={() => writeMembers(removeRow.id, 'none')}
           onClose={() => setRemoveId('')}
@@ -213,7 +213,7 @@ export default function Players({ campaignId, actor, isDm, offline }) {
 }
 
 /**
- * "Player or DM?" — the whole of what Update role asks.
+ * "Player or DM?" - the whole of what Update role asks.
  *
  * A dialog rather than two more menu items, because the menu would then have to
  * say which one they already are, and a menu that reports state is a menu you

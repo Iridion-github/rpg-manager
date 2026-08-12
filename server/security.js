@@ -7,7 +7,7 @@
  * every one of them is a decision this app has to make anyway (the YouTube
  * player alone rules out any default policy), and a header you can read is a
  * header you can argue with. The trade is that new defaults don't arrive for
- * free — if this file is still here in two years, check it against what
+ * free - if this file is still here in two years, check it against what
  * browsers have learned since.
  */
 
@@ -21,14 +21,14 @@ const DEV_ORIGINS = [
 /**
  * Who may call this API from another origin.
  *
- * Empty means "nobody" — which is the right answer for a published server,
+ * Empty means "nobody" - which is the right answer for a published server,
  * because the app is served from the same origin as the API and same-origin
  * requests never consult CORS at all. It is only the split dev setup (Vite on
  * 5173, API on 3001) that genuinely needs an entry here.
  *
  * `*` is deliberately not reachable. Requests here carry their credential in a
  * header rather than a cookie, so a wildcard couldn't be ridden by a stranger's
- * browser the way a cookie-authenticated one could — but with the gate open in
+ * browser the way a cookie-authenticated one could - but with the gate open in
  * dev an unauthenticated caller *is* the admin, which turns any page you happen
  * to visit into a remote control for your own machine.
  */
@@ -56,7 +56,7 @@ function corsPolicy(origins) {
   const allow = new Set(origins);
   return function cors(req, res, next) {
     const origin = req.get('origin');
-    // No Origin header is a same-origin request, a curl, or a native client —
+    // No Origin header is a same-origin request, a curl, or a native client -
     // none of which CORS governs. Answer normally and add nothing.
     if (origin && allow.has(origin.replace(/\/$/, ''))) {
       res.setHeader('Access-Control-Allow-Origin', origin);
@@ -81,7 +81,7 @@ function corsPolicy(origins) {
  * with a style attribute, and CSP counts those as inline. Scripts are not
  * granted the same, so the one thing an injection would need most is missing.
  *
- * YouTube is in here because the music player embeds it — the API script comes
+ * YouTube is in here because the music player embeds it - the API script comes
  * from www.youtube.com and loads its widget from s.ytimg.com, and the player
  * itself is an iframe. Everything else is same-origin.
  */

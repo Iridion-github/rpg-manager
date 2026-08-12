@@ -4,7 +4,7 @@
     A d20 seen face-on: an icosahedron in that orientation has a hexagonal
     silhouette, one triangle facing you in the middle, and three edges running
     from its corners out to alternating corners of the hexagon. That is the
-    whole drawing — three shapes, no shading, no number.
+    whole drawing - three shapes, no shading, no number.
 
     Deliberately no "20" on the face. At the size this is actually used, sixteen
     pixels in a tab strip, two digits inside the middle triangle would be four
@@ -13,7 +13,7 @@
 
     Vector, so one file serves the tab, the bookmark and the installed-app icon
     at every size. Strokes are heavy relative to the 64-unit box for the same
-    reason — a hairline here disappears entirely at tab size.
+    reason - a hairline here disappears entirely at tab size.
   -->
   <g stroke="#0d1017" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round">
     <!-- The body. Its own dark outline is what keeps it legible against a

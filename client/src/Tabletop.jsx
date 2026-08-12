@@ -71,7 +71,7 @@ const TOOLS_MIN_KEY = 'rpg:map-tools-min';
 
 // And what the drawing tools were last set to. A colour and an opacity are how
 // *you* draw rather than anything about the table, so they live here beside the
-// panel's fold — and reaching for the same tool twice in one evening shouldn't
+// panel's fold - and reaching for the same tool twice in one evening shouldn't
 // mean setting it up twice.
 const SHAPE_STYLE_KEY = 'rpg:shape-style';
 
@@ -85,7 +85,7 @@ const SHAPE_SAVE_MS = 400;
 const MEASURE_KEY = 'rpg:measure-setup';
 
 // How near a right-click has to land, in cells, to be about a measurement
-// rather than about the bare map — and, inside that, to be about one of its
+// rather than about the bare map - and, inside that, to be about one of its
 // points rather than the line between two. The point radius is the smaller
 // because it sits *on* the line: a hand aiming at the line near a point would
 // otherwise always be told it meant the point.
@@ -99,8 +99,8 @@ const MEASURE_POINT_GRAB = 0.25;
 const GRIP_PX = 14;
 
 // And how solid the turn tracker is. Like the panel's fold and the window's own
-// box, this says nothing about the table — only how much of this screen its
-// owner wants the map to have — so it lives in the browser, not the scene.
+// box, this says nothing about the table - only how much of this screen its
+// owner wants the map to have - so it lives in the browser, not the scene.
 const TURNS_OPACITY_KEY = 'rpg:turns-opacity';
 
 // The turn tracker holds a short list, not a character sheet, so it may be
@@ -123,12 +123,12 @@ const GRID_MAX = 240;
 const GRID_WHEEL_STEP = 4;
 
 // Roughly one mouse-wheel notch. Trackpads emit many small deltas instead, so we
-// accumulate and only step once this much has gone by — otherwise a light
+// accumulate and only step once this much has gone by - otherwise a light
 // two-finger flick would rocket through the whole zoom range.
 const WHEEL_NOTCH = 100;
 
 // A right-click is a menu; a right-drag is a pan. Under this much travel the
-// gesture is still a click — which is what lets "press, release, don't really
+// gesture is still a click - which is what lets "press, release, don't really
 // move" open the menu instead of panning the map by three pixels and
 // suppressing it. No pointer is perfectly still for the length of a click.
 const PAN_SLOP = 5;
@@ -138,7 +138,7 @@ const PAN_SLOP = 5;
 const PING_MS = 2400;
 
 // Roughly the menu's own size, used only to stop it opening past the edge of
-// the window. Approximate on purpose — measuring it properly means rendering it
+// the window. Approximate on purpose - measuring it properly means rendering it
 // somewhere invisible first, for a few pixels nobody will ever notice. Sized
 // for the longest of the three menus, which is the map's own: six items and a
 // rule, once there is something on the bench to spawn. The shorter ones open a
@@ -152,19 +152,19 @@ const MENU_H = 182;
  *
  * Everything is measured in map pixels because the layer's viewBox is, so this
  * knows nothing about the zoom except for the two things that must *not* follow
- * it — the outline, which would thin to nothing zoomed out, and the lettering,
+ * it - the outline, which would thin to nothing zoomed out, and the lettering,
  * which is meant to be read rather than scaled.
  */
 function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
   const d = shapePath(shape, cell, origin);
   const at = shapeAnchor(shape, cell, origin);
   const caption = sketching ? shapeSize(shape) : shape.label;
-  // The centre mark, in map pixels — where the shape turns about.
+  // The centre mark, in map pixels - where the shape turns about.
   const pivot = shapePivot(shape);
   const middle = { x: origin.x + pivot.x * cell, y: origin.y + pivot.y * cell };
   const ink = contrastInk(shape.fill);
   // A circle looks the same whichever way it faces, so it has no rotation at
-  // all: no arrow promising a turn, and no handle to start one with — a grip
+  // all: no arrow promising a turn, and no handle to start one with - a grip
   // that quietly wrote a new facing nobody could see would still be a change,
   // a broadcast and an entry in everyone's undo. It keeps the dot, which says
   // where the burst is centred. Everything else can be pointed somewhere.
@@ -212,7 +212,7 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
         </text>
       )}
       {/* Scaled against the zoom so the mark is the same size on screen at any
-          magnification — which is what lets everything inside it be written in
+          magnification - which is what lets everything inside it be written in
           plain pixels. Drawn last, so it's the mark you get when it overlaps
           anything else the shape offers. */}
       {!sketching && (
@@ -242,7 +242,7 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
  *
  * Drawn in cells and scaled into map pixels here, so the numbers it is handed
  * are the numbers that travel between clients. Everything that should keep its
- * size on screen — the stroke, the dots, the type — is divided by the zoom,
+ * size on screen - the stroke, the dots, the type - is divided by the zoom,
  * because the layer it sits in is scaled as a whole and a ruler whose lettering
  * grew with the map would be unreadable at both ends of the range.
  *
@@ -316,7 +316,7 @@ function MeasureMark({ chain, cell, origin, zoom, color, unit, perCell, pending 
         </text>
       )}
 
-      {/* The chain's own running total, at its far end — the answer to "how far
+      {/* The chain's own running total, at its far end - the answer to "how far
           have I come", which for a route with a corner in it is not any of the
           leg numbers. Only once there is more than one leg to add up. */}
       {legs.length > 1 && (
@@ -340,7 +340,7 @@ const TEXT_ENTRY = /^(|text|search|url|email|tel|password|number)$/;
  * Whether a keystroke was aimed at something being *typed into*.
  *
  * Deliberately not "is the focus in a field of any kind". A press on the map
- * calls preventDefault — that's what stops a drag selecting text as it goes —
+ * calls preventDefault - that's what stops a drag selecting text as it goes -
  * and a prevented press also stops the browser moving the focus. So the focus
  * stays on whatever was last touched in a panel, which after any use of the
  * drawing box is a slider or a colour well. Reading that as typing meant a
@@ -357,7 +357,7 @@ function isTyping(target) {
 }
 
 const round1 = (v) => Math.round(v * 10) / 10;
-// Free placement still gets rounded, just far more finely than to a cell —
+// Free placement still gets rounded, just far more finely than to a cell -
 // there's no sense storing a token position to fifteen decimal places.
 const round2 = (v) => Math.round(v * 100) / 100;
 
@@ -382,7 +382,7 @@ export default function Tabletop({ actor, players, offline }) {
   const [maps, setMaps] = useState([]); // built-in maps from public/maps
   const [activeId, setActiveId] = useState('');
   const [zoom, setZoom] = useState(1);
-  // Live grid-slider value. Null means "whatever the scene says" — we only hold
+  // Live grid-slider value. Null means "whatever the scene says" - we only hold
   // a local value while the GM is actually dragging, so another GM's change
   // isn't masked by a stale draft.
   const [gridDraft, setGridDraft] = useState(null);
@@ -401,12 +401,12 @@ export default function Tabletop({ actor, players, offline }) {
   // The right-click menu: where on screen to draw it, and the map point it was
   // opened on. Null when closed.
   const [menu, setMenu] = useState(null);
-  // Pings currently pulsing. Ephemeral by nature — never persisted, and dropped
+  // Pings currently pulsing. Ephemeral by nature - never persisted, and dropped
   // wholesale when the scene changes.
   const [pings, setPings] = useState([]);
   // The token form: either { x, y } for a new token at that spot, or { token }
   // for one being edited. Held here rather than in the modal because the menu
-  // that decided it is closed by the time the modal opens — the choice has to
+  // that decided it is closed by the time the modal opens - the choice has to
   // outlive the thing that made it.
   const [tokenForm, setTokenForm] = useState(null);
   // Every token of this campaign the viewer may touch: the DM's whole cast, or
@@ -423,9 +423,9 @@ export default function Tabletop({ actor, players, offline }) {
   // on. The element is kept rather than looked up again because the event that
   // told us about the hover is holding it already.
   const [hovered, setHovered] = useState(null);
-  // Whether the tools panel is rolled up to its square. A local preference —
+  // Whether the tools panel is rolled up to its square. A local preference -
   // it says nothing about the table, only about how much of this screen its
-  // owner wants the map to have — so it lives in this browser and is read back
+  // owner wants the map to have - so it lives in this browser and is read back
   // on mount, since leaving the tab unmounts the map entirely.
   const [toolsMin, setToolsMin] = useState(() => localStorage.getItem(TOOLS_MIN_KEY) === '1');
   // The token whose row in the turn tracker the pointer is over, lit up on the
@@ -453,11 +453,11 @@ export default function Tabletop({ actor, players, offline }) {
   const pannedRef = useRef(false);
   const gridTimer = useRef(null);
   // The drawing drag in flight: either a new shape being pulled out, or one
-  // being pushed around. A ref for the same reason the token drag is one —
+  // being pushed around. A ref for the same reason the token drag is one -
   // pointer handlers must see the current values, not a render's idea of them.
   const drawRef = useRef(null);
   // Slider changes waiting to be written, and what the shape looked like before
-  // the first of them — which is what Undo has to put back.
+  // the first of them - which is what Undo has to put back.
   const shapeEdit = useRef(null);
   const shapeTimer = useRef(null);
   const wheelAcc = useRef(0);
@@ -474,7 +474,7 @@ export default function Tabletop({ actor, players, offline }) {
   // focus that doesn't change the zoom would re-render nothing and never scroll.
   const [focusTick, setFocusTick] = useState(0);
   // Whether there is anything of yours left to take back, or to put again. Held
-  // as state rather than read at render because the stack is a plain module —
+  // as state rather than read at render because the stack is a plain module -
   // it changes without React being told, so it says so instead.
   const [history, setHistory] = useState(() => ({ undo: canUndo(), redo: canRedo() }));
 
@@ -505,15 +505,15 @@ export default function Tabletop({ actor, players, offline }) {
    * Measuring mode: the box being open, exactly as drawing mode is.
    *
    * Nothing it produces is saved and nothing it produces is a change to the
-   * board. A measurement is a question somebody is asking out loud — "can I
-   * reach him from here?" — and the answer stops being interesting the moment
+   * board. A measurement is a question somebody is asking out loud - "can I
+   * reach him from here?" - and the answer stops being interesting the moment
    * it has been given, so it lives in this component's state and dies with it.
    */
   const [measureWindow, setMeasureWindow] = useState(false);
   /**
    * The ruler: the chains on the board and which one is still taking points.
    *
-   * One piece of state holding both, because every change touches both — a
+   * One piece of state holding both, because every change touches both - a
    * click that starts a chain also makes it the open one, and deleting the open
    * chain closes it. As two they could be updated out of step, and the code
    * that had to keep them in step would be every caller.
@@ -525,7 +525,7 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * The same thing, readable *now*.
    *
-   * Two clicks inside one frame — a double-click, or an impatient tap-tap — are
+   * Two clicks inside one frame - a double-click, or an impatient tap-tap - are
    * both handled before React has re-rendered, so both would read the same
    * stale state from their closure and the second would overwrite the first
    * rather than extend it. That cost a point every time somebody clicked
@@ -542,7 +542,7 @@ export default function Tabletop({ actor, players, offline }) {
   // its far end has been decided. Null when the pointer is off the map.
   const [measureAt, setMeasureAt] = useState(null);
   // What the ruler counts in, and whether anybody else can see it. Remembered
-  // per browser — except for Shared, which is deliberately not: showing the
+  // per browser - except for Shared, which is deliberately not: showing the
   // table your working is a decision about *this* measurement, and one that
   // silently persisted from a fortnight ago is one nobody made.
   const [measureSetup, setMeasureSetup] = useState(() => {
@@ -563,14 +563,14 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * The scene on screen, which is not merely "the one whose id is selected".
    *
-   * A selection can stop resolving — you deleted that scene, or another DM did.
+   * A selection can stop resolving - you deleted that scene, or another DM did.
    * Falling back to the first scene means an id pointing at nothing costs you a
    * selection rather than the whole view: the alternative is rendering the
    * empty state while scenes plainly exist, and since the scene picker lives
    * below that branch there'd be no way back.
    */
   const rawScene = scenes.find((s) => s.id === activeId) || scenes[0] || null;
-  // Everything downstream — the picker, the draft, the wheel handler — follows
+  // Everything downstream - the picker, the draft, the wheel handler - follows
   // what's actually shown, so the id and the view can't disagree.
   const selectedId = rawScene?.id || '';
   // Tokens are always an array from here on, whatever the server sent.
@@ -601,7 +601,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * Re-read whenever the board changes, because the two move together: a token
    * stops being placeable exactly when it arrives on a scene. A failure is
-   * silent — the map is the point of this screen, and a list we couldn't read
+   * silent - the map is the point of this screen, and a list we couldn't read
    * is simply not offered.
    */
   const loadRoster = useCallback(async () => {
@@ -620,8 +620,8 @@ export default function Tabletop({ actor, players, offline }) {
   }, [refresh, loadRoster]);
 
   // --- undo and redo ---
-  // The stack outlives this component — it's a module, so walking off to the
-  // notes and back doesn't cost you your history — which is exactly why the
+  // The stack outlives this component - it's a module, so walking off to the
+  // notes and back doesn't cost you your history - which is exactly why the
   // buttons have to be told when it changes.
   useEffect(() => subscribe(() => setHistory({ undo: canUndo(), redo: canRedo() })), []);
 
@@ -717,7 +717,7 @@ export default function Tabletop({ actor, players, offline }) {
 
     socket.on('scenes:changed', onSceneChange);
     // A token leaving the bench is a token arriving on a scene, and the other
-    // way about — so whatever moved the board may have moved the bench too.
+    // way about - so whatever moved the board may have moved the bench too.
     socket.on('scenes:changed', loadRoster);
     socket.on('token:dragging', onDragging);
     socket.on('token:drag:ended', onDragEnded);
@@ -776,7 +776,7 @@ export default function Tabletop({ actor, players, offline }) {
 
   // --- geometry ---
   // The map keeps its own size; the grid is laid over it. So the surface is
-  // sized from the image and only the *cell* size follows the grid slider —
+  // sized from the image and only the *cell* size follows the grid slider -
   // sliding right makes cells bigger and therefore fewer, not the map larger.
   const gridSize = gridDraft ?? scene?.gridSize ?? 70;
   // Absent means on, matching the server: scenes made before the toggle existed
@@ -788,8 +788,8 @@ export default function Tabletop({ actor, players, offline }) {
   const mapW = scene?.width || 1200;
   const mapH = scene?.height || 840;
   const cellPx = gridSize * zoom;
-  // Where cell (0,0) starts, in map pixels. Everything measured in cells —
-  // the lines, the tokens, the square a pointer is over — is measured from
+  // Where cell (0,0) starts, in map pixels. Everything measured in cells -
+  // the lines, the tokens, the square a pointer is over - is measured from
   // here, so moving it slides the whole grid across a map that stays put.
   const gridOffX = offsetDraft?.x ?? scene?.gridOffsetX ?? 0;
   const gridOffY = offsetDraft?.y ?? scene?.gridOffsetY ?? 0;
@@ -800,7 +800,7 @@ export default function Tabletop({ actor, players, offline }) {
   const rows = Math.max(1, Math.floor(mapH / gridSize));
 
   // One token per cell. Footprints are rectangles because a token can be bigger
-  // than one cell, so this mirrors the server's check — the server is still the
+  // than one cell, so this mirrors the server's check - the server is still the
   // authority, this just avoids a doomed round trip and lets us warn mid-drag.
   const blockerAt = useCallback(
     (x, y, size, ignoreId) =>
@@ -818,7 +818,7 @@ export default function Tabletop({ actor, players, offline }) {
   // --- the drawing layer ---
   // Drawing is for the people playing: a spectator reads the board, and the
   // server would refuse them anyway. What you may do to a shape once it exists
-  // is a separate question — see canEditShape below, which is the ownership
+  // is a separate question - see canEditShape below, which is the ownership
   // rule tokens already have.
   const canDraw = !offline && (isDm || actor?.role === 'player');
   /**
@@ -826,19 +826,19 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * Opening it is a change of mode: from then on the map answers to shapes
    * rather than to tokens, whether or not there's a tool in hand. You can pick
-   * up what's already drawn, and every shape shows its centre mark — a mode you
+   * up what's already drawn, and every shape shows its centre mark - a mode you
    * have to arm by choosing a tool would be two steps to reach one state.
    * Picking a tool then adds the one thing this doesn't do on its own: pulling
    * a *new* shape out of the map.
    */
   const drawing = canDraw && shapeWindow;
   // What could be put on the board right now. A token already standing on a
-  // scene — this one or another — is not a thing you can place; it is a thing
+  // scene - this one or another - is not a thing you can place; it is a thing
   // you can go and look at.
   const placeable = roster.filter((t) => !t.sceneId);
   const shapes = scene?.shapes || [];
   const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
-  // Yours if you drew it, anyone's if you're the DM — the rule the server keeps.
+  // Yours if you drew it, anyone's if you're the DM - the rule the server keeps.
   const canEditShape = useCallback(
     (shape) =>
       Boolean(shape) &&
@@ -847,7 +847,7 @@ export default function Tabletop({ actor, players, offline }) {
     [isDm, offline, actor]
   );
   // The ones this person could clear: all of them for the DM, their own for
-  // anyone else — the rule the server keeps, asked here so the button that
+  // anyone else - the rule the server keeps, asked here so the button that
   // offers it can name a real number. Declared below canEditShape rather than
   // beside the list it filters, because that's the order it can be read in.
   const clearableShapes = shapes.filter((s) => canEditShape(s));
@@ -855,7 +855,7 @@ export default function Tabletop({ actor, players, offline }) {
   // --- the ruler ---
   /**
    * Your own colour, on anything of yours that appears on somebody else's
-   * screen — a ping, and now a shared ruler. It carries who it is from without
+   * screen - a ping, and now a shared ruler. It carries who it is from without
    * a name having to be read mid-combat.
    *
    * Declared up here rather than beside the ping that first needed it: the
@@ -869,7 +869,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * While it's on, the board stops answering to hands: no token drags, no shape
    * grips, no menu on a token. That is the mode rather than a side effect of it
-   * — a ruler is used *over* a board you are reading, and a click that measured
+   * - a ruler is used *over* a board you are reading, and a click that measured
    * sometimes and dragged an ogre other times would be a ruler nobody trusted
    * near a crowded map. Everything is still visible, and still moves when
    * somebody else moves it; it just isn't yours to touch for the moment.
@@ -879,7 +879,7 @@ export default function Tabletop({ actor, players, offline }) {
   // The legs of every chain added together. Total distance in the panel: it is
   // asked about a route, and a route is usually more than one leg.
   const measuredCells = measurements.reduce((sum, m) => sum + totalCells(m.points), 0);
-  // Somebody else's ruler, but only the ones about the board on screen — a line
+  // Somebody else's ruler, but only the ones about the board on screen - a line
   // measured on another map is a line drawn in another map's coordinates.
   const remoteRulers = Object.values(remoteMeasures).filter(
     (r) => r.sceneId === selectedId && r.measurements.length > 0
@@ -890,13 +890,13 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * Measuring is counting cells, and counting what you cannot see is guessing.
    * But `gridOn` is a property of the *scene*: it is saved, it is the same for
-   * everybody, and only the DM may change it — so a player entering this mode
+   * everybody, and only the DM may change it - so a player entering this mode
    * could not turn it on, and a DM entering it would be turning it on for the
    * whole table and leaving it on afterwards.
    *
    * So the grid is drawn locally instead, for exactly as long as there is a
    * measurement to read against it, and for exactly the people who can see that
-   * measurement: the measurer, and — when it's shared — everyone else. Nothing
+   * measurement: the measurer, and - when it's shared - everyone else. Nothing
    * is written, nothing is sent, and when the last ruler goes the grid goes back
    * to whatever the scene actually says.
    */
@@ -908,7 +908,7 @@ export default function Tabletop({ actor, players, offline }) {
    * Measuring actions go on the same undo stack as everything else, because
    * "Ctrl+Z takes back the last thing you did" is a promise about the last
    * thing you did, not about the last thing you did to the server. They're
-   * tagged so leaving the mode can drop them — the measurements are gone by
+   * tagged so leaving the mode can drop them - the measurements are gone by
    * then, and an entry that would put one back is a promise it can't keep.
    */
   const recordMeasure = useCallback(
@@ -930,7 +930,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * `next` is handed the current state and returns the next one, or null to
    * mean "nothing to do". Read from the ref rather than from this render, so a
-   * second click arriving in the same frame builds on the first — and written
+   * second click arriving in the same frame builds on the first - and written
    * outside a state updater, since recording history inside one would write the
    * entry twice the first time React chose to call it twice.
    */
@@ -989,7 +989,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * Said in the panel, and true: they are not saved anywhere, so there is no
    * version of this where closing the box and reopening it finds them again.
-   * The undo entries go at the same moment — an entry that would put back a
+   * The undo entries go at the same moment - an entry that would put back a
    * ruler in a mode that is switched off is a promise the stack can't keep, and
    * Ctrl+Z reaching past a token move to redraw one would be baffling.
    */
@@ -1012,7 +1012,7 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * Show the table what you're measuring, or stop showing them.
    *
-   * The whole set goes on every change rather than the change itself — see the
+   * The whole set goes on every change rather than the change itself - see the
    * note on the server side. It is at most a few dozen numbers, and a stream of
    * states cannot get out of order in a way that leaves a line on somebody's
    * screen that was never on yours.
@@ -1039,7 +1039,7 @@ export default function Tabletop({ actor, players, offline }) {
   }, [measuring, measureShared, offline, selectedId, measurements, measureSetup, myColor]);
 
   // Somebody else's ruler arriving. Keyed by whose it is, so a new set from one
-  // person replaces theirs and leaves everybody else's alone — and an empty set
+  // person replaces theirs and leaves everybody else's alone - and an empty set
   // is how a ruler is taken down, which the same line handles.
   useEffect(() => {
     const onMeasured = ({ sceneId, userId, by, measurements: theirs, unit, perCell, color }) => {
@@ -1099,15 +1099,15 @@ export default function Tabletop({ actor, players, offline }) {
   // Snapping is only ever on when there are squares to snap to.
   const snapping = shapeStyle.snap && gridOn;
 
-  // Where the pointer is on the board, in cells — on the squares if that's what
+  // Where the pointer is on the board, in cells - on the squares if that's what
   // was asked for.
   function drawPoint(e) {
     const { px, py } = pointerCell(e);
     return { x: snapCell(px, snapping), y: snapCell(py, snapping) };
   }
 
-  // The same, untouched. Turning and stretching do their own rounding — of an
-  // angle, or of the far edge — and snapping the pointer first would round the
+  // The same, untouched. Turning and stretching do their own rounding - of an
+  // angle, or of the far edge - and snapping the pointer first would round the
   // measurement twice, each time to a different thing.
   function rawPoint(e) {
     const { px, py } = pointerCell(e);
@@ -1164,7 +1164,7 @@ export default function Tabletop({ actor, players, offline }) {
     e.preventDefault();
     // A press on the map is the map taking the keyboard. The preventDefault
     // above is what stops the browser doing this itself, so without it the
-    // focus stays wherever the panel left it — and after typing a label,
+    // focus stays wherever the panel left it - and after typing a label,
     // Delete would go on belonging to that text field rather than to the shape
     // you have just picked up. Without the scroll, because moving the view is
     // the one thing a press on the map must never do by itself.
@@ -1203,7 +1203,7 @@ export default function Tabletop({ actor, players, offline }) {
           base,
           shape: base,
           // Which sides, for a rectangle. The tolerance is the hit stroke's own
-          // width in cells — what the hand was aiming at was a band of screen
+          // width in cells - what the hand was aiming at was a band of screen
           // pixels, and this is that band said in the shape's units.
           held:
             shape.kind === 'rect'
@@ -1318,7 +1318,7 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * Change a shape: a slider moved, or a drag that put it somewhere else.
    *
-   * Applied here and written when the hand stops, like the grid's own sliders —
+   * Applied here and written when the hand stops, like the grid's own sliders -
    * a colour picker dragged across the spectrum would otherwise be a hundred
    * writes and a hundred broadcasts of a shape nobody has finished choosing.
    */
@@ -1333,7 +1333,7 @@ export default function Tabletop({ actor, players, offline }) {
       )
     );
     // The shape as it stood before the *first* change of a burst is the one
-    // Undo has to put back — not as it stood one slider-notch ago.
+    // Undo has to put back - not as it stood one slider-notch ago.
     if (shapeEdit.current?.id !== id) shapeEdit.current = { id, before: shape, changes: {} };
     shapeEdit.current.changes = { ...shapeEdit.current.changes, ...changes };
     clearTimeout(shapeTimer.current);
@@ -1420,7 +1420,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * With the Grid gauge selected the same gesture is aimed at the grid rather
    * than the camera: the map stays exactly where it is and the cells slide over
-   * it. That's what makes a map with a grid already drawn on it usable — size
+   * it. That's what makes a map with a grid already drawn on it usable - size
    * the cells to match the art, then push them onto it. The view still has its
    * scrollbars, and picking Zoom again gives the pan back.
    */
@@ -1443,7 +1443,7 @@ export default function Tabletop({ actor, players, offline }) {
       // Decided at the press, not at each move: changing gauge mid-drag would
       // otherwise turn a nudge into a pan halfway through it.
       grid: canNudgeGrid,
-      // Where the grid started, and where it has got to — kept here rather than
+      // Where the grid started, and where it has got to - kept here rather than
       // read back from the draft, so the save at the end can't pick up a value
       // from a render that hasn't happened yet. The start is kept as well as
       // the running total: it's what Undo puts back.
@@ -1468,7 +1468,7 @@ export default function Tabletop({ actor, players, offline }) {
     if (p.grid) {
       // In map pixels, not screen ones: the offset is stored against the map,
       // so everyone draws the same alignment whatever their zoom. Held to a
-      // cell each way — beyond that the grid only repeats itself.
+      // cell each way - beyond that the grid only repeats itself.
       p.offX = clamp(Math.round(p.offX + (e.clientX - p.x) / zoom), -gridSize, gridSize);
       p.offY = clamp(Math.round(p.offY + (e.clientY - p.y) / zoom), -gridSize, gridSize);
       // The travel so far has been spent; measure the next move from here.
@@ -1495,7 +1495,7 @@ export default function Tabletop({ actor, players, offline }) {
       /* pointer already gone */
     }
     // Saved when the hand comes off the map rather than once per pixel of
-    // travel — the same bargain the cell-size slider makes with its timer.
+    // travel - the same bargain the cell-size slider makes with its timer.
     if (p.grid && pannedRef.current) {
       saveGridOffset(p.offX, p.offY, { gridOffsetX: p.fromX, gridOffsetY: p.fromY });
     }
@@ -1503,7 +1503,7 @@ export default function Tabletop({ actor, players, offline }) {
 
   // --- scroll to adjust ---
   // The wheel drives one of the bars in the scene bar rather than the
-  // scrollbars — whichever is selected there. Registered natively because React
+  // scrollbars - whichever is selected there. Registered natively because React
   // attaches wheel listeners as *passive*, where preventDefault() is ignored and
   // the page would scroll anyway.
   useEffect(() => {
@@ -1524,7 +1524,7 @@ export default function Tabletop({ actor, players, offline }) {
       if (!notches) return;
       wheelAcc.current -= notches * WHEEL_NOTCH;
 
-      // Scrolling down (positive delta) means less of whatever is selected —
+      // Scrolling down (positive delta) means less of whatever is selected -
       // zoomed further out, or smaller cells.
       if (wheelTarget === 'grid' && canTuneGrid) {
         const next = clamp(gridSize - notches * GRID_WHEEL_STEP, GRID_MIN, GRID_MAX);
@@ -1536,7 +1536,7 @@ export default function Tabletop({ actor, players, offline }) {
       if (next === zoom) return;
 
       // Remember the map point under the cursor so it stays put across the
-      // zoom — otherwise the view lurches away from whatever you're aiming at.
+      // zoom - otherwise the view lurches away from whatever you're aiming at.
       const surf = surfaceRef.current;
       const box = el.getBoundingClientRect();
       if (surf) {
@@ -1579,7 +1579,7 @@ export default function Tabletop({ actor, players, offline }) {
    * Centre the view on a map point, once the zoom it arrived with is on screen.
    *
    * Runs after every render that bumped focusTick, which is why the tick exists
-   * — a focus at the zoom you already had changes no state the renderer can see.
+   * - a focus at the zoom you already had changes no state the renderer can see.
    */
   useLayoutEffect(() => {
     const target = pendingFocus.current;
@@ -1590,14 +1590,14 @@ export default function Tabletop({ actor, players, offline }) {
     if (!el || !surf) return;
     const box = el.getBoundingClientRect();
     const sBox = surf.getBoundingClientRect();
-    // Where the surface begins in content coordinates — derived rather than
+    // Where the surface begins in content coordinates - derived rather than
     // read from offsetLeft, because `margin: 0 auto` centring shifts it.
     const originX = sBox.left - box.left + el.scrollLeft;
     const originY = sBox.top - box.top + el.scrollTop;
     // Put the point in the middle of the viewport. Assigning past either end is
     // clamped by the browser, which is exactly what should happen at a border
     // or a corner: scroll as far as there is map to scroll, and no further. The
-    // spot ends up off-centre there, which is the honest result — the alternative
+    // spot ends up off-centre there, which is the honest result - the alternative
     // is showing everyone a margin of nothing so the maths can come out even.
     el.scrollLeft = originX + target.mx * zoom - el.clientWidth / 2;
     el.scrollTop = originY + target.my * zoom - el.clientHeight / 2;
@@ -1607,7 +1607,7 @@ export default function Tabletop({ actor, players, offline }) {
   useEffect(() => {
     if (!menu) return;
     const close = (e) => {
-      // Not a press on the menu itself — that press is someone choosing an item,
+      // Not a press on the menu itself - that press is someone choosing an item,
       // and closing here would unmount the button before its click landed.
       if (e?.target && menuRef.current?.contains(e.target)) return;
       setMenu(null);
@@ -1657,7 +1657,7 @@ export default function Tabletop({ actor, players, offline }) {
    * In the *capture* phase on the document, which is the whole trick: the
    * measuring window listens for Escape too, on the document, to close itself.
    * A bubbling listener would run after that one and find the window already
-   * shut. Capture runs first, so this gets to decide — and stops the event
+   * shut. Capture runs first, so this gets to decide - and stops the event
    * where it stands when there was a line to end.
    *
    * With no line open the key falls through untouched, and Escape closes the
@@ -1672,7 +1672,7 @@ export default function Tabletop({ actor, players, offline }) {
       if (isTyping(e.target)) return;
       e.stopPropagation();
       e.preventDefault();
-      // Not recorded as an undoable action. Nothing about the board changed —
+      // Not recorded as an undoable action. Nothing about the board changed -
       // this only says the next click starts somewhere new, and a Ctrl+Z that
       // silently reopened a line for appending would be an invisible edit.
       applyRuler({ ...rulerRef.current, openChainId: null });
@@ -1685,8 +1685,8 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * Delete rubs out the shape you have hold of.
    *
-   * Only while a tool is in hand and something is picked — the same two
-   * conditions that put the button in the panel — so the key means nothing at
+   * Only while a tool is in hand and something is picked - the same two
+   * conditions that put the button in the panel - so the key means nothing at
    * all when there's nothing selected to mean it about. Undo puts it back, like
    * everything else here, which is why it doesn't stop to ask.
    */
@@ -1694,7 +1694,7 @@ export default function Tabletop({ actor, players, offline }) {
     if (!drawing || !selectedShapeId) return;
     const onKey = (e) => {
       if (e.key !== 'Delete') return;
-      // Delete inside a text box is a text box's own key — the label field in
+      // Delete inside a text box is a text box's own key - the label field in
       // the drawing panel is one, and it's a field you type in with a shape
       // selected by definition. A slider is not.
       if (isTyping(e.target)) return;
@@ -1723,7 +1723,7 @@ export default function Tabletop({ actor, players, offline }) {
      * token you cannot so much as drag would be a menu describing a different
      * mode. What it offers depends on what the click landed on, and the
      * hit-testing is done here in cells rather than by the DOM, so the drawn
-     * layer can stay untouchable to the pointer — a line one pixel wide is not
+     * layer can stay untouchable to the pointer - a line one pixel wide is not
      * a thing anybody can be asked to hit.
      */
     if (measuring) {
@@ -1754,7 +1754,7 @@ export default function Tabletop({ actor, players, offline }) {
 
     // A token gets a menu about *that token* rather than about the map under
     // it. The DM gets one on any token; a player gets one on their own, where
-    // there is now something on it for them — their initiative, and taking the
+    // there is now something on it for them - their initiative, and taking the
     // token off the table. On anybody else's they keep the browser's own menu,
     // because a menu of things you may not do is worse than no menu.
     const el = e.target.closest?.('.token');
@@ -1795,7 +1795,7 @@ export default function Tabletop({ actor, players, offline }) {
    * The three things the ruler's menu can do.
    *
    * All local, all undoable, none of them asking first. Nothing here can lose
-   * work — a measurement is a question, not a drawing — and a confirmation
+   * work - a measurement is a question, not a drawing - and a confirmation
    * dialog in front of something Ctrl+Z puts straight back is a dialog that
    * only ever gets in the way.
    */
@@ -1855,14 +1855,14 @@ export default function Tabletop({ actor, players, offline }) {
 
   /**
    * The same pull, aimed at where a token stands rather than where a pointer
-   * was — what a double-click in the turn list does.
+   * was - what a double-click in the turn list does.
    *
    * Token coordinates are in cells and the focus wants map pixels, and it wants
    * the middle of the token rather than its top-left corner: a size-3 giant
    * centred on its corner sits a cell and a half off the middle of the screen.
    */
   // Resolved from the live scene when the item is chosen, not when the menu was
-  // opened — the same care the map's own menu takes, since a token can be
+  // opened - the same care the map's own menu takes, since a token can be
   // deleted or moved while its menu is sitting there.
   function focusFromTurnList() {
     const token = scene?.tokens.find((t) => t.id === menu?.turnTokenId);
@@ -1899,7 +1899,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * Measured from the grid's own corner, so it follows the grid when that has
    * been slid across the map. Rounded to a square where there is a grid to
-   * round to, and clamped to the board — you can right-click beside a map that
+   * round to, and clamped to the board - you can right-click beside a map that
    * is narrower than its scroller.
    */
   const cellAt = (mx, my) => ({
@@ -1934,7 +1934,7 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   // Asking first, like every other delete in the app. The menu closes as the
-  // dialog opens — leaving both on screen would be two things asking to be
+  // dialog opens - leaving both on screen would be two things asking to be
   // answered about the same token.
   function askDeleteToken() {
     if (!menuToken) return;
@@ -1988,7 +1988,7 @@ export default function Tabletop({ actor, players, offline }) {
   }
 
   /**
-   * What this creature rolled — the one number about a token that belongs to
+   * What this creature rolled - the one number about a token that belongs to
    * the person playing it rather than to the person running the table.
    *
    * Not wrapped in guard(): the dialog is open, and an error belongs in front
@@ -2042,7 +2042,7 @@ export default function Tabletop({ actor, players, offline }) {
    * The same rule the server applies when Next decides who acts (routes/
    * scenes.js `turnOrder`): highest initiative first, ties to the bigger
    * modifier, and a token without an initiative isn't in the fight at all. The
-   * two are kept in step on purpose — if this list and that one disagreed, the
+   * two are kept in step on purpose - if this list and that one disagreed, the
    * highlight would land somewhere Next never goes.
    */
   const order = useMemo(() => turnOrderOf(scene?.tokens), [scene?.tokens]);
@@ -2050,7 +2050,7 @@ export default function Tabletop({ actor, players, offline }) {
   const turnMode = Boolean(scene?.turnMode);
 
   // Only while the list it comes from is on screen. Rows can be taken away
-  // under the pointer — the fight ends, the window is folded — and no
+  // under the pointer - the fight ends, the window is folded - and no
   // mouseleave arrives to say so, which would strand the highlight on the map.
   const spotlitId = turnMode ? spotlight : null;
 
@@ -2126,7 +2126,7 @@ export default function Tabletop({ actor, players, offline }) {
       if (ack?.ok) {
         if (dragRef.current) dragRef.current.authorized = true;
       } else {
-        // The server disagrees about who owns this — stop immediately.
+        // The server disagrees about who owns this - stop immediately.
         setError(ack?.error || 'You cannot move that token.');
         endDrag();
       }
@@ -2135,7 +2135,7 @@ export default function Tabletop({ actor, players, offline }) {
 
   function onPointerMove(e) {
     // The leg being drawn follows the pointer, so the distance is readable
-    // before the far end has been decided — which is most of what a ruler is
+    // before the far end has been decided - which is most of what a ruler is
     // for. The cell centre rather than the pointer itself, so the number on
     // screen is the number the next click will commit.
     if (measuring) {
@@ -2163,17 +2163,17 @@ export default function Tabletop({ actor, players, offline }) {
     if (onDrawEnd()) return;
     const d = dragRef.current;
     if (!d) return;
-    // Snap to the grid on drop — or don't, when there isn't one.
+    // Snap to the grid on drop - or don't, when there isn't one.
     const x = gridOn ? Math.round(d.x) : round2(d.x);
     const y = gridOn ? Math.round(d.y) : round2(d.y);
     const tokenId = d.tokenId;
     endDrag();
 
-    // Nothing moved — don't spend a write on it.
+    // Nothing moved - don't spend a write on it.
     if (x === d.fromX && y === d.fromY) return;
 
     // Occupied: silently refuse. Clearing the drag above already returned the
-    // token to its stored square, so the move simply doesn't happen — no
+    // token to its stored square, so the move simply doesn't happen - no
     // message needed, since the red outline already said so mid-drag.
     if (blockerAt(x, y, d.size, tokenId)) return;
     // Apply locally, then persist. The PUT re-checks ownership server-side, so
@@ -2246,7 +2246,7 @@ export default function Tabletop({ actor, players, offline }) {
   const patchScene = (changes) =>
     guard(async () => {
       const fields = Object.keys(changes);
-      // Read off the scene as this screen reads it, defaults filled in — an
+      // Read off the scene as this screen reads it, defaults filled in - an
       // older scene may never have stored a grid offset or a gridOn flag, and
       // "put back what was there" has to mean the value that was in force, not
       // the gap where it wasn't written down.
@@ -2280,7 +2280,7 @@ export default function Tabletop({ actor, players, offline }) {
     setGridDraft(value);
     clearTimeout(gridTimer.current);
     gridTimer.current = setTimeout(async () => {
-      // What the scene said before this settle — one entry per time the hand
+      // What the scene said before this settle - one entry per time the hand
       // comes to rest, rather than one per pixel of slider travel.
       const before = { gridSize: scene.gridSize ?? 70 };
       try {
@@ -2303,7 +2303,7 @@ export default function Tabletop({ actor, players, offline }) {
     try {
       const updated = await api.updateScene(scene.id, {
         ...scene,
-        // The slider's own draft, if one is mid-flight — otherwise saving the
+        // The slider's own draft, if one is mid-flight - otherwise saving the
         // offset would write the cell size back to what it was before it moved.
         gridSize,
         gridOffsetX: x,
@@ -2348,8 +2348,8 @@ export default function Tabletop({ actor, players, offline }) {
         )
       );
       // Only the fields the form asked about, and read back off the server's
-      // answer rather than off the form: it settles some of them itself — hit
-      // points from a total, an initiative from its die and modifier — and an
+      // answer rather than off the form: it settles some of them itself - hit
+      // points from a total, an initiative from its die and modifier - and an
       // undo has to put back what was stored, not what was typed.
       const fields = Object.keys(asked);
       recordTokenEdit({
@@ -2370,7 +2370,7 @@ export default function Tabletop({ actor, players, offline }) {
       imageUrl,
       // `stats` carries the owner the form chose. It used to be overwritten
       // with null here, which is why nothing in the app could hand a token to
-      // anybody — every permission check behind it worked, and nothing ever
+      // anybody - every permission check behind it worked, and nothing ever
       // set the field they all read.
       ...stats,
       x: tokenForm.x,
@@ -2402,7 +2402,7 @@ export default function Tabletop({ actor, players, offline }) {
     );
   }
 
-  // Sized from the map, not the grid — the whole point of the ratio slider.
+  // Sized from the map, not the grid - the whole point of the ratio slider.
   const width = mapW * zoom;
   const height = mapH * zoom;
 
@@ -2411,7 +2411,7 @@ export default function Tabletop({ actor, players, offline }) {
    *
    * A lookup rather than a run of ternaries: there are three of these now and
    * each wants its own heading, its own warning and its own button. The
-   * warnings differ in kind, not just in wording — a scene is gone for good,
+   * warnings differ in kind, not just in wording - a scene is gone for good,
    * where a token or a board of shapes is one Ctrl+Z from coming back.
    */
   const CONFIRM = {
@@ -2470,7 +2470,7 @@ export default function Tabletop({ actor, players, offline }) {
             aria-label="Zoom"
             onChange={(e) => setZoom(Number(e.target.value))}
             // Taking hold of a bar is as much a way of choosing it as clicking
-            // its name — you've said which one you're working on either way.
+            // its name - you've said which one you're working on either way.
             onPointerDown={() => pickWheel('zoom')}
             title="Scroll over the map to zoom"
           />
@@ -2480,7 +2480,7 @@ export default function Tabletop({ actor, players, offline }) {
         {isDm && !offline && (
           <>
             {/* Grid ratio: how much of the map one cell covers. The map does
-                not change size — only the number of cells over it does. */}
+                not change size - only the number of cells over it does. */}
             <div className={`zoom grid-ratio${wheelTarget === 'grid' ? ' wheel-target' : ''}`}>
               <input
                 type="checkbox"
@@ -2490,7 +2490,7 @@ export default function Tabletop({ actor, players, offline }) {
                 aria-label="Show the grid and snap tokens to it"
               />
               {/* The word used to be the checkbox's label. It picks the wheel
-                  now, so the checkbox carries its own aria-label instead —
+                  now, so the checkbox carries its own aria-label instead -
                   otherwise choosing what to scroll would flick the grid off. */}
               <button
                 type="button"
@@ -2633,7 +2633,7 @@ export default function Tabletop({ actor, players, offline }) {
           {/* The drawing layer, under the grid and under the tokens: a shape
               marks out ground, and ground is the thing everything else stands
               on. In map pixels via the viewBox, so one set of numbers is right
-              at every zoom — and the strokes are told not to scale with it, or
+              at every zoom - and the strokes are told not to scale with it, or
               zooming out would thin every outline into nothing. */}
           <svg
             className="shape-layer"
@@ -2668,7 +2668,7 @@ export default function Tabletop({ actor, players, offline }) {
             )}
           </svg>
 
-          {/* Borrowed while a ruler is on the board, whoever's it is — see
+          {/* Borrowed while a ruler is on the board, whoever's it is - see
               gridShown. The scene's own setting is untouched. */}
           {gridShown && <div className="grid-overlay" />}
 
@@ -2729,7 +2729,7 @@ export default function Tabletop({ actor, players, offline }) {
                   top: offYPx + pos.y * cellPx,
                   width: token.size * cellPx,
                   height: token.size * cellPx,
-                  // A picture replaces the fill, not just the name — cover so a
+                  // A picture replaces the fill, not just the name - cover so a
                   // portrait of any shape fills the circle without distorting.
                   background: token.imageUrl
                     ? `center / cover no-repeat url(${JSON.stringify(token.imageUrl)})`
@@ -2748,7 +2748,7 @@ export default function Tabletop({ actor, players, offline }) {
                     text over a face at the size a token actually is. */}
                 {!token.imageUrl && <span className="token-label">{token.label}</span>}
 
-                {/* Whose it is, in their own colour — the same colour that
+                {/* Whose it is, in their own colour - the same colour that
                     names them in the chat and marks them in the roster, so the
                     map can be read against either without learning a third
                     thing. A pip rather than a border: `borderColor` is already
@@ -2771,7 +2771,7 @@ export default function Tabletop({ actor, players, offline }) {
               a shape is ground that things stand on, but a measurement is a
               question about the things themselves, and one whose answer
               disappears behind the very ogre you were measuring to is no
-              answer. Untouchable by the pointer — the right-click menu works
+              answer. Untouchable by the pointer - the right-click menu works
               out what was hit from the coordinates instead (see onContextMenu),
               which is the only way a line two pixels wide can be aimed at. */}
           {(measurements.length > 0 || remoteRulers.length > 0) && (
@@ -2875,7 +2875,7 @@ export default function Tabletop({ actor, players, offline }) {
               )}
               {/* Everybody's, including a spectator's. Measuring changes
                   nothing and is sent nowhere unless you tick Shared, so there
-                  is no permission it could need — and "how far is that?" is a
+                  is no permission it could need - and "how far is that?" is a
                   question the person who *isn't* running the fight asks most. */}
               <button
                 onClick={() => {
@@ -2893,7 +2893,7 @@ export default function Tabletop({ actor, players, offline }) {
         )}
       </div>
 
-      {/* The drawing box. Yours alone — unlike the turn tracker, which is the
+      {/* The drawing box. Yours alone - unlike the turn tracker, which is the
           table's, this one only says what *your* pointer is about to do. */}
       {shapeWindow && canDraw && (
         <ShapeTools
@@ -2926,7 +2926,7 @@ export default function Tabletop({ actor, players, offline }) {
         <MeasureTools
           unit={measureSetup.unit}
           perCell={measureSetup.perCell}
-          // A change of unit brings that unit's own default with it — see the
+          // A change of unit brings that unit's own default with it - see the
           // note in the panel. Keeping the old number would quietly reinterpret
           // it, and the field that would say so is the one being changed.
           onUnit={(unit) => setMeasureSetup({ unit, perCell: unitNamed(unit).perCell })}
@@ -2944,7 +2944,7 @@ export default function Tabletop({ actor, players, offline }) {
       )}
 
       {/* One tracker, shown to the whole table while the fight is on. Only the
-          DM can put it away, and doing so is what ends turn mode — so a player
+          DM can put it away, and doing so is what ends turn mode - so a player
           gets no close button rather than one that betrays them. */}
       {turnMode && (
         <FloatingWindow
@@ -2978,7 +2978,7 @@ export default function Tabletop({ actor, players, offline }) {
                   // A menu of its own rather than an action on the click: the
                   // list is a thing you read during a fight, and every camera
                   // at the table swinging across the map is too much to hang on
-                  // brushing against it. Anyone may ask for it, DM or not — it
+                  // brushing against it. Anyone may ask for it, DM or not - it
                   // is the same Focus the map's own menu offers, and that has
                   // never been the DM's alone.
                   <li
@@ -3006,7 +3006,7 @@ export default function Tabletop({ actor, players, offline }) {
                     <span className="turn-who">
                       <strong>{t.label}</strong>
                       {/* Hit points stay the DM's to know, exactly as they do in
-                          the hover tooltip — a tracker every player can see is
+                          the hover tooltip - a tracker every player can see is
                           the last place to print the ogre's remaining health. */}
                       {isDm && total > 0 && (
                         <span className="turn-hp">
@@ -3119,7 +3119,7 @@ export default function Tabletop({ actor, players, offline }) {
               {/* Above Create token, and shown to anybody with a token of
                   their own waiting: placing one you already have is the common
                   act, and making a new one is the occasional one. Only when
-                  there is something to place — an empty list behind a menu item
+                  there is something to place - an empty list behind a menu item
                   is a promise the menu couldn't keep. */}
               {placeable.length > 0 && (
                 <button
@@ -3133,8 +3133,8 @@ export default function Tabletop({ actor, players, offline }) {
               )}
               {isDm && <button onClick={openTokenModal}>Create token</button>}
               {/* Below the line: not things to do to the map, but things to do
-                  to what you have already done to it. Everyone has these — a
-                  player who has moved a token has something to take back — and
+                  to what you have already done to it. Everyone has these - a
+                  player who has moved a token has something to take back - and
                   they reach only your own work, since your own is all this
                   browser ever wrote down. */}
               <div className="menu-sep" />
@@ -3165,7 +3165,7 @@ export default function Tabletop({ actor, players, offline }) {
 
       {/* A scene asks for its name to be typed; a token only asks. The scene
           takes every token on it with it and can't be got back, which is the
-          test the sheet windows already use — a token is a minute's work. */}
+          test the sheet windows already use - a token is a minute's work. */}
       {asking && (
         <ConfirmDeleteModal
           name={confirmDelete.name}
@@ -3206,8 +3206,8 @@ export default function Tabletop({ actor, players, offline }) {
         />
       )}
 
-      {/* Tokens are made from the map's own right-click menu now — see the
-          `Create token` item — so there is no panel here any more. */}
+      {/* Tokens are made from the map's own right-click menu now - see the
+          `Create token` item - so there is no panel here any more. */}
     </div>
   );
 }

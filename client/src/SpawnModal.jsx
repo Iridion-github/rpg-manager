@@ -8,8 +8,8 @@ import { createPortal } from 'react-dom';
  * exactly the set they'd be allowed to place. Nothing here is drawn that would
  * come back refused.
  *
- * Each one is shown as it will look on the board — the same face, the same
- * colour — because that is how it will be recognised once it's there, and a
+ * Each one is shown as it will look on the board - the same face, the same
+ * colour - because that is how it will be recognised once it's there, and a
  * list of names is a worse answer than a list of faces at a table with three
  * goblins on it.
  */
@@ -33,7 +33,7 @@ export default function SpawnModal({ bench, owners, onPick, onClose }) {
 
         {bench.length === 0 ? (
           <p className="hint">
-            Nothing is waiting off the table. A token gets here by being taken off one —
+            Nothing is waiting off the table. A token gets here by being taken off one -
             right-click it and choose <strong>Remove from table</strong>, which keeps it for
             later rather than deleting it.
           </p>

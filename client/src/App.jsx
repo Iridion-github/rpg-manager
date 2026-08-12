@@ -42,8 +42,8 @@ export default function App() {
   const [actor, setActor] = useState(ANON);
   const [campaigns, setCampaigns] = useState([]);
   // Always starts closed. Reopening the last campaign automatically would put
-  // you inside a table on arrival, and the directory — the thing you're meant
-  // to land on — is reached by a tab that only exists while you're outside one.
+  // you inside a table on arrival, and the directory - the thing you're meant
+  // to land on - is reached by a tab that only exists while you're outside one.
   const [campaignId, setCampaignIdState] = useState('');
   // Mirrors campaignId so callbacks can read the current table without taking
   // it as a dependency and being rebuilt (and re-firing) on every switch.
@@ -56,7 +56,7 @@ export default function App() {
   // Whether we've heard back about who we are even once. Without it the sign-in
   // screen flashes on every load before the answer arrives.
   const [ready, setReady] = useState(false);
-  // The campaign directory is the front door — you choose a table before you
+  // The campaign directory is the front door - you choose a table before you
   // can be at one.
   const [tab, setTab] = useState('campaigns');
   // What this server offers an account screen: a signup code to type instead of
@@ -68,7 +68,7 @@ export default function App() {
   /**
    * The other half of the same idea: a reset link, which opens a form rather
    * than a yes/no. Two parameters instead of one flag, so the page knows which
-   * of the two it is without having to ask the server — and so presenting one
+   * of the two it is without having to ask the server - and so presenting one
    * at the other's route, which would waste the token, can't happen by accident.
    */
   const [resetToken, setResetToken] = useState(() => takeToken('reset'));
@@ -95,7 +95,7 @@ export default function App() {
     setCampaignIdState(next);
     setCampaign(next);
     enterCampaign(next);
-    // What you did at the last table isn't yours to undo at this one — the
+    // What you did at the last table isn't yours to undo at this one - the
     // entries name scenes and tokens that don't exist here.
     clearHistory();
   }, []);
@@ -106,7 +106,7 @@ export default function App() {
       setActor(status.actor || ANON);
       setReachable(true);
     } catch {
-      // Your PC is off — fall back to whatever the cache holds, read-only.
+      // Your PC is off - fall back to whatever the cache holds, read-only.
       setReachable(false);
     } finally {
       setReady(true);
@@ -118,7 +118,7 @@ export default function App() {
       const list = await api.listCampaigns();
       setCampaigns(list);
       // The campaign you have open may have been deleted, or you may have been
-      // removed from it — either way, don't sit at a table that isn't there.
+      // removed from it - either way, don't sit at a table that isn't there.
       // Read the current id from a ref rather than state so this callback can
       // stay dependency-free without going stale.
       const current = campaignRef.current;
@@ -144,7 +144,7 @@ export default function App() {
 
   // Read once: what a server offers an account is set when it starts, not while
   // it runs. A failure leaves the empty object, and the account screen then
-  // offers the safest reading of it — no code, no mail.
+  // offers the safest reading of it - no code, no mail.
   useEffect(() => {
     api.authConfig().then(setAuthConfig).catch(() => {});
   }, []);
@@ -170,13 +170,13 @@ export default function App() {
      * answer in itself.
      *
      * The two are different questions and they used to share a flag. A busy
-     * connection — a tunnel carrying a few hundred token thumbnails — starves
+     * connection - a tunnel carrying a few hundred token thumbnails - starves
      * the WebSocket's heartbeat long before it troubles an HTTP request, and
      * calling that "unreachable" emptied the whole app into its read-only cache
      * while every request was still going through perfectly well.
      *
      * So: live updates have stopped, say so, and go and find out about the rest.
-     * `loadIdentity` is one small GET that answers it honestly — it sets
+     * `loadIdentity` is one small GET that answers it honestly - it sets
      * reachable either way, so a server that really has gone still lands in the
      * cached view a moment later.
      */
@@ -191,7 +191,7 @@ export default function App() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('campaigns:changed', onCampaigns);
-    // Your key was rotated or revoked — re-ask who you are rather than carrying
+    // Your key was rotated or revoked - re-ask who you are rather than carrying
     // on as someone the server no longer recognises.
     socket.on('identity:changed', loadIdentity);
     return () => {
@@ -203,7 +203,7 @@ export default function App() {
   }, [loadIdentity, loadCampaigns, loadMembers, campaignId]);
 
   // Changing a credential changes who we are, and the socket's identity is
-  // fixed at handshake — so reconnect it too, or dragging would stay forbidden
+  // fixed at handshake - so reconnect it too, or dragging would stay forbidden
   // until a manual refresh.
   function signedIn({ token, actor: who }) {
     setSession(token);
@@ -235,8 +235,8 @@ export default function App() {
   /**
    * Are we at a table?
    *
-   * Everything below the directory — the tabletop, the characters, the notes,
-   * the chat — is one campaign's data, so none of it exists as a view until a
+   * Everything below the directory - the tabletop, the characters, the notes,
+   * the chat - is one campaign's data, so none of it exists as a view until a
    * campaign is open. Not disabled, not empty: absent.
    */
   const insideCampaign = Boolean(campaignId && role);
@@ -259,7 +259,7 @@ export default function App() {
   function resolveTab(wanted) {
     if (!insideCampaign) return tableTabs.includes(wanted) ? 'campaigns' : wanted;
     if (shellTabs.includes(wanted)) return 'tabletop';
-    // Music is the DM's alone — for everyone else the soundtrack is scenery,
+    // Music is the DM's alone - for everyone else the soundtrack is scenery,
     // and a playlist they could read would name what they're only meant to
     // hear.
     if (wanted === 'music' && !isDm) return 'tabletop';
@@ -297,8 +297,8 @@ export default function App() {
    * door asking them to would be the door they are standing here about.
    *
    * Finishing reloads the identity too. The reset signed out every session on
-   * that account — including, if the mail happened to be read in this browser,
-   * the one this tab is holding — so what /me says afterwards is a question
+   * that account - including, if the mail happened to be read in this browser,
+   * the one this tab is holding - so what /me says afterwards is a question
    * worth asking again rather than assuming.
    */
   if (resetToken) {
@@ -317,7 +317,7 @@ export default function App() {
    * No identity, no app.
    *
    * Every campaign endpoint requires one, so there is nothing behind this to
-   * show — a sign-in screen is more honest than a shell with every tab empty.
+   * show - a sign-in screen is more honest than a shell with every tab empty.
    * Being offline is the exception: the cached read-only view is still worth
    * having, and there's no server to sign in to anyway.
    */
@@ -334,7 +334,7 @@ export default function App() {
     >
       <div className="main">
         {/* Identity and navigation on one line. They were stacked, which cost
-            the map two rows of chrome to say two short things — and the map is
+            the map two rows of chrome to say two short things - and the map is
             the one view that wants every pixel. Wraps back to two lines when
             the window is too narrow to hold both, which is no worse than what
             it always did. */}
@@ -342,7 +342,7 @@ export default function App() {
         <header>
           <h1>⚔️ RPG Manager</h1>
           {/* A dot rather than a word. This is a green "fine" almost always,
-              and the state that actually matters — not connected — already
+              and the state that actually matters - not connected - already
               gets a full-width banner under the bar. The colour carries it;
               the tooltip spells it out for anyone who wants it. */}
           <span
@@ -351,8 +351,8 @@ export default function App() {
             aria-label={connected ? 'Connected to the table' : 'Not connected to the table'}
             title={
               connected
-                ? 'Connected — changes reach the table as you make them'
-                : 'Not connected — the table is not seeing your changes'
+                ? 'Connected - changes reach the table as you make them'
+                : 'Not connected - the table is not seeing your changes'
             }
           />
           <span className={`badge role ${role || actor.globalRole}`}>{roleLabel}</span>
@@ -364,7 +364,7 @@ export default function App() {
             just a stray rule across the page. */}
         {authed && (
         <nav className="tabs">
-          {/* These three exist only while a campaign is open — they are views
+          {/* These three exist only while a campaign is open - they are views
               onto its data, and there is nothing for them to show without it. */}
           {insideCampaign && (
             <>
@@ -404,7 +404,7 @@ export default function App() {
                 Tokens
               </button>
               {/* Last, and for everyone: who is at this table is not the DM's
-                  private information — the members endpoint has always been
+                  private information - the members endpoint has always been
                   readable by any member. */}
               <button
                 className={activeTab === 'players' ? 'active' : ''}
@@ -420,7 +420,7 @@ export default function App() {
           <div className="spacer" />
           {/* The mirror image of the three above: these belong to the shell, not
               to a table, and while you're at one the way back is Close
-              campaign — not a tab that would sit alongside its own contents. */}
+              campaign - not a tab that would sit alongside its own contents. */}
           {!insideCampaign && authed && (
             <button
               className={activeTab === 'campaigns' ? 'active' : ''}
@@ -429,7 +429,7 @@ export default function App() {
               Campaigns
             </button>
           )}
-          {/* Everyone signed in can see who else is here — a DM picking members
+          {/* Everyone signed in can see who else is here - a DM picking members
               is reading this same list from inside their campaign. What you can
               *do* to it is another matter, and the tab itself decides that. */}
           {!insideCampaign && authed && (
@@ -443,7 +443,7 @@ export default function App() {
           {/* Before My account, which is where a list of "what's new here"
               belongs: the tabs to its left are places to go and do something,
               and this is the one that says what has changed since you last
-              did. Shown to anyone signed in — it describes the app, and every
+              did. Shown to anyone signed in - it describes the app, and every
               signed-in person is using the same one. */}
           {!insideCampaign && authed && (
             <button
@@ -483,8 +483,8 @@ export default function App() {
             ))}
           </select>
         )}
-        {/* Only outside a campaign. At a table, leaving is a two-step move —
-            close the campaign, then log out — rather than one click sitting
+        {/* Only outside a campaign. At a table, leaving is a two-step move -
+            close the campaign, then log out - rather than one click sitting
             next to the scene controls. */}
         {!insideCampaign && (
           <button className="linky" onClick={signOut}>
@@ -498,7 +498,7 @@ export default function App() {
             leave room for about three words of it. */}
         {offline && (
           <p className="offline-banner">
-            Offline — the table's server is unreachable, so this is a read-only view of
+            Offline - the table's server is unreachable, so this is a read-only view of
             the last data your browser cached.
             {lastSynced && ` Last synced ${new Date(lastSynced).toLocaleString()}.`}
           </p>
@@ -544,7 +544,7 @@ export default function App() {
             siblings sharing a key makes React duplicate and drop nodes rather
             than reconcile them. Same reason the sidebar's player is keyed
             `music-…`. Keep the prefixes even where a view is currently
-            exclusive — the next one to escape its tab shouldn't have to
+            exclusive - the next one to escape its tab shouldn't have to
             rediscover this. */}
         {insideCampaign && activeTab === 'tabletop' && (
           <Tabletop
@@ -556,7 +556,7 @@ export default function App() {
         )}
         {/* Mounted for the whole campaign, not just its tab. An open character
             sheet floats over the app in a window of its own, and you're meant
-            to be able to read it while looking at the map — so the tab only
+            to be able to read it while looking at the map - so the tab only
             decides whether the *roster* is on screen. Closing the campaign
             unmounts this, which is what shuts an open sheet. */}
         {insideCampaign && (
@@ -572,7 +572,7 @@ export default function App() {
         )}
         {/* Mounted for the whole campaign for the same reason as the sheets: a
             note popped out into a window floats over the app, and closing the
-            campaign — not switching tabs — is what takes it away. */}
+            campaign - not switching tabs - is what takes it away. */}
         {insideCampaign && (
           <Notes
             key={`notes-${campaignId}`}

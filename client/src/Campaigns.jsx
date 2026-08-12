@@ -4,7 +4,7 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import CreateCampaignModal from './CreateCampaignModal.jsx';
 
 /**
- * The campaign directory — the first thing you see on arriving.
+ * The campaign directory - the first thing you see on arriving.
  *
  * Every campaign on the server is listed, yours first. What's public is that a
  * table exists and how busy it is; what stays private is *who* is at it, so the
@@ -15,10 +15,10 @@ import CreateCampaignModal from './CreateCampaignModal.jsx';
 
 const dateOnly = (iso) => {
   const d = new Date(iso || '');
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString();
 };
 
-// Relative time reads better than a date for "is anyone still running this?" —
+// Relative time reads better than a date for "is anyone still running this?" -
 // "3 days ago" answers it, "12/04/2026" makes you do the arithmetic.
 function sinceNow(iso) {
   const then = Date.parse(iso || '');
@@ -51,7 +51,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   const [campaigns, setCampaigns] = useState([]);
   const [users, setUsers] = useState([]);
   const [members, setMembers] = useState([]); // of the campaign being edited
-  // Whether the create dialog is up. The fields it holds live inside it — they
+  // Whether the create dialog is up. The fields it holds live inside it - they
   // are its business until it hands back a finished campaign.
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -75,7 +75,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   }, [load]);
 
   // The list never carries the members map, so the DM's editor asks for it
-  // separately — an endpoint only a member of that campaign can call.
+  // separately - an endpoint only a member of that campaign can call.
   const openEditor = useCallback(async (id) => {
     setEditing(id);
     setMembers([]);
@@ -101,7 +101,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   }
 
   /**
-   * Make the campaign the dialog describes — from a file if one was accepted,
+   * Make the campaign the dialog describes - from a file if one was accepted,
    * from nothing if not.
    *
    * Not wrapped in guard(): the dialog is up, and an error belongs in front of
@@ -128,7 +128,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
      * Tell the shell before walking in, and wait for it.
      *
      * Whether you are "inside" a campaign is decided by finding it in the
-     * shell's own list and reading your role off it — so opening one it hasn't
+     * shell's own list and reading your role off it - so opening one it hasn't
      * heard of sets an id that renders nothing, and the click looks ignored.
      * This used to come free from guard(), which calls onChanged on the way
      * out; this path throws instead, so its errors can reach the dialog, and
@@ -186,7 +186,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   return (
     <div className="campaigns">
       <p className="hint">
-        Every campaign on this server. The ones you're part of come first —
+        Every campaign on this server. The ones you're part of come first -
         everything else you can see the shape of, but not the contents.
       </p>
 
@@ -305,7 +305,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
                   </ul>
                   {users.length === 0 && (
                     <p className="empty">
-                      No other people exist yet — the admin adds them in the Users tab.
+                      No other people exist yet - the admin adds them in the Users tab.
                     </p>
                   )}
 
@@ -313,13 +313,13 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
                     <div className="spacer" />
                     {/* The whole table as a file, minus the people at it. Next
                         to Delete because they are the two things you do to a
-                        campaign as a whole — and in that order, since one of
+                        campaign as a whole - and in that order, since one of
                         them is what you'd want to have done before the other. */}
                     <button onClick={() => exportCampaign(c)} disabled={busy}>
                       Export campaign
                     </button>
                     {/* Asked in the same dialog as every other delete in the
-                        app rather than by swapping this row for two buttons —
+                        app rather than by swapping this row for two buttons -
                         one place to read "is this the right thing?", and the
                         same shape of answer wherever you meet it. */}
                     <button className="del" onClick={() => setConfirmDelete(c.id)} disabled={busy}>
@@ -343,13 +343,13 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
         <CreateCampaignModal onCreate={create} onClose={() => setCreating(false)} />
       )}
 
-      {/* The heaviest delete in the app — scenes, sheets, notes, chat, the lot
-          — so it asks for the name in full. */}
+      {/* The heaviest delete in the app - scenes, sheets, notes, chat, the lot
+          - so it asks for the name in full. */}
       {confirmCampaign && (
         <ConfirmDeleteModal
           name={confirmCampaign.name}
           byName
-          description="This deletes the campaign and everything in it — every scene, character sheet, note and message — for everyone at the table. It can't be undone."
+          description="This deletes the campaign and everything in it - every scene, character sheet, note and message - for everyone at the table. It can't be undone."
           confirmLabel="Delete campaign"
           onConfirm={() => remove(confirmCampaign.id)}
           onClose={() => setConfirmDelete('')}

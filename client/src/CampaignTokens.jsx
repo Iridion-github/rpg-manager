@@ -6,14 +6,14 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import SheetTokenLink from './SheetTokenLink.jsx';
 
 /**
- * This campaign's own tokens — its cast, made in advance of needing them.
+ * This campaign's own tokens - its cast, made in advance of needing them.
  *
  * Distinct from the library above it, which is *artwork*: pictures anyone can
  * put on anything. These are the actual pieces this table plays with, each one
  * belonging to somebody, each one either standing on a map or waiting to be
  * placed on one.
  *
- * Two rules shape what this screen offers, and both come from the same idea —
+ * Two rules shape what this screen offers, and both come from the same idea -
  * a player has a character, a DM runs a cast:
  *
  *   - the DM sees every token here and may make as many as they like;
@@ -28,7 +28,7 @@ import SheetTokenLink from './SheetTokenLink.jsx';
  * token carries them across untouched by anything that form can reach.
  *
  * The exception is the character picker on each row, which is the one control
- * here that does touch them — coupling a token to a sheet copies the
+ * here that does touch them - coupling a token to a sheet copies the
  * character's hit points and initiative modifier across, and keeps the hit
  * points in step from then on. That is the point of coupling, and it is why it
  * is a control of its own rather than a field in the form.
@@ -44,7 +44,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
    * The characters this person could couple a token to.
    *
    * The server sends only the sheets they may *see*, which is a wider set than
-   * the ones they may link — linking needs edit access, since it writes hit
+   * the ones they may link - linking needs edit access, since it writes hit
    * points in both directions afterwards. So this is filtered again below, and
    * the server checks it a third time on the way in.
    */
@@ -127,7 +127,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
    * Characters this person may actually couple something to.
    *
    * Edit access, not merely sight. A character somebody has been allowed to
-   * read is not one they may weld their figure to — the link carries hit points
+   * read is not one they may weld their figure to - the link carries hit points
    * back and forth once it exists, so the right question is "may you change
    * this?" rather than "may you see it?".
    */
@@ -163,7 +163,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
 
       <p className="hint">
         {isDm
-          ? "Every token at this table, yours and your players'. Make them before the session and place them when you need them — right-click the map and choose Place Token."
+          ? "Every token at this table, yours and your players'. Make them before the session and place them when you need them - right-click the map and choose Place Token."
           : 'Your token, made once and kept. Place it from the map with a right-click, take it off again when you are done, and it will be here next time.'}
       </p>
 
@@ -174,7 +174,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
       ) : rows.length === 0 ? (
         <p className="empty">
           {canCreate
-            ? 'Nothing yet — make one and it will wait here until you place it.'
+            ? 'Nothing yet - make one and it will wait here until you place it.'
             : 'Nothing here yet.'}
         </p>
       ) : (
@@ -215,7 +215,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
               {/* The same coupling the Characters tab offers, asked from this
                   end: which character is this figure. Drawn in the row rather
                   than inside the Edit form, because it is not part of what a
-                  token *looks like* — and because acting on change keeps it the
+                  token *looks like* - and because acting on change keeps it the
                   same gesture it is over there. */}
               {!offline && (
                 <SheetTokenLink
@@ -267,7 +267,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
           description={
             doomed.sceneId
               ? `This deletes the token for good, and takes it off ${doomed.sceneName}. To keep it for later, take it off the table from the map instead.`
-              : 'This deletes the token for good. To keep it for later, leave it here — it costs nothing to keep.'
+              : 'This deletes the token for good. To keep it for later, leave it here - it costs nothing to keep.'
           }
           confirmLabel="Delete token"
           onConfirm={() => remove(doomed.id)}

@@ -1,4 +1,4 @@
-# Named Cloudflare Tunnel — a hostname that survives a restart.
+# Named Cloudflare Tunnel - a hostname that survives a restart.
 #
 # Only worth setting up if you own a domain on Cloudflare. Without one, use the
 # quick tunnel instead (`npm run tunnel`), which needs no account and no config
@@ -14,7 +14,7 @@
 #
 #   cloudflared tunnel --config cloudflared/config.yml run
 #
-# config.yml is gitignored — it names your host and points at a credentials
+# config.yml is gitignored - it names your host and points at a credentials
 # file, neither of which belongs in a public repo.
 
 # From `cloudflared tunnel create`. The name works here too, but the UUID keeps

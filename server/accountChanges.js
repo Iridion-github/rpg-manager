@@ -5,7 +5,7 @@
  *
  * A password or an address only moves once the person has answered a letter, so
  * between the asking and the answering the new value has to live somewhere. It
- * lives here, and it lives *only* here — the account itself is untouched until
+ * lives here, and it lives *only* here - the account itself is untouched until
  * the link is followed, which is the whole point: someone who gets at a signed-in
  * browser can start one of these, and the owner of the mailbox can simply not
  * finish it.
@@ -41,7 +41,7 @@ const isExpired = (record) => !record?.expiresAt || Date.parse(record.expiresAt)
  * Put a change on hold and return the token that will finish it.
  *
  * `kind` is 'password', 'email' or 'reset'; `change` is the fields to apply to
- * the user when it's confirmed — a `passwordHash`, or an `email`. Any earlier
+ * the user when it's confirmed - a `passwordHash`, or an `email`. Any earlier
  * request of the same kind by the same person is dropped: two live links to two
  * different new passwords is a question nobody wants to have to answer.
  *
@@ -73,7 +73,7 @@ async function holdChange(userId, kind, change) {
 /**
  * Take a token and hand back the change it stands for, once.
  *
- * The record is removed whether or not it had expired — a token that has been
+ * The record is removed whether or not it had expired - a token that has been
  * presented is spent either way, and leaving an expired one to be presented
  * again is just a slower version of the same mistake. Returns null when there
  * is nothing to apply, which is the same answer for a token that never
@@ -81,7 +81,7 @@ async function holdChange(userId, kind, change) {
  * information a stranger guessing at links should be given.
  *
  * `kinds` is the list this caller is willing to act on. A token of some other
- * kind is refused *without* being spent — it belongs to a route that hasn't
+ * kind is refused *without* being spent - it belongs to a route that hasn't
  * been asked yet, and burning somebody's live email-change link because they
  * hand-edited a query parameter would be a small cruelty for no gain. Only a
  * token this door can actually open is consumed by knocking on it.
@@ -97,7 +97,7 @@ async function claimChange(token, kinds) {
   return record;
 }
 
-/** Drop everything waiting for one person — on a password change, say. */
+/** Drop everything waiting for one person - on a password change, say. */
 async function forgetChangesFor(userId) {
   const waiting = await store.list(PENDING);
   for (const record of waiting) {

@@ -2,7 +2,7 @@
  * "3 minutes ago", "yesterday", "last month".
  *
  * Through Intl.RelativeTimeFormat rather than a table of English strings, so
- * the wording follows the reader's own locale — and so "1 days ago" can't
+ * the wording follows the reader's own locale - and so "1 days ago" can't
  * happen. The unit is chosen by size: the useful thing about a timestamp from
  * four months back is not how many hours it was.
  *
@@ -34,8 +34,8 @@ export function timeAgo(iso) {
   if (Number.isNaN(then.getTime())) return '';
 
   const elapsed = Date.now() - then.getTime();
-  // Under a minute — and, for a clock that's a little fast, anything in the
-  // near future — is simply now. A negative "in 3 seconds" would be a report
+  // Under a minute - and, for a clock that's a little fast, anything in the
+  // near future - is simply now. A negative "in 3 seconds" would be a report
   // about the reader's own clock rather than about the person.
   if (elapsed < 60 * 1000) return 'just now';
 

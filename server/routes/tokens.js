@@ -1,21 +1,21 @@
 'use strict';
 
 /**
- * The built-in token library — whatever you drop into `public/tokens/`.
+ * The built-in token library - whatever you drop into `public/tokens/`.
  *
  * Same bargain as the maps beside it: served off disk, listed on demand, so
  * adding artwork is a file copy rather than a rebuild. The difference is scale
  * and shape. There are getting on for two thousand of these arranged in nested
  * folders, which changes two things.
  *
- * First, the walk is cached. Reading a tree that size on every request — and
- * every open of the token picker is a request — is real work for an answer that
+ * First, the walk is cached. Reading a tree that size on every request - and
+ * every open of the token picker is a request - is real work for an answer that
  * changes when somebody copies a file in, which is to say almost never. A short
  * TTL means new artwork shows up within the minute without anyone restarting
  * anything.
  *
- * Second, the URL is built here. These names are meant to be read by people —
- * "D&D Iconic Characters", "monk, fighting stance (1)" — so they carry spaces,
+ * Second, the URL is built here. These names are meant to be read by people -
+ * "D&D Iconic Characters", "monk, fighting stance (1)" - so they carry spaces,
  * commas, parentheses and one ampersand. Encoding them at the point they become
  * a URL, once, is better than trusting every future caller to remember; the `&`
  * in particular would silently truncate a path that was merely concatenated.
@@ -32,7 +32,7 @@ const router = express.Router();
 
 const TOKENS_DIR = path.join(__dirname, '..', '..', 'public', 'tokens');
 
-// A listing filter, not a security check — nothing here is executed, and a
+// A listing filter, not a security check - nothing here is executed, and a
 // file's extension says nothing about its real contents.
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 
@@ -48,7 +48,7 @@ let cache = null; // { at, files }
  * Every image under the library, each with the folder path that leads to it.
  *
  * Flat rather than nested: the client builds its own tree from these in one
- * pass, and search — which is the other half of what this feeds — wants the
+ * pass, and search - which is the other half of what this feeds - wants the
  * flat list anyway. A nested payload would have to be flattened back out.
  */
 async function walk(dir, relative = '', depth = 0, out = []) {

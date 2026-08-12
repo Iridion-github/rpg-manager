@@ -14,7 +14,7 @@ const SAVE_DEBOUNCE_MS = 400;
  * from 40) rather than sharing one.
  *
  * Neither component can see the other's windows, so a shared range would let a
- * note and a sheet hold the same z — and clicking the one behind could not
+ * note and a sheet hold the same z - and clicking the one behind could not
  * bring it forward. A band each is predictable and never traps a window; the
  * cost is that a sheet can't be raised over a note. Both stay under the map's
  * context menu (450) and the dialogs (500).
@@ -23,13 +23,13 @@ const WIN_Z_BASE = 402;
 const WIN_Z_CEILING = 440;
 
 /**
- * Notes (DM) and handouts (everyone else) — the same records, seen from two
+ * Notes (DM) and handouts (everyone else) - the same records, seen from two
  * sides. The server sends a player only the notes marked shared, so this
  * component never has to decide what to hide: it renders what it was given.
  *
  * Mounted for as long as the campaign is, not for as long as its tab is shown:
  * a note popped out into a window has to survive a trip to the map. `showList`
- * is what the tab actually switches — off, this renders nothing but the open
+ * is what the tab actually switches - off, this renders nothing but the open
  * windows, and keeps saving and syncing in the background.
  */
 export default function Notes({
@@ -59,7 +59,7 @@ export default function Notes({
   const readOnly = !canEdit || offline;
   const open = notes.find((n) => n.id === openId) || null;
 
-  // Skipping any id whose note has gone — deleted here, or unshared by the DM
+  // Skipping any id whose note has gone - deleted here, or unshared by the DM
   // and withdrawn from a player over the socket.
   const openWindows = windowIds.map((id) => notes.find((n) => n.id === id)).filter(Boolean);
   const confirmNote = notes.find((n) => n.id === confirmDeleteId) || null;
@@ -70,7 +70,7 @@ export default function Notes({
   const refresh = useCallback(async () => {
     try {
       const data = await api.listNotes();
-      // Server truth for everything except what we're mid-edit on — otherwise
+      // Server truth for everything except what we're mid-edit on - otherwise
       // a refresh triggered by our own save would undo what we typed since.
       setNotes(data.map((n) => pending.current.get(n.id) || n));
       setError('');
@@ -105,7 +105,7 @@ export default function Notes({
   );
 
   // Apply an edit locally right away, then schedule the save. `immediate` is
-  // for discrete clicks (sharing) rather than typing — waiting out a debounce
+  // for discrete clicks (sharing) rather than typing - waiting out a debounce
   // to see a checkbox take effect feels broken.
   const queueSave = useCallback(
     (next, { immediate = false } = {}) => {
@@ -119,7 +119,7 @@ export default function Notes({
     [flush]
   );
 
-  // A note change arrives as a bare signal — see the server's announce() — so
+  // A note change arrives as a bare signal - see the server's announce() - so
   // there is no record to merge, only a reason to re-read our own filtered view.
   const onChanged = useCallback(
     ({ origin }) => {
@@ -140,7 +140,7 @@ export default function Notes({
   }, [refresh, onChanged]);
 
   // Land on something readable instead of an empty pane, but only on the first
-  // load — re-picking after every refresh would fight with the reader.
+  // load - re-picking after every refresh would fight with the reader.
   useEffect(() => {
     if (picked.current || notes.length === 0) return;
     picked.current = true;
@@ -168,7 +168,7 @@ export default function Notes({
     if (readOnly) return;
     try {
       // Not optimistic: only the server can mint the record's id. New notes
-      // start private — sharing is a decision, not a default.
+      // start private - sharing is a decision, not a default.
       const record = await api.createNote({ title: 'New note', body: '', shared: false });
       setNotes((prev) => [...prev, record]);
       setOpenId(record.id);
@@ -240,7 +240,7 @@ export default function Notes({
                 ? 'No notes yet.'
                 : offline
                   ? 'No handouts cached yet.'
-                  : "Nothing shared yet — your DM hasn't handed anything out."}
+                  : "Nothing shared yet - your DM hasn't handed anything out."}
             </li>
           )}
         </ul>
@@ -267,7 +267,7 @@ export default function Notes({
       )}
 
       {/* One window per popped-out note, painted in the order they were last
-          reached for — the same arrangement the character sheets use. */}
+          reached for - the same arrangement the character sheets use. */}
       {openWindows.map((note, i) => (
         <FloatingWindow
           key={note.id}
@@ -327,7 +327,7 @@ export default function Notes({
 }
 
 /**
- * One note, read or edited — the same thing whether it's in the side pane or
+ * One note, read or edited - the same thing whether it's in the side pane or
  * floating in a window of its own, so both render this rather than each
  * growing its own copy that drifts from the other.
  */
@@ -335,7 +335,7 @@ export default function Notes({
  * The one switch that decides who else can read this.
  *
  * A button rather than a checkbox because it is an action with a consequence at
- * the table — a handout appearing in front of the players — and because what it
+ * the table - a handout appearing in front of the players - and because what it
  * says should be what happens when you press it. Its label is the next state,
  * not the current one; the colour carries the current one.
  */

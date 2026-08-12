@@ -45,7 +45,7 @@ const PORT = Number(process.env.PORT) || 3001;
  * Listen on localhost only, by default.
  *
  * The tunnel runs on this same machine and dials localhost, so binding here
- * costs it nothing — and it means the only way in from outside is the tunnel,
+ * costs it nothing - and it means the only way in from outside is the tunnel,
  * which you can shut off. A default of 0.0.0.0 would quietly put the table on
  * every coffee-shop network you ever join. Set HOST=0.0.0.0 to reach it from
  * another device on your LAN.
@@ -80,14 +80,14 @@ app.use(corsPolicy(CORS_ORIGINS));
  *
  * Worth it for one link in particular. Behind a tunnel, cloudflared forwards
  * the browser's Accept-Encoding to this server, so without this the *origin to
- * Cloudflare* hop — the narrow one, the one that starves the WebSocket when the
- * token library is opened — carries every byte uncompressed. The library's
+ * Cloudflare* hop - the narrow one, the one that starves the WebSocket when the
+ * token library is opened - carries every byte uncompressed. The library's
  * listing is 232kB of very repetitive JSON and goes to 28kB; the client bundle
  * goes to a third.
  *
  * Two things it deliberately does not touch.
  *
- * Artwork: `compression.filter` skips image types, and rightly — a .webp comes
+ * Artwork: `compression.filter` skips image types, and rightly - a .webp comes
  * out of gzip *larger* than it went in. The 34MB of token pictures is most of
  * this server's traffic and none of it is helped by any of this.
  *
@@ -95,7 +95,7 @@ app.use(corsPolicy(CORS_ORIGINS));
  * and text the caller chose is the shape BREACH attacks read secrets out of,
  * by watching how the length moves. The sign-in reply carries a session token
  * beside a username the caller typed, which is exactly that shape. It is a
- * small, awkward attack and this is a private table — but the responses in
+ * small, awkward attack and this is a private table - but the responses in
  * question are a few hundred bytes, so declining to compress them costs
  * nothing at all, and then the question doesn't need answering.
  */
@@ -181,7 +181,7 @@ io.on('connection', (socket) => {
    * "I'm looking at this campaign now."
    *
    * Live updates are scoped to a campaign, and a socket has no URL to read that
-   * from — so it says. Membership is verified here rather than taken on trust,
+   * from - so it says. Membership is verified here rather than taken on trust,
    * because this is what decides which broadcasts the connection receives: a
    * socket that could name any campaign could listen to any table.
    */
@@ -192,7 +192,7 @@ io.on('connection', (socket) => {
       socket.data.drag = null; // a drag doesn't survive leaving the table
 
       // Closing a campaign comes through here too, as an enter with nothing to
-      // enter — and leaving the table is exactly the kind of move the people
+      // enter - and leaving the table is exactly the kind of move the people
       // still in it should see.
       if (!isCampaignId(campaignId)) {
         announcePresence(io);
@@ -211,7 +211,7 @@ io.on('connection', (socket) => {
       socket.join(roomFor(campaignId));
 
       // "Last activity" on the campaign list means a DM was here. A player
-      // wandering in doesn't make a table active — the person who runs it
+      // wandering in doesn't make a table active - the person who runs it
       // showing up does. Throttled inside touchActivity so a refresh isn't a
       // disk write.
       if (role === 'dm') await touchActivity(campaignId, campaign);
@@ -227,7 +227,7 @@ io.on('connection', (socket) => {
 registerTokenDrag(io);
 registerSceneSignals(io);
 
-// Health / status endpoint — also tells the client who it is.
+// Health / status endpoint - also tells the client who it is.
 app.get('/api/status', (req, res) => {
   res.json({ ok: true, writeGate: gateEnabled, actor: req.actor, dataDir: store.DATA_DIR });
 });
@@ -262,7 +262,7 @@ app.use('/api/uploads', uploadsRouter);
 app.use('/api/maps', mapsRouter);
 app.use('/api/tokens', tokensRouter);
 
-// Uploaded maps are public to anyone who can reach the server — they're just
+// Uploaded maps are public to anyone who can reach the server - they're just
 // images, and players need to see the map they're standing on.
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '1h', index: false, dotfiles: 'deny' }));
 
@@ -271,14 +271,14 @@ app.use('/maps', express.static(MAPS_DIR, { maxAge: '1h', index: false, dotfiles
 
 // The token library, same arrangement. Cached hard: these are content-addressed
 // by name in a folder nobody edits in place, so a browser that has one has the
-// one it wants — and a picker showing hundreds of them at once should ask for
+// one it wants - and a picker showing hundreds of them at once should ask for
 // each exactly once.
 app.use(
   '/tokens',
   express.static(TOKENS_DIR, { maxAge: '7d', index: false, dotfiles: 'deny' })
 );
 
-// An unmatched /api path is a client bug, not a page — answer in JSON rather
+// An unmatched /api path is a client bug, not a page - answer in JSON rather
 // than falling through to the SPA and handing back HTML.
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such endpoint' }));
 
@@ -289,7 +289,7 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'No such endpoint' }
  * there is no Vite: this process serves both the API and the app from one
  * origin, so the tunnel only has to point at one port.
  *
- * Run `npm run build` first — without it the server still runs as an API and
+ * Run `npm run build` first - without it the server still runs as an API and
  * says so at startup, rather than 404ing mysteriously.
  */
 const CLIENT_DIST = process.env.CLIENT_DIST
@@ -303,13 +303,13 @@ if (hasClientBuild) {
     '/assets',
     express.static(path.join(CLIENT_DIST, 'assets'), { maxAge: '1y', immutable: true })
   );
-  // Everything else (favicon and friends) is unfingerprinted — no caching, or a
+  // Everything else (favicon and friends) is unfingerprinted - no caching, or a
   // browser keeps running the previous build after you deploy a new one.
   app.use(express.static(CLIENT_DIST, { index: false, maxAge: 0 }));
 
   // SPA fallback: any other GET is a client-side route, so hand back the shell.
   app.get('*', (req, res) => {
-    // A missing map is a missing file, not a route — don't answer with the app.
+    // A missing map is a missing file, not a route - don't answer with the app.
     if (req.path.startsWith('/uploads/') || req.path.startsWith('/maps/')) {
       return res.status(404).json({ error: 'Not found' });
     }
@@ -329,7 +329,7 @@ app.use((err, req, res, next) => {
 /**
  * Fail closed on the open gate.
  *
- * With no ADMIN_PASSWORD every visitor resolves to the admin (see auth.js) —
+ * With no ADMIN_PASSWORD every visitor resolves to the admin (see auth.js) -
  * harmless on your own machine, catastrophic on a hostname a stranger can find.
  * So the password is required unless someone explicitly asks for the open door,
  * which `npm run dev` does by passing --open-gate.
@@ -344,7 +344,7 @@ if (!gateEnabled && !process.argv.includes('--open-gate')) {
   console.error(`
 Refusing to start: ADMIN_PASSWORD is not set.
 
-Without it, everyone who reaches this server is treated as the admin —
+Without it, everyone who reaches this server is treated as the admin -
 including anyone who finds your tunnel's hostname. Set one:
 
   PowerShell   $env:ADMIN_PASSWORD='your-secret'; npm start
@@ -384,8 +384,8 @@ if ((PLATFORM || process.env.PORT) && /^(127\.|::1|localhost)/.test(HOST)) {
  *
  * `npm run dev` runs this under `node --watch`, which restarts by killing this
  * process and launching another straight away. Socket.IO connections are
- * long-lived, and a websocket still attached keeps the listening socket — and
- * `server.close()` — waiting, so the replacement can land on a port this
+ * long-lived, and a websocket still attached keeps the listening socket - and
+ * `server.close()` - waiting, so the replacement can land on a port this
  * process hasn't let go of yet. Hang up deliberately instead of leaving it to
  * chance, and don't wait forever for a client that won't take the hint.
  */
@@ -407,20 +407,20 @@ function shutdown() {
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, shutdown);
 
 /**
- * A busy port is usually busy for a moment, not for good — the watch restart
+ * A busy port is usually busy for a moment, not for good - the watch restart
  * above races the old process's last breath. So retry for a couple of seconds
  * before giving up, and when it really is taken, say so in a sentence. Left
  * alone this arrives as an unhandled 'error' event: a stack trace through
  * node:net that never names the actual problem.
  */
-// Enough to ride out a handover, short enough that the far more common case —
-// a copy of this server genuinely already running — reaches the message below
+// Enough to ride out a handover, short enough that the far more common case -
+// a copy of this server genuinely already running - reaches the message below
 // while you're still looking at the terminal.
 const BIND_ATTEMPTS = 6;
 const BIND_WAIT_MS = 250;
 let bindAttempts = 0;
 
-// `announce` is registered once, not passed to each listen() — a listen
+// `announce` is registered once, not passed to each listen() - a listen
 // callback is just a one-off 'listening' listener, and retrying with one would
 // stack up a fresh copy per attempt (Node starts warning at ten).
 server.on('listening', announce);
@@ -434,7 +434,7 @@ server.on('error', (err) => {
   }
   console.error(`
 Port ${PORT} is still in use after ${((BIND_ATTEMPTS * BIND_WAIT_MS) / 1000).toFixed(1)}s.
-Another copy of this server is already running — find it and stop it:
+Another copy of this server is already running - find it and stop it:
 
   PowerShell   Get-NetTCPConnection -LocalPort ${PORT} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
   bash         lsof -ti tcp:${PORT} | xargs kill
@@ -456,7 +456,7 @@ importJson()
     }
     bind();
 
-    // Housekeeping, not a control — an expired token is refused on use either
+    // Housekeeping, not a control - an expired token is refused on use either
     // way. Once at startup and daily after that, so a long-lived server stops
     // accumulating every session it has ever issued. unref() so it can never be
     // the reason the process won't exit.
@@ -469,7 +469,7 @@ importJson()
 
     // A one-off, kept because it has to run against whatever database is in
     // front of it rather than only against the one that was here when invite
-    // links went away — an import, a restored backup, or a copy from another
+    // links went away - an import, a restored backup, or a copy from another
     // machine can all bring keys back. Idempotent, and silent when there's
     // nothing to do.
     dropInviteKeys()
@@ -477,7 +477,7 @@ importJson()
       .catch((err) => console.error('invite key cleanup failed:', err.message));
   })
   .catch((err) => {
-    console.error('Import failed — refusing to start rather than serving half-moved data:');
+    console.error('Import failed - refusing to start rather than serving half-moved data:');
     console.error(err);
     process.exit(1);
   });
@@ -489,16 +489,16 @@ function announce() {
   console.log(
     HOST === '127.0.0.1'
       ? '  bound to: localhost only (a tunnel still works; set HOST=0.0.0.0 for LAN)'
-      : `  bound to: ${HOST} — reachable from other machines on this network`
+      : `  bound to: ${HOST} - reachable from other machines on this network`
   );
   console.log(
     TRUST_PROXY
-      ? `  trust proxy: ${TRUST_PROXY} — client addresses read from X-Forwarded-For`
+      ? `  trust proxy: ${TRUST_PROXY} - client addresses read from X-Forwarded-For`
       : '  trust proxy: off (set TRUST_PROXY=1 behind Render or a tunnel, or rate limits see one address)'
   );
   console.log(
     signupIsOpen
-      ? '  signup: OPEN — anyone who reaches this server can register (set SIGNUP_CODE to close it)'
+      ? '  signup: OPEN - anyone who reaches this server can register (set SIGNUP_CODE to close it)'
       : '  signup: requires SIGNUP_CODE'
   );
   // Worth saying out loud: with no mailer, the links that confirm a password or
@@ -508,7 +508,7 @@ function announce() {
   console.log(`  mail: ${mailStatus}`);
   console.log(
     hasClientBuild
-      ? `  app: serving client/dist — open http://localhost:${PORT}`
-      : '  app: API only (no client build — run `npm run build` to serve the UI)'
+      ? `  app: serving client/dist - open http://localhost:${PORT}`
+      : '  app: API only (no client build - run `npm run build` to serve the UI)'
   );
 }

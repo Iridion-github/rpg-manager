@@ -1,19 +1,19 @@
 'use strict';
 
 /**
- * Live token dragging — the ephemeral half of token movement.
+ * Live token dragging - the ephemeral half of token movement.
  *
  * A drag produces dozens of positions a second. Persisting each one would mean
  * a disk read-modify-write per frame through the store's serialized queue, so
  * we split the problem:
  *
- *   during the drag — socket only, nothing touches the disk (this file)
- *   on drop         — one HTTP PUT .../position, which persists and broadcasts
+ *   during the drag - socket only, nothing touches the disk (this file)
+ *   on drop         - one HTTP PUT .../position, which persists and broadcasts
  *
  * Permission is checked once, at `token:drag:start`, and remembered on the
  * socket. Re-reading the scene on every frame just to re-answer "do you own
  * this?" would put the disk back in the hot path. The drop still goes through
- * the HTTP route, which re-checks ownership from disk — so a lie told over the
+ * the HTTP route, which re-checks ownership from disk - so a lie told over the
  * socket moves a ghost on other people's screens but never gets saved.
  *
  * The campaign is taken from the socket's own state, never from the drag

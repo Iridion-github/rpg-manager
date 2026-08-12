@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * The campaign's own tokens — its cast, rather than what is on a map right now.
+ * The campaign's own tokens - its cast, rather than what is on a map right now.
  *
  * A token in this campaign is in one of two places: standing on a scene, or
  * waiting on the bench. This router is the view that spans both, because the
- * question it answers — "what tokens exist here, and whose are they?" — is not
+ * question it answers - "what tokens exist here, and whose are they?" - is not
  * a question about any one scene.
  *
  * What it deliberately does not touch is hit points and initiative. Those are
@@ -15,7 +15,7 @@
  *
  * Who sees what: the DM sees the whole cast, everyone else sees the tokens that
  * belong to them. Who may *make* one: the DM as many as they like, a player
- * one — their own character — which is why a token remembers the hand that
+ * one - their own character - which is why a token remembers the hand that
  * created it as well as the one it belongs to.
  */
 
@@ -50,7 +50,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * A deliberately shorter list than the tabletop's: what a token is called, what
  * it looks like and how big it is. No position, because nothing here is on a
  * map. No hit points or initiative, because those belong to a fight in
- * progress. No owner — that is handled apart, below, since only the DM may
+ * progress. No owner - that is handled apart, below, since only the DM may
  * change it and it is the one field that hands something over.
  */
 function sanitizeLook(body = {}, existing = {}) {
@@ -58,15 +58,15 @@ function sanitizeLook(body = {}, existing = {}) {
    * Did the caller mention this field at all?
    *
    * The distinction this exists to make: **saying null is not the same as
-   * saying nothing**. For `borderColor`, null is a real answer — "no colour,
-   * draw the default dark ring" — and it is exactly what the form sends when
+   * saying nothing**. For `borderColor`, null is a real answer - "no colour,
+   * draw the default dark ring" - and it is exactly what the form sends when
    * the border checkbox is unticked.
    *
    * This used to be written with `??`, which cannot tell the two apart: it
    * falls through on null as readily as on undefined, so `body.borderColor ??
    * existing.borderColor` read an explicit "remove the border" as silence and
    * handed back the colour already on the token. Removing a border from the
-   * Tokens tab was therefore impossible — the request was accepted, answered
+   * Tokens tab was therefore impossible - the request was accepted, answered
    * 200, and changed nothing. `hasOwnProperty` asks the question actually being
    * asked, which is about the *key*, not about its value.
    *
@@ -84,7 +84,7 @@ function sanitizeLook(body = {}, existing = {}) {
     // a colour, which includes the null meaning "no border".
     borderColor: hexOr(pick('borderColor', existing.borderColor), null),
     imageUrl: String(pick('imageUrl', existing.imageUrl) ?? '').slice(0, 500),
-    // `?? 1` before num(), because Number(null) is 0 rather than NaN — so a null
+    // `?? 1` before num(), because Number(null) is 0 rather than NaN - so a null
     // size would slip past the finite check and be clamped to the minimum
     // instead of falling back to one cell.
     size: clamp(num(pick('size', existing.size) ?? 1, 1), 0.5, 10),
@@ -124,7 +124,7 @@ router.get('/', requireUser, async (req, res, next) => {
   try {
     const all = await everyToken(req);
     const mine = all.filter((token) => canMoveToken(req.actor, req.campaignRole, token));
-    // Unplaced first — those are the ones you can do something with from here —
+    // Unplaced first - those are the ones you can do something with from here -
     // and alphabetically within that, since this is a cast list rather than a
     // history.
     mine.sort(
@@ -164,7 +164,7 @@ router.post('/', requireUser, async (req, res, next) => {
       // whether they may make another; who owns it decides who may move it.
       createdBy: req.actor.userId,
       // A player's own token is theirs. The DM says who anybody else's belongs
-      // to, and may say nobody — the monsters and the scenery.
+      // to, and may say nobody - the monsters and the scenery.
       ownerId: dm ? (req.body?.ownerId ? String(req.body.ownerId) : null) : req.actor.userId,
       initiative: null,
       initiativeDie: null,
@@ -186,7 +186,7 @@ router.post('/', requireUser, async (req, res, next) => {
  * Edit one, wherever it is.
  *
  * The same token can be sitting on the bench or standing on a map, and the edit
- * is the same edit either way — which is the point of this view existing. Only
+ * is the same edit either way - which is the point of this view existing. Only
  * the look is touched; a placed token keeps its square, its wounds and its
  * place in the turn order.
  */
@@ -234,7 +234,7 @@ router.put('/:tokenId', requireUser, async (req, res, next) => {
  *
  * **Who may.** The DM may couple anything to anything at their own table. Anyone
  * else needs both halves to be theirs: a token they could move, and a sheet
- * they could edit. Requiring *edit* rather than mere sight is the point — a
+ * they could edit. Requiring *edit* rather than mere sight is the point - a
  * character somebody has been allowed to read is not a character they may weld
  * their figure to, and the link writes hit points in both directions
  * afterwards.

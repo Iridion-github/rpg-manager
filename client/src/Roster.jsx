@@ -12,7 +12,7 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
  * how they get back in, and both belong to them rather than to the admin.
  *
  * Everyone signed in may read it: it carries names and colours and nothing else
- * — the server strips the rest before it leaves (publicUser) — and knowing who
+ * - the server strips the rest before it leaves (publicUser) - and knowing who
  * else is at the server is what lets a player recognise the person a DM just
  * added to their table. Only the admin sees a way to remove anybody, and the
  * server refuses it from anyone else regardless of what this draws.
@@ -23,7 +23,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
   // The person a confirmation dialog is currently asking about.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
   // A reset link the admin has just been handed: { name, link, minutes }. One
-  // at a time — two on screen is two chances to send the wrong person's.
+  // at a time - two on screen is two chances to send the wrong person's.
   const [issued, setIssued] = useState(null);
 
   const load = useCallback(async () => {
@@ -41,7 +41,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
 
   /**
    * Who is connected changes without this page doing anything, so the server
-   * says when it moves. The nudge carries nothing — it's a signal to ask again,
+   * says when it moves. The nudge carries nothing - it's a signal to ask again,
    * which keeps the server from having to work out who may be told what.
    */
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
    * Get a reset link for somebody the server can't write to.
    *
    * The last resort, and only that. Anybody with an address on file gets their
-   * own link from the sign-in screen without the admin ever hearing about it —
+   * own link from the sign-in screen without the admin ever hearing about it -
    * this is for the account registered under a signup code, which was never
    * asked for a mailbox and so has nowhere for a letter to go.
    */
@@ -116,12 +116,12 @@ export default function Roster({ isAdmin, onUsersChanged }) {
             />
             <strong className="roster-who">{u.name}</strong>
             {u.globalRole === 'admin' && <span className="badge role gm">admin</span>}
-            {/* Someone connected right now has no "last time" worth printing —
+            {/* Someone connected right now has no "last time" worth printing -
                 it is this moment, and it would tick over as you read it. */}
             <span className="roster-seen" title={u.online ? '' : exactTime(u.lastSeenAt)}>
               {u.online ? 'Online now' : timeAgo(u.lastSeenAt) || 'Never'}
             </span>
-            {/* Nothing to press unless you're the admin — and the admin account
+            {/* Nothing to press unless you're the admin - and the admin account
                 has no delete even then, since removing it would leave a server
                 whose password authenticates as nobody. The server refuses this
                 from anyone else regardless; hiding it only means not offering a
@@ -155,7 +155,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
 
       {/* Said plainly rather than softened: for the next hour this string is
           that account. The admin could already reach into the files on the
-          machine and do worse, so this isn't a new power — but a button is
+          machine and do worse, so this isn't a new power - but a button is
           easier to press than a text editor is to open, and the screen offering
           it should be the thing that says so. */}
       {issued && (

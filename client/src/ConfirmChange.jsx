@@ -54,7 +54,7 @@ export default function ConfirmChange({ token, onDone }) {
             has happened yet.
           </p>
           <p className="hint">
-            If you didn't ask for this, close this page — the link expires on its own and nothing
+            If you didn't ask for this, close this page - the link expires on its own and nothing
             will change.
           </p>
           {error && <p className="error">{error}</p>}

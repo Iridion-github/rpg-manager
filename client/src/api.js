@@ -1,13 +1,13 @@
 // Thin API client.
 //
 // You sign in and get a session token; that is the credential. The admin
-// password is the one exception — it is the server's own configuration rather
+// password is the one exception - it is the server's own configuration rather
 // than an account, and is sent as x-admin-password.
 //
 // There was a third: a key in an invite link, which signed you in by being
 // opened. It is gone. A bearer credential that lives in a URL ends up in
 // bookmarks, in browser history and in whatever chat it was pasted into, and it
-// never expired. People arrive by registering now — with SIGNUP_CODE, if the
+// never expired. People arrive by registering now - with SIGNUP_CODE, if the
 // server has one.
 //
 // The server turns what it sees into a role; the client never decides its own
@@ -20,7 +20,7 @@ const SESSION_KEY = 'rpg-manager:session';
 // Per-tab identity. Sent on every write so the server can tag its broadcast with
 // the originator; we then ignore the echo of our own change (we already applied
 // it optimistically, and re-applying it would clobber whatever we've typed
-// since). sessionStorage — not localStorage — so two tabs count as two clients.
+// since). sessionStorage - not localStorage - so two tabs count as two clients.
 export const clientId = (() => {
   let id = sessionStorage.getItem(CLIENT_KEY);
   if (!id) {
@@ -40,7 +40,7 @@ export function setGmPassword(value) {
 }
 
 /**
- * The session token from logging in — the normal credential now.
+ * The session token from logging in - the normal credential now.
  *
  * In localStorage rather than a cookie because the app already sends its
  * credentials as headers and the socket sends them in its handshake, so a token
@@ -59,7 +59,7 @@ export function setSession(value) {
  * Forget a key left behind by the invite-link era.
  *
  * The links stopped working when the server stopped reading them, but the key
- * itself would sit in this browser's storage forever — a dead secret nobody can
+ * itself would sit in this browser's storage forever - a dead secret nobody can
  * see to delete. Run once at import, and after that there is nothing to find.
  */
 (function forgetOldInviteKey() {
@@ -86,7 +86,7 @@ export function authHeaders() {
  *
  * Held here rather than passed to each call: every one of them is inside a
  * campaign, so threading an id through dozens of call sites would only create
- * dozens of chances to forget one — and forgetting one means reading another
+ * dozens of chances to forget one - and forgetting one means reading another
  * table's data. Set once when the campaign changes (see App.jsx), and the URLs
  * below can't be built without it.
  */
@@ -142,14 +142,14 @@ export const api = {
   login: (username, password) => post('/api/auth/login', { username, password }),
   logout: () => post('/api/auth/logout', {}),
   // Your own account. The name changes on the spot; the password and the email
-  // either take the signup code or wait for a link to be opened — the server
+  // either take the signup code or wait for a link to be opened - the server
   // decides which, and says so in its answer.
   updateAccount: (name) => put('/api/auth/account', { name }),
   changePassword: (current, password, code) =>
     post('/api/auth/password', { current, password, code }),
   changeEmail: (email, code) => post('/api/auth/email', { email, code }),
   confirmChange: (token) => post('/api/auth/confirm', { token }),
-  // Getting back in. `who` is a username or an address — somebody who has
+  // Getting back in. `who` is a username or an address - somebody who has
   // forgotten their password may not remember which they signed up with. The
   // answer is the same either way and says nothing about whether the account
   // exists, so there is nothing here for the caller to branch on.
@@ -164,7 +164,7 @@ export const api = {
   // for the person the server has no address for, so there is nowhere to post.
   resetUserPassword: (id) => post(`/api/users/${id}/reset`, {}),
 
-  // Only ever the campaigns you're a member of — someone else's table doesn't
+  // Only ever the campaigns you're a member of - someone else's table doesn't
   // appear at all, admin included.
   listCampaigns: () => get('/api/campaigns'),
   createCampaign: (data) => post('/api/campaigns', data),
@@ -173,7 +173,7 @@ export const api = {
   listMembers: (id) => get(`/api/campaigns/${id}/members`),
 
   // A campaign as a file, and back again. The export is a download rather than
-  // a value, so it fetches and hands the browser a blob — a plain <a href>
+  // a value, so it fetches and hands the browser a blob - a plain <a href>
   // couldn't carry the session header.
   exportCampaign: async (id, name) => {
     const res = await fetch(`/api/campaigns/${id}/export`, { headers: authHeaders() });
@@ -200,7 +200,7 @@ export const api = {
   updateSheet: (id, data) => put(table(`/sheets/${id}`), data),
   deleteSheet: (id) => del(table(`/sheets/${id}`)),
   /**
-   * Who may read and change one character — the DM's call, and a route of its
+   * Who may read and change one character - the DM's call, and a route of its
    * own rather than a field on updateSheet.
    *
    * That separation is the point: a player editing their own sheet sends the
@@ -219,14 +219,14 @@ export const api = {
   rollDice: ({ count, sides, modifier, advantage, label, secret }) =>
     post(table('/chat/roll'), { count, sides, modifier, advantage, label, secret }),
 
-  // The list comes back already filtered by role — a player is never sent an
+  // The list comes back already filtered by role - a player is never sent an
   // unshared note, so there is nothing here for the UI to have to hide.
   listNotes: () => get(table('/notes')),
   createNote: (data) => post(table('/notes'), data),
   updateNote: (id, data) => put(table(`/notes/${id}`), data),
   deleteNote: (id) => del(table(`/notes/${id}`)),
 
-  // Tracks plus what's playing, in one call — the tab needs both and they're
+  // Tracks plus what's playing, in one call - the tab needs both and they're
   // read together on every refresh.
   getMusic: () => get(table('/music')),
   addTrack: (url, title) => post(table('/music'), { url, title }),
@@ -265,7 +265,7 @@ export const api = {
   /**
    * Couple a token to a character sheet, or pass null to set it loose.
    *
-   * One call behind both screens — the Characters tab asks it "which token is
+   * One call behind both screens - the Characters tab asks it "which token is
    * this character?" and the Tokens tab "which character is this token?", which
    * are the same fact written from two ends. The link is stored on the token
    * alone, so there is only ever one record to change and no way for the two

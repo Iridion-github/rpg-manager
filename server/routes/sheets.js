@@ -5,7 +5,7 @@
  * one.
  *
  * Each sheet carries an `access` map (userId → 'view' | 'edit') that only the
- * DM can change — it has its own endpoint precisely so that "edit this
+ * DM can change - it has its own endpoint precisely so that "edit this
  * character" and "decide who may edit this character" can never be the same
  * request. A player editing their own sheet sends the whole sheet back, and if
  * access travelled in that body they could promote themselves in the process.
@@ -62,7 +62,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const record = await store.get(sheetsOf(req), req.params.id);
-    // Invisible reads as absent, not as forbidden — "you may not see this"
+    // Invisible reads as absent, not as forbidden - "you may not see this"
     // still tells a player whose sheet exists.
     if (!record || !canViewSheet(req.actor, req.campaignRole, record)) {
       return res.status(404).json({ error: 'Not found' });
@@ -74,7 +74,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * Make a character. Anyone at the table may — see who ends up holding it.
+ * Make a character. Anyone at the table may - see who ends up holding it.
  *
  * Not `requireDm`, unlike notes and scenes, and the difference is the point: a
  * note is the DM's material and a scene is their board, but a character is the
@@ -93,7 +93,7 @@ router.post('/', async (req, res, next) => {
         // out is a decision, and defaulting to "everyone" is the wrong way to
         // be wrong. The access panel is how they then hand it over.
         sanitizeSheetAccess(req.body.access)
-      : // A player's own character is theirs from the moment it exists —
+      : // A player's own character is theirs from the moment it exists -
         // anything else would mean making one you then have to be given.
         //
         // Built here rather than read from the body, which is deliberate: a
@@ -116,7 +116,7 @@ router.post('/', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     // The permission check runs inside the write lock, against the record as it
-    // actually is — checking first and writing after would let the DM's
+    // actually is - checking first and writing after would let the DM's
     // revocation land in between and be overtaken by the write it revoked.
     let seen = null;
     const record = await store.mutate(sheetsOf(req), req.params.id, (current) => {
@@ -150,7 +150,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// Who may see and edit this sheet — the DM's call alone.
+// Who may see and edit this sheet - the DM's call alone.
 router.put('/:id/access', requireDm, async (req, res, next) => {
   try {
     const access = sanitizeSheetAccess(req.body?.access);
@@ -174,7 +174,7 @@ router.delete('/:id', requireDm, async (req, res, next) => {
   try {
     // Release the token first. Doing it after the delete would be the same
     // outcome, but a failure between the two would leave a token pointing at a
-    // sheet that no longer exists — whereas a failure here leaves a released
+    // sheet that no longer exists - whereas a failure here leaves a released
     // token and a sheet that is still there, which is merely the state before
     // somebody pressed the button.
     await sheetLink.releaseSheet(req.campaignId, req.params.id);

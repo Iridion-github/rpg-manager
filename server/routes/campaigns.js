@@ -3,13 +3,13 @@
 /**
  * Campaign CRUD and membership.
  *
- * Any signed-in user can start a campaign and is its DM from the first moment —
+ * Any signed-in user can start a campaign and is its DM from the first moment -
  * that's what makes "DM at my table, player at yours" work without anyone
  * brokering it.
  *
  * The *list* is a public directory: every signed-in user can see that a
  * campaign exists, what it's called, how busy it is and whether it's still
- * being run. What it never reveals is who is at a table — only how many. And
+ * being run. What it never reveals is who is at a table - only how many. And
  * seeing a campaign gets you nothing beyond seeing it: its sheets, scenes, chat
  * and notes stay member-only, enforced before any of those routes run.
  */
@@ -36,7 +36,7 @@ const router = express.Router();
 // a member, so its membership is not a secret from you.
 const withRole = (campaign, actor) => ({ ...campaign, myRole: roleIn(campaign, actor) });
 
-// The directory. Every campaign, summarised — never the membership itself.
+// The directory. Every campaign, summarised - never the membership itself.
 router.get('/', requireUser, async (req, res, next) => {
   try {
     const all = await store.list(CAMPAIGNS);
@@ -61,7 +61,7 @@ router.get('/:id', requireUser, async (req, res, next) => {
 });
 
 // Members with names attached, for the DM's member list and for labelling
-// tokens. Any member may read it — you can see who else is at your table.
+// tokens. Any member may read it - you can see who else is at your table.
 router.get('/:id/members', requireUser, async (req, res, next) => {
   try {
     const campaign = await store.get(CAMPAIGNS, req.params.id);
@@ -88,7 +88,7 @@ router.get('/:id/members', requireUser, async (req, res, next) => {
 });
 
 /**
- * The campaign as a file. DM only — it carries the unshared notes, every
+ * The campaign as a file. DM only - it carries the unshared notes, every
  * character sheet and the whole chat log, which is the DM's view of the table
  * rather than a player's.
  */
@@ -125,7 +125,7 @@ router.get('/:id/export', requireUser, async (req, res, next) => {
  * and a caller that mixes them up should get a clear answer about which.
  *
  * The name and subtitle are taken from the body when given and from the file
- * otherwise — the dialog fills its fields from the file only when they're
+ * otherwise - the dialog fills its fields from the file only when they're
  * empty, and this is the same rule on the server so a direct caller can't end
  * up with a campaign named differently from the one it asked for.
  */
@@ -155,7 +155,7 @@ router.post('/', requireUser, async (req, res, next) => {
   try {
     const record = await store.create(CAMPAIGNS, {
       ...sanitizeCampaign(req.body),
-      // You run what you start. Taken from the credential, never the body —
+      // You run what you start. Taken from the credential, never the body -
       // otherwise creating a campaign could name someone else as its DM.
       members: { [req.actor.userId]: 'dm' },
     });
@@ -173,7 +173,7 @@ router.put('/:id', requireUser, async (req, res, next) => {
         denied = true;
         return null;
       }
-      // members is not taken from the body — it has its own endpoint, so
+      // members is not taken from the body - it has its own endpoint, so
       // renaming a campaign can't quietly rewrite who's in it.
       return { ...current, ...sanitizeCampaign(req.body) };
     });
@@ -196,7 +196,7 @@ router.put('/:id', requireUser, async (req, res, next) => {
  *
  * A DM cannot demote or remove themselves if they'd be the last one: a campaign
  * with no DM is a campaign nobody can ever administer again, and there's no
- * higher authority to appeal to — admin has no standing here by design.
+ * higher authority to appeal to - admin has no standing here by design.
  */
 router.put('/:id/members', requireUser, async (req, res, next) => {
   try {

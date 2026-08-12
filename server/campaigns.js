@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Campaigns — the container everything else lives inside.
+ * Campaigns - the container everything else lives inside.
  *
  * A campaign is a key prefix, not a column:
  *
@@ -12,14 +12,14 @@
  *   campaigns/<id>/notes         …its notes and handouts
  *
  * The campaign is part of the collection name, and the collection name is the
- * leading half of the primary key. The obvious alternative — one `sheets` table
- * with a campaignId column — makes every forgotten WHERE clause a silent leak
+ * leading half of the primary key. The obvious alternative - one `sheets` table
+ * with a campaignId column - makes every forgotten WHERE clause a silent leak
  * of one table's secrets into another. Here there is no row you can reach
  * without naming its campaign first. Deleting a campaign is deleting a key
  * prefix.
  *
  * The id is still checked against a strict uuid pattern before being built into
- * a collection name — see scoped(). It no longer reaches a filesystem, but a
+ * a collection name - see scoped(). It no longer reaches a filesystem, but a
  * caller that could name any collection could name `users`.
  */
 
@@ -36,7 +36,7 @@ const isCampaignId = (id) => typeof id === 'string' && UUID_RE.test(id);
  * The name of a collection *inside* a campaign.
  *
  * Every campaign-scoped read and write goes through here, which makes this the
- * single choke point where an id becomes part of a key — and therefore the only
+ * single choke point where an id becomes part of a key - and therefore the only
  * place that has to get the validation right.
  */
 function scoped(campaignId, collection) {
@@ -59,14 +59,14 @@ async function removeCampaignData(campaignId) {
 /**
  * What this person is *at this table*.
  *
- * Returns 'dm', 'player', or null for someone who isn't a member — except for
+ * Returns 'dm', 'player', or null for someone who isn't a member - except for
  * the admin, who is 'dm' everywhere without being a member anywhere.
  *
  * This used to be the opposite, on the reasoning that an admin who was never
  * invited to your campaign is not its DM. That holds on a server whose admin is
  * also somebody's player. It doesn't hold here: this admin is an administrative
  * account that never sits at a table, so refusing it meant the only person who
- * can fix a table had to be invited to it first — by the DM whose table is
+ * can fix a table had to be invited to it first - by the DM whose table is
  * broken. The confidentiality it bought was already nominal, since
  * /api/admin/backup hands the same password holder the entire database.
  *
@@ -88,7 +88,7 @@ const isDm = (campaign, actor) => roleIn(campaign, actor) === 'dm';
 /**
  * The ownership rule for tokens, in one place: the DM may move any token, a
  * player may move only a token assigned to them, and nobody else may move
- * anything. Both the HTTP route and the socket drag handler call this — if they
+ * anything. Both the HTTP route and the socket drag handler call this - if they
  * each had their own copy, one of them would eventually be wrong.
  */
 function canMoveToken(actor, role, token) {
@@ -102,8 +102,8 @@ function canMoveToken(actor, role, token) {
  *
  * A sheet carries `access`, a map of userId → 'view' | 'edit'. A player who
  * isn't in it can't see the sheet at all. One map rather than separate viewer
- * and editor lists: those two can disagree — an editor missing from the viewers
- * — and then there are two answers about who can read the sheet.
+ * and editor lists: those two can disagree - an editor missing from the viewers
+ * - and then there are two answers about who can read the sheet.
  *
  * The DM is never in the map. They can always do everything at their own table,
  * which is also why only they can change the map: see routes/sheets.js.
@@ -157,13 +157,13 @@ function sanitizeCampaign(body = {}) {
 /**
  * What everyone may know about a campaign, member or not.
  *
- * The list of campaigns is public to signed-in users — you can see that a table
+ * The list of campaigns is public to signed-in users - you can see that a table
  * exists, what it's called, how many people are at it, and whether it's alive.
  * What stays private is *who*: the members map never leaves the server through
  * here, only its size. "Four people play this" is a fact about the campaign;
  * "these four people play this" is a fact about them.
  *
- * Contents — sheets, scenes, chat, notes — remain member-only, and that's
+ * Contents - sheets, scenes, chat, notes - remain member-only, and that's
  * enforced elsewhere (attachCampaign). This is a directory, not a door.
  */
 function publicSummary(campaign, actor) {
@@ -203,7 +203,7 @@ async function touchActivity(campaignId, campaign) {
  * accidentally serve data from a campaign the caller isn't in: by the time any
  * handler runs, req.campaign and req.campaignRole are already decided.
  *
- * A campaign you aren't a member of answers 404, not 403 — the existence of
+ * A campaign you aren't a member of answers 404, not 403 - the existence of
  * someone else's table is not yours to learn.
  */
 function attachCampaign(req, res, next) {

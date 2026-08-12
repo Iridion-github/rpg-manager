@@ -5,7 +5,7 @@ import { PATCH_NOTES, patchDate } from './patchNotes.js';
  *
  * A read-only page with no server behind it: the list is a module that ships
  * with the app (patchNotes.js), so it is exactly as current as the version you
- * are looking at. That is the useful property — a changelog fetched from
+ * are looking at. That is the useful property - a changelog fetched from
  * somewhere else can describe features the page it is on doesn't have.
  *
  * Grouped by day rather than by commit. Several changes usually land together,
@@ -41,7 +41,7 @@ export default function PatchNotes() {
               const kind = KINDS[entry.kind] || KINDS.change;
               return (
                 // The index is a fine key here: the list is a constant that
-                // never reorders, filters or animates — it is read off a file
+                // never reorders, filters or animates - it is read off a file
                 // that only ever grows at the top.
                 <li key={i} className={`patch-entry ${entry.kind}`}>
                   <span className="patch-tag" title={kind.title}>

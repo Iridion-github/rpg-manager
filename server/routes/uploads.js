@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Map image uploads — the first binary assets in the project.
+ * Map image uploads - the first binary assets in the project.
  *
  * Files land in DATA_DIR/uploads and are served read-only from /uploads.
  *
@@ -28,7 +28,7 @@ const { requireUser } = require('../auth');
 const router = express.Router();
 
 const UPLOAD_DIR = path.join(store.DATA_DIR, 'uploads');
-const MAX_BYTES = 20 * 1024 * 1024; // 20 MB — a big battle map, not a video
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB - a big battle map, not a video
 
 // Extension is chosen by us from the detected mime type, not from the upload.
 const ALLOWED = new Map([
@@ -43,7 +43,7 @@ const upload = multer({
   limits: { fileSize: MAX_BYTES, files: 1 },
   fileFilter: (req, file, cb) => {
     // A first pass only. `file.mimetype` is the browser's claim about its own
-    // upload, not a fact — sniffBytes below is what actually decides.
+    // upload, not a fact - sniffBytes below is what actually decides.
     if (!ALLOWED.has(file.mimetype)) {
       return cb(new Error(`Unsupported image type: ${file.mimetype}`));
     }
@@ -81,7 +81,7 @@ function sniffBytes(buf) {
 
 router.post('/', requireUser, (req, res, next) => {
   // Charged before the body is read, so a caller who is over their quota costs
-  // nothing but the refusal — no 20 MB held in memory to be thrown away.
+  // nothing but the refusal - no 20 MB held in memory to be thrown away.
   const wait = limits.uploads.take(limits.bucketOf(req));
   if (wait) return limits.refuse(res, wait);
 
@@ -95,7 +95,7 @@ router.post('/', requireUser, (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded (field name: "image")' });
 
     // The bytes decide, and the extension is taken from what they say rather
-    // than from what the upload claimed — so a PNG announced as a JPEG is
+    // than from what the upload claimed - so a PNG announced as a JPEG is
     // simply stored as a PNG, and anything that is not an image at all is
     // refused before it touches the disk.
     const actual = sniffBytes(req.file.buffer);

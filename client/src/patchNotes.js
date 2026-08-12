@@ -1,7 +1,7 @@
 // What has changed, in the order it changed, for the people who use this.
 //
 // Written by hand rather than generated from the git log, and that is the whole
-// point of the file. A commit message is a note from one developer to another —
+// point of the file. A commit message is a note from one developer to another -
 // "Fix token update bug" tells a player nothing, and "WIP" tells them less. This
 // says what is different at their table. When two commits are really one change,
 // they get one line; when a commit changed nothing anybody can see, it gets
@@ -11,13 +11,13 @@
 //
 // **Adding an entry.** Put it at the top. If today's date is already the first
 // group, add a line to it; otherwise start a new group above the last one. One
-// group per day, newest first — the screen renders them in the order they
+// group per day, newest first - the screen renders them in the order they
 // appear here and does no sorting of its own, so the order in this file is the
 // order on the page.
 //
-//   kind — 'new' for a feature, 'fix' for something that was broken,
+//   kind - 'new' for a feature, 'fix' for something that was broken,
 //          'change' for something that already worked and now works differently.
-//   text — one or two sentences, in the second person, about what somebody can
+//   text - one or two sentences, in the second person, about what somebody can
 //          now do. Not how it was built.
 //
 // Dates are ISO so they sort and parse unambiguously; the screen formats them.
@@ -28,15 +28,15 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
-        text: 'Characters and tokens can be coupled, from either the Characters tab or the Tokens tab. Linked, the two share hit points in both directions — damage on the map lands on the sheet, healing on the sheet shows on the map — and the token takes its initiative modifier from the character. Its name, picture and size stay its own. One character per token and one token per character; you can couple your own, and the DM can couple anything.',
+        text: 'Characters and tokens can be coupled, from either the Characters tab or the Tokens tab. Linked, the two share hit points in both directions - damage on the map lands on the sheet, healing on the sheet shows on the map - and the token takes its initiative modifier from the character. Its name, picture and size stay its own. One character per token and one token per character; you can couple your own, and the DM can couple anything.',
       },
       {
         kind: 'new',
-        text: 'Patch notes — this page. Every change worth knowing about, newest first.',
+        text: 'Patch notes - this page. Every change worth knowing about, newest first.',
       },
       {
         kind: 'new',
-        text: 'Character sheets belong to people now. Anyone at the table can make one and it is theirs immediately; the DM can hand any sheet to any player as view-only or fully editable, and take it back again — it disappears from their screen at once. Players see only the characters that are theirs, and the DM sees them all with a note of who holds each.',
+        text: 'Character sheets belong to people now. Anyone at the table can make one and it is theirs immediately; the DM can hand any sheet to any player as view-only or fully editable, and take it back again - it disappears from their screen at once. Players see only the characters that are theirs, and the DM sees them all with a note of who holds each.',
       },
       {
         kind: 'new',
@@ -97,7 +97,7 @@ export const PATCH_NOTES = [
       },
       {
         kind: 'new',
-        text: 'Floating windows — sheets, the turn tracker, the drawing box — have an opacity slider, so you can keep one over the map and still see the map.',
+        text: 'Floating windows - sheets, the turn tracker, the drawing box - have an opacity slider, so you can keep one over the map and still see the map.',
       },
       {
         kind: 'change',
@@ -114,7 +114,7 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
-        text: 'Hovering a token tells you about it — name, hit points and initiative, showing each person only what they are entitled to see.',
+        text: 'Hovering a token tells you about it - name, hit points and initiative, showing each person only what they are entitled to see.',
       },
       {
         kind: 'new',
@@ -160,7 +160,7 @@ export const PATCH_NOTES = [
       },
       {
         kind: 'change',
-        text: 'Everything moved into a database instead of loose files — faster, and it stops two people saving at once from losing one of the changes. Existing data is carried over automatically.',
+        text: 'Everything moved into a database instead of loose files - faster, and it stops two people saving at once from losing one of the changes. Existing data is carried over automatically.',
       },
       {
         kind: 'change',
@@ -181,7 +181,7 @@ export const PATCH_NOTES = [
 
 /**
  * "12 August 2026". Written out rather than 12/08/2026, which means two
- * different days depending on who is reading it — and this list is read
+ * different days depending on who is reading it - and this list is read
  * top-to-bottom for *when*, so the one thing every line has to be unambiguous
  * about is its date.
  *

@@ -7,8 +7,8 @@ import { createPortal } from 'react-dom';
  * just its title bar with the button beside the close one.
  *
  * Deliberately *not* a modal: no backdrop, and nothing behind it is made
- * inert. The whole point is that the rest of the page — the list you opened
- * this from, the chat down the side — stays where it was and stays usable.
+ * inert. The whole point is that the rest of the page - the list you opened
+ * this from, the chat down the side - stays where it was and stays usable.
  * `role="dialog"` without `aria-modal` says exactly that to a screen reader.
  *
  * `controls` are laid out between the title and the close button; pass a
@@ -21,7 +21,7 @@ import { createPortal } from 'react-dom';
 const GRIPS = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
 
 // Below this a character sheet stops being readable and turns into a puzzle.
-// Only the default, though — a window whose content is a short list rather than
+// Only the default, though - a window whose content is a short list rather than
 // a sheet says so with `minSize` and is allowed to be much smaller.
 const MIN_W = 380;
 const MIN_H = 260;
@@ -66,14 +66,14 @@ function savedRect(storageKey) {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
     return saved && Number.isFinite(saved.x) ? saved : null;
   } catch {
-    // A corrupt entry is not worth a broken window — treat it as none.
+    // A corrupt entry is not worth a broken window - treat it as none.
     return null;
   }
 }
 
 const hasSavedRect = (storageKey) => Boolean(storageKey && savedRect(storageKey));
 
-// Where it opens: where you last left it, or centred the first time — offset by
+// Where it opens: where you last left it, or centred the first time - offset by
 // its place in the stack, since windows that have never been moved would
 // otherwise all land on the same spot and look like one window.
 function firstRect(storageKey, size, cascade, min) {
@@ -96,7 +96,7 @@ function firstRect(storageKey, size, cascade, min) {
 
 // Dragging the north or west side moves the corner you *aren't* holding, so the
 // opposite side stays put. The upper clamps are what stop a stretch running off
-// the screen — the edge you're pulling can't pass the viewport it started in.
+// the screen - the edge you're pulling can't pass the viewport it started in.
 function stretch(from, mode, dx, dy, min) {
   let { x, y, w, h } = from;
   if (mode.includes('e')) w = clamp(from.w + dx, min.w, window.innerWidth - from.x);
@@ -123,13 +123,13 @@ export default function FloatingWindow({
   // window holding a short list can ask for far less and still be usable.
   minSize = DEFAULT_MIN,
   // 0–1, applied to the whole window. Pass `onOpacityChange` as well and the
-  // header grows the slider that drives it — kept here rather than handed to
+  // header grows the slider that drives it - kept here rather than handed to
   // each caller as markup so every window that offers it looks and behaves the
   // same, and answers to one floor.
   opacity = 1,
   onOpacityChange,
   // Where this one sits in a stack of them: `zIndex` paints it, `cascade`
-  // places it the first time, and `isTop` decides who answers the Escape key —
+  // places it the first time, and `isTop` decides who answers the Escape key -
   // one keypress should close the window in front, not every one at once.
   zIndex = 40,
   cascade = 0,
@@ -149,7 +149,7 @@ export default function FloatingWindow({
   // see the current values, and changing it must not re-render on its own.
   const gesture = useRef(null);
 
-  // Rolled up to its title bar. Holds the *size* to unroll back into — only the
+  // Rolled up to its title bar. Holds the *size* to unroll back into - only the
   // size, so a bar you dragged somewhere unrolls where you left it rather than
   // springing back to where it was folded. Non-null is what "rolled up" means.
   const [rolledUpSize, setRolledUpSize] = useState(null);
@@ -157,13 +157,13 @@ export default function FloatingWindow({
   const winRef = useRef(null);
   const headRef = useRef(null);
 
-  // The box the window has when open — right now, or once unrolled.
+  // The box the window has when open - right now, or once unrolled.
   const openRect = minimized ? { ...rect, ...rolledUpSize } : rect;
 
   // While rolled up the window is allowed to be far smaller than a sheet needs,
-  // and every clamp — dragging, a browser resize — has to agree, or the next one
+  // and every clamp - dragging, a browser resize - has to agree, or the next one
   // to run would quietly unroll it.
-  // The folded bar is MINI_W wide — unless the window's own minimum is narrower
+  // The folded bar is MINI_W wide - unless the window's own minimum is narrower
   // than that, in which case folding it must not *widen* it.
   const foldW = Math.min(MINI_W, Math.max(rect.w, minSize.w));
   const minW = minimized ? foldW : minSize.w;
@@ -174,7 +174,7 @@ export default function FloatingWindow({
    *
    * Driven by the button in the header rather than a double-click on the bar:
    * starting a drag calls preventDefault on the pointerdown, and that suppresses
-   * the compatibility mouse events the browser would otherwise synthesise — so
+   * the compatibility mouse events the browser would otherwise synthesise - so
    * a dblclick handler on a draggable surface never hears anything.
    *
    * The collapsed height is measured rather than guessed: it's whatever the
@@ -304,7 +304,7 @@ export default function FloatingWindow({
     >
       <div ref={headRef} className="win-head" onPointerDown={beginMove}>
         <strong className="win-title">{title}</strong>
-        {/* Beside the title, and only while the window is open — rolled up,
+        {/* Beside the title, and only while the window is open - rolled up,
             the bar is a name and its own two buttons. */}
         {onOpacityChange && !minimized && (
           <label className="win-opacity" title={`Opacity ${Math.round(opacity * 100)}%`}>
@@ -320,13 +320,13 @@ export default function FloatingWindow({
           </label>
         )}
         {/* Rolled up, the bar carries the name and nothing else. The controls
-            act on a sheet you can't see, so they go with it — but the window's
+            act on a sheet you can't see, so they go with it - but the window's
             own buttons stay, or a folded sheet would have no way back. */}
         {!minimized && controls}
         {minimized && <div className="spacer" />}
         {/* Drawn rather than typed. As characters these two marks come from
             whatever font the system hands over, at optical sizes and baselines
-            that have nothing to do with each other or with the ✕ beside them —
+            that have nothing to do with each other or with the ✕ beside them -
             a square glyph in particular lands small and sitting low. Two lines
             of SVG buy an exact size and a true centre. */}
         <button

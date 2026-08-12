@@ -28,7 +28,7 @@ const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
  * It goes through SQLite's online backup API rather than copying the file,
  * which matters: in WAL mode the committed state is spread across the database
  * and its write-ahead log, so a plain copy of the .db taken while the server is
- * running can be missing the most recent transactions — or be torn outright.
+ * running can be missing the most recent transactions - or be torn outright.
  * backup() cooperates with the writer and hands back a file that opens cleanly.
  *
  * The server keeps running throughout. Restoring is putting this file where
@@ -42,7 +42,7 @@ router.get('/backup', requireAdmin, async (req, res, next) => {
     await store.db.backup(temp);
     res.download(temp, `rpg-manager-${stamp()}.db`, (err) => {
       // Fires once the transfer finishes or fails; either way the copy is done
-      // with. Errors here are logged rather than raised — the response has
+      // with. Errors here are logged rather than raised - the response has
       // already begun, so there's nothing left to tell the client.
       fs.rm(temp, { force: true }, () => {});
       if (err) console.error('backup download failed:', err.message);

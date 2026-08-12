@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Built-in maps — whatever image files you drop into `public/maps/`.
+ * Built-in maps - whatever image files you drop into `public/maps/`.
  *
  * Served straight off disk and listed on demand rather than baked into the
  * client bundle, so adding a map is a file copy: no rebuild, no redeploy.
@@ -20,7 +20,7 @@ const router = express.Router();
 const MAPS_DIR = path.join(__dirname, '..', '..', 'public', 'maps');
 
 // Extensions we're willing to hand to an <img>. Note that a file's extension
-// says nothing about its real format — browsers sniff content — so this is a
+// says nothing about its real format - browsers sniff content - so this is a
 // listing filter, not a security check. Nothing here is executed.
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 

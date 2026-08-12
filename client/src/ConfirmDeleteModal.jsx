@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
- * "Delete Kira?" — the step between clicking a delete button and the thing
+ * "Delete Kira?" - the step between clicking a delete button and the thing
  * ceasing to exist for everyone at the table.
  *
  * `byName` asks for the name to be typed instead of offering a plain yes/no.
  * That's for deletions worth slowing down: a character sheet is not undoable
- * and not private — it takes the sheet away from the player whose character it
- * is — and with several windows open the mistake to guard against is deleting
+ * and not private - it takes the sheet away from the player whose character it
+ * is - and with several windows open the mistake to guard against is deleting
  * the *wrong* one. Copying out a name can't be done by reflex. A note is the
  * DM's own and cheaper to lose, so it just asks.
  */
@@ -17,8 +17,8 @@ export default function ConfirmDeleteModal({
   description,
   byName = false,
   confirmLabel = 'Confirm deletion',
-  // Not everything this asks about is being destroyed — removing someone from a
-  // campaign leaves the person untouched — so the heading can be overridden
+  // Not everything this asks about is being destroyed - removing someone from a
+  // campaign leaves the person untouched - so the heading can be overridden
   // rather than promising a deletion that isn't going to happen.
   title,
   onConfirm,
@@ -50,7 +50,7 @@ export default function ConfirmDeleteModal({
       await onConfirm();
       onClose();
     } catch (err) {
-      // Stay open and say what happened — closing on a failed delete would
+      // Stay open and say what happened - closing on a failed delete would
       // report success for something that didn't happen.
       setError(err.message);
       setBusy(false);

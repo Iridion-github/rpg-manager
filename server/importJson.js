@@ -13,7 +13,7 @@
  *       actual game, so they're folded into a campaign rather than left behind
  *       for a fresh empty one.
  *
- * Runs only when the database holds nobody's game yet — that emptiness is the
+ * Runs only when the database holds nobody's game yet - that emptiness is the
  * "not yet imported" marker, so a second start does nothing. Source files are
  * renamed to *.imported rather than deleted: this is the one irreversible-
  * looking step in the project and a backup costs nothing.
@@ -56,7 +56,7 @@ const dropScaffolding = store.db.prepare(`
 `);
 
 /**
- * Is the database empty in the only sense that matters — does it hold anybody's
+ * Is the database empty in the only sense that matters - does it hold anybody's
  * game?
  *
  * A lone admin account is scaffolding; a second account is not. Somebody
@@ -103,7 +103,7 @@ function findSources(dir) {
 }
 
 async function importJson() {
-  if (!onlyScaffolding()) return null; // already somebody's game — nothing to do
+  if (!onlyScaffolding()) return null; // already somebody's game - nothing to do
 
   const sources = findSources(store.DATA_DIR);
   if (sources.length === 0) return null; // fresh install
@@ -177,7 +177,7 @@ async function importJson() {
   const run = store.db.transaction(() => {
     // Clear the scaffolding first and let the JSON decide who exists. The
     // folder carries its own admin, and two accounts sharing the username
-    // `admin` is a coin toss over which one you log in as — with the loser's
+    // `admin` is a coin toss over which one you log in as - with the loser's
     // campaigns invisible, since membership is by id. Any session goes with it,
     // which costs one login. ensureAdminUser() seeds a fresh admin at that
     // login if the import turned out not to carry one.

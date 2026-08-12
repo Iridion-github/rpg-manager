@@ -1,22 +1,22 @@
 'use strict';
 
 /**
- * Who is asking? — global identity, which is *not* the same thing as what you
+ * Who is asking? - global identity, which is *not* the same thing as what you
  * may do.
  *
  * There are two separate questions in this app, and keeping them apart is the
  * point of this file:
  *
- *   1. Who are you?      — answered here. A user record, or nobody (anon).
- *   2. What are you here? — answered per campaign, in campaigns.js. The same
+ *   1. Who are you?      - answered here. A user record, or nobody (anon).
+ *   2. What are you here? - answered per campaign, in campaigns.js. The same
  *                           person is a DM at one table and a player at another.
  *
  * Three ways to prove who you are, checked in that order:
  *
- *   session      — you logged in. A random token, stored server-side, sent as
+ *   session      - you logged in. A random token, stored server-side, sent as
  *                  x-session. This is the normal path.
- *   admin password — ADMIN_PASSWORD, which authenticates as the seeded admin.
- *   invite key   — the older credential, a per-user secret in a link. Still
+ *   admin password - ADMIN_PASSWORD, which authenticates as the seeded admin.
+ *   invite key   - the older credential, a per-user secret in a link. Still
  *                  honoured so existing invites don't break.
  *
  * Global roles: admin (mints users), user, anon.
@@ -59,7 +59,7 @@ const ANON = Object.freeze({ globalRole: 'anon', userId: null, name: '', usernam
 // Distinct, readable-on-dark token colours.
 const PALETTE = ['#e5534b', '#3fb950', '#58a6ff', '#d29922', '#bc8cff', '#39c5cf'];
 
-// scrypt is in the standard library and is a real password KDF — unlike a plain
+// scrypt is in the standard library and is a real password KDF - unlike a plain
 // hash, it's deliberately slow and memory-hard, so a stolen users.json can't be
 // run through a wordlist at speed. No dependency needed for it.
 const SCRYPT = { N: 16384, r: 8, p: 1 };
@@ -95,7 +95,7 @@ const newSessionToken = () => crypto.randomBytes(32).toString('base64url');
 const colorFor = (index) => PALETTE[index % PALETTE.length];
 
 // Usernames and emails are compared lowercased so "Kira" and "kira" can't both
-// exist — two accounts that look identical in a members list is a way to be
+// exist - two accounts that look identical in a members list is a way to be
 // impersonated, and two accounts on one address break recovery.
 const normalizeUsername = (v) => String(v || '').trim().toLowerCase();
 const normalizeEmail = (v) => String(v || '').trim().toLowerCase();
@@ -109,7 +109,7 @@ const MAX_NAME = 60;
  * Good enough for a form, and no more.
  *
  * An address is only truly valid if mail sent to it arrives, which no pattern
- * can tell you — this exists to catch a typo, not to be a specification. RFC
+ * can tell you - this exists to catch a typo, not to be a specification. RFC
  * 5322 in a regex would reject real addresses and still accept dead ones.
  */
 const EMAIL_RE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
@@ -134,12 +134,12 @@ function validateCredentials(username, password) {
  * The address is only insisted on when nothing else has vouched for the person
  * filling this in. A server closed behind a signup code has already asked for
  * something only an invited person has, and asking for an address as well is
- * asking twice — see routes/auth.js, which decides which of the two this is.
+ * asking twice - see routes/auth.js, which decides which of the two this is.
  *
  * An address that *was* typed is checked either way. Half of one is a typo, not
  * a decision to go without.
  */
-/** One address, checked on its own — the form isn't the only thing that asks. */
+/** One address, checked on its own - the form isn't the only thing that asks. */
 function validateEmail(email) {
   if (!email || email.length > MAX_EMAIL || !EMAIL_RE.test(email)) {
     return "That doesn't look like an email address.";
@@ -159,7 +159,7 @@ function validateProfile(name, email, { emailRequired = true } = {}) {
  *
  * Run once at boot, and idempotent. A key stopped being a credential when the
  * link system went, and a secret nothing reads is still a secret sitting in the
- * database — in backups, in exports, in whatever copy of the file gets moved to
+ * database - in backups, in exports, in whatever copy of the file gets moved to
  * a new machine. Better gone than inert.
  */
 async function dropInviteKeys() {
@@ -184,7 +184,7 @@ async function findUserByUsername(username) {
 async function findUserByEmail(email) {
   const wanted = normalizeEmail(email);
   if (!wanted) return null;
-  // Accounts made before emails existed have none — they can't collide.
+  // Accounts made before emails existed have none - they can't collide.
   const users = await store.list(USERS);
   return users.find((u) => u.email && normalizeEmail(u.email) === wanted) || null;
 }
@@ -219,7 +219,7 @@ async function userForSession(token) {
 const destroySession = (token) => (token ? store.remove(SESSIONS, token) : Promise.resolve(false));
 
 /**
- * Drop every session belonging to a user — used when their account is deleted,
+ * Drop every session belonging to a user - used when their account is deleted,
  * their credentials rotated, or their password changed, so a token issued
  * earlier stops working.
  *
@@ -237,7 +237,7 @@ async function destroySessionsFor(userId, { except } = {}) {
 /**
  * Forget sessions that have already expired.
  *
- * They are refused on use either way — userForSession checks the date — so this
+ * They are refused on use either way - userForSession checks the date - so this
  * is housekeeping rather than a control: without it the table only ever grows,
  * and every one of those rows is a token that was valid once. Run at startup
  * and daily after that; a server that lives for months would otherwise carry
@@ -261,7 +261,7 @@ async function sweepExpiredSessions() {
  *
  * It has to be: an admin who runs a campaign is its DM, and membership is a map
  * of user ids. A password alone has no id to put in that map. The password is
- * how you authenticate *as* the admin user, not the identity itself — which is
+ * how you authenticate *as* the admin user, not the identity itself - which is
  * also why the admin can sign in through the normal login form, using
  * ADMIN_USERNAME and ADMIN_PASSWORD.
  */
@@ -288,7 +288,7 @@ async function ensureAdminUser() {
  *
  * An explicit credential always wins, *including* in dev mode. Without that,
  * logging in as a player on an open-gate server would silently keep making you
- * the admin — which defeats the entire point of being able to test the roles.
+ * the admin - which defeats the entire point of being able to test the roles.
  * Dev mode is the fallback for requests that present nothing at all.
  */
 async function resolveActor({ adminPassword, session }) {
@@ -301,7 +301,7 @@ async function resolveActor({ adminPassword, session }) {
   }
   if (!gateEnabled) {
     // Open gate (dev): an unauthenticated visitor is the admin, which keeps
-    // local work frictionless. See index.js — every other way of starting the
+    // local work frictionless. See index.js - every other way of starting the
     // server demands a password.
     const admin = await ensureAdminUser();
     return { ...actorFor(admin), name: `${admin.name} (dev mode)` };
@@ -341,7 +341,7 @@ function requireAdmin(req, res, next) {
  * Strip everything private before a record leaves the server.
  *
  * Email goes too. The user list is readable by any signed-in person so that a
- * DM can pick members from it — that's a reason to expose names, not the
+ * DM can pick members from it - that's a reason to expose names, not the
  * address someone hands over to recover their account. You see your own on
  * /auth/me; the admin sees all of them on /users/keys.
  */

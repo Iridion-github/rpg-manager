@@ -7,7 +7,7 @@
  * credentials as headers and the socket sends them in its handshake, so a token
  * fits both without cookie plumbing or CSRF handling. The tradeoff is that a
  * token in localStorage is readable by any script that gets injected into the
- * page — worth knowing, and the reason a session expires rather than lasting
+ * page - worth knowing, and the reason a session expires rather than lasting
  * forever.
  *
  * Registration is open unless SIGNUP_CODE is set. On your own machine that's
@@ -57,7 +57,7 @@ const cleanName = (v) => String(v || '').trim();
  *
  * Written on the way past a successful login rather than tracked per request:
  * this answers "when were you last here", which is a different question from
- * "are you here now" — presence answers that, and it comes from the live
+ * "are you here now" - presence answers that, and it comes from the live
  * sockets rather than from anything stored.
  */
 const markLogin = (userId) =>
@@ -110,7 +110,7 @@ router.post('/register', async (req, res, next) => {
     const name = cleanName(req.body?.name);
     const email = normalizeEmail(req.body?.email);
 
-    // Getting this far on a closed server means the code was right — the check
+    // Getting this far on a closed server means the code was right - the check
     // above returns before this line otherwise. So the code has already
     // established that this is somebody who was invited, and an address is no
     // longer being asked for as a second piece of evidence: it's offered, for
@@ -126,7 +126,7 @@ router.post('/register', async (req, res, next) => {
       return res.status(409).json({ error: 'That username is taken.' });
     }
     // Both are unique, and both say so plainly. This is an account-enumeration
-    // leak by construction — a signup form that accepts duplicates isn't a
+    // leak by construction - a signup form that accepts duplicates isn't a
     // signup form, and a vaguer message would only make it harder to use
     // without making it harder to probe.
     if (await findUserByEmail(email)) {
@@ -138,7 +138,7 @@ router.post('/register', async (req, res, next) => {
       username,
       name,
       // Null, never an empty string. The unique index on this column skips
-      // nulls and does not skip '' — so a second account without an address
+      // nulls and does not skip '' - so a second account without an address
       // would collide with the first one and fail on the way into the database
       // rather than in front of the person filling in the form.
       email: email || null,
@@ -147,7 +147,7 @@ router.post('/register', async (req, res, next) => {
       globalRole: 'user',
     });
 
-    // Registering signs you in — an account you then have to log into
+    // Registering signs you in - an account you then have to log into
     // separately is a form for its own sake.
     const session = await createSession(record.id);
     limits.signup.clear(from);
@@ -175,7 +175,7 @@ router.post('/login', async (req, res, next) => {
     /**
      * The admin signs in with ADMIN_PASSWORD rather than a stored hash.
      *
-     * That password is the server's own configuration — the thing that says
+     * That password is the server's own configuration - the thing that says
      * "whoever runs this machine". Copying it into the user file at first login
      * would mean two places to change it and one of them silently winning.
      */
@@ -209,7 +209,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // Logging out destroys the token server-side, so a copy of it that leaked
-// somewhere stops working too — not merely forgotten by this browser.
+// somewhere stops working too - not merely forgotten by this browser.
 router.post('/logout', async (req, res, next) => {
   try {
     await destroySession(credsFromRequest(req).session);
@@ -227,19 +227,19 @@ router.post('/logout', async (req, res, next) => {
  * three are load-bearing:
  *
  *   - **The answer never varies.** Found, not found, found but with no address,
- *     found but it's the admin — every one of them gets the same 202 and the
+ *     found but it's the admin - every one of them gets the same 202 and the
  *     same words. A form that said "no such account" would be a way to ask this
  *     server, one name at a time, who plays here; that a name is *registered*
  *     is not a thing a stranger is entitled to learn, and the cost of hiding it
  *     is one sentence of vagueness on a screen almost nobody reads twice.
- *   - **Nothing is chosen here.** The request carries no new password — see the
+ *   - **Nothing is chosen here.** The request carries no new password - see the
  *     note in accountChanges.js. It buys nothing but the right to type one on
  *     the page the link opens, so a stranger who fires this at your address has
  *     sent you an unwanted letter and gained no other foothold. Even clicking
  *     the link in it changes nothing on its own.
  *   - **The signup code is not accepted, deliberately.** Everywhere else in
  *     this file the code stands in for answering a letter, and everywhere else
- *     it does that *on top of* something only the owner has — being signed in,
+ *     it does that *on top of* something only the owner has - being signed in,
  *     knowing the current password. Here there would be nothing underneath it,
  *     so a code shared with the whole table would be a code that takes over any
  *     account at the table, the DM's included. An account with no mailbox is
@@ -273,7 +273,7 @@ router.post('/forgot', async (req, res, next) => {
       ? await findUserByEmail(who)
       : (await findUserByUsername(who)) || (await findUserByEmail(who));
 
-    // No such person, nowhere to write to, or the admin — whose password is
+    // No such person, nowhere to write to, or the admin - whose password is
     // ADMIN_PASSWORD in the environment and cannot be reset by anything this
     // server stores. All three end here, silently, having already said yes.
     if (!user || !user.email || user.globalRole === 'admin') return;
@@ -283,7 +283,7 @@ router.post('/forgot', async (req, res, next) => {
       to: user.email,
       subject: 'Reset the password on your RPG Manager account',
       text: [
-        `Somebody — we hope you — asked to reset the password on the account "${user.username}".`,
+        `Somebody - we hope you - asked to reset the password on the account "${user.username}".`,
         '',
         'Nothing has changed yet, and nothing will until you choose a new password.',
         'To do that, open this link:',
@@ -292,7 +292,7 @@ router.post('/forgot', async (req, res, next) => {
         `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
         '',
         "If this wasn't you, do nothing at all. Your password stays exactly as it is,",
-        'and whoever asked learns nothing — they cannot see this letter, and the link',
+        'and whoever asked learns nothing - they cannot see this letter, and the link',
         'is the only thing that would let anyone set a new password.',
       ].join('\n'),
     }).catch((err) => {
@@ -319,7 +319,7 @@ router.post('/forgot', async (req, res, next) => {
  * it carries is the whole substance of it.
  *
  * No session is needed or wanted. The person reading the mail may be on a
- * machine that has never signed in here — that is the ordinary case, not the
+ * machine that has never signed in here - that is the ordinary case, not the
  * strange one, since the reason they're here is that they can't sign in.
  */
 router.post('/reset', async (req, res, next) => {
@@ -338,7 +338,7 @@ router.post('/reset', async (req, res, next) => {
      * screen telling them so is the screen that can no longer help. So the
      * cheap check first, and the irreversible one only once it has passed.
      *
-     * A stand-in username, since whose account this is isn't known yet — the
+     * A stand-in username, since whose account this is isn't known yet - the
      * same shape as the /password route, and only the password half of the
      * answer is used.
      */
@@ -356,7 +356,7 @@ router.post('/reset', async (req, res, next) => {
     const user = await store.get(USERS, record.userId);
     if (!user) return res.status(404).json({ error: 'That account no longer exists.' });
 
-    // Every session goes, this one included — there is no "this one". Somebody
+    // Every session goes, this one included - there is no "this one". Somebody
     // who has just had to prove they own the mailbox should not leave behind a
     // browser still signed in from whenever the password was last known.
     await applyPassword(req, user, await hashPassword(password));
@@ -372,7 +372,7 @@ router.post('/reset', async (req, res, next) => {
  * The code is the stand-in for answering a letter: on a server that has one,
  * knowing it is already the proof that you belong here. Returns null when no
  * code was offered at all, so a caller can tell "didn't try" from "got it
- * wrong" — the first goes to the mailbox, the second is refused.
+ * wrong" - the first goes to the mailbox, the second is refused.
  */
 function codeGiven(req) {
   const code = String(req.body?.code || '');
@@ -387,7 +387,7 @@ function codeGiven(req) {
  *
  * Every other session goes. Changing a password usually means somebody else has
  * one, and a new password that leaves their session alive has not taken the
- * account back. The browser doing the asking keeps its own — which is nothing
+ * account back. The browser doing the asking keeps its own - which is nothing
  * at all when the asking is a link opened somewhere else, and that's correct
  * too: the change is finished, so signing in again with the new password is the
  * next thing to do.
@@ -399,7 +399,7 @@ async function applyPassword(req, user, passwordHash) {
 }
 
 /**
- * Change your own shown name — the one the table sees.
+ * Change your own shown name - the one the table sees.
  *
  * The only field here that changes on the strength of being signed in. It isn't
  * a credential and it isn't how anyone is identified: the username is, and that
@@ -429,7 +429,7 @@ router.put('/account', requireUser, async (req, res, next) => {
  *
  * Then one of two ways. The signup code finishes it on the spot. Without it, a
  * letter goes to the address on file and nothing changes until that link is
- * followed — so a stranger at an unlocked browser can start this, and the
+ * followed - so a stranger at an unlocked browser can start this, and the
  * person who owns the mailbox simply never finishes it. An account with no
  * address on file has only the first way, which is the same bargain it made at
  * registration.
@@ -440,7 +440,7 @@ router.post('/password', requireUser, async (req, res, next) => {
     if (!user) return res.status(404).json({ error: 'Not found' });
     if (user.globalRole === 'admin') {
       return res.status(400).json({
-        error: 'The admin password is server configuration — change ADMIN_PASSWORD instead.',
+        error: 'The admin password is server configuration - change ADMIN_PASSWORD instead.',
       });
     }
 
@@ -480,14 +480,14 @@ router.post('/password', requireUser, async (req, res, next) => {
       to: user.email,
       subject: 'Confirm your new password',
       text: [
-        `Somebody — we hope you — asked to change the password on the account "${user.username}".`,
+        `Somebody - we hope you - asked to change the password on the account "${user.username}".`,
         '',
         'Nothing has changed yet. To finish, open this link:',
         confirmLink(req, token),
         '',
         `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
         '',
-        "If this wasn't you, do nothing at all. The password stays as it is — and since",
+        "If this wasn't you, do nothing at all. The password stays as it is - and since",
         'whoever asked was signed in as you, this is worth knowing about: sign in and',
         'change your password from a device you trust.',
       ].join('\n'),
@@ -501,7 +501,7 @@ router.post('/password', requireUser, async (req, res, next) => {
 /**
  * Change your own email address.
  *
- * No current address is asked for — you're signed in, and unlike a password an
+ * No current address is asked for - you're signed in, and unlike a password an
  * address isn't a secret you prove you know. What guards it instead is where
  * the letter goes: to the address being *replaced*, so the person who owns it
  * is the one who agrees to lose it. An account with no address to warn has the
@@ -533,7 +533,7 @@ router.post('/email', requireUser, async (req, res, next) => {
     if (!user.email) {
       return res.status(400).json({
         error:
-          'This account has no email address yet, so there is nowhere to send the warning — use the signup code to set one.',
+          'This account has no email address yet, so there is nowhere to send the warning - use the signup code to set one.',
       });
     }
 
@@ -545,7 +545,7 @@ router.post('/email', requireUser, async (req, res, next) => {
       to: user.email,
       subject: 'Confirm the new address on your account',
       text: [
-        `Somebody — we hope you — asked to move the account "${user.username}" to a new email address.`,
+        `Somebody - we hope you - asked to move the account "${user.username}" to a new email address.`,
         '',
         `From: ${user.email}`,
         `To:   ${email}`,
@@ -555,7 +555,7 @@ router.post('/email', requireUser, async (req, res, next) => {
         '',
         `The link works once, and stops working in ${Math.round(TTL_MS / 60000)} minutes.`,
         '',
-        "If this wasn't you, do nothing at all — this address stays on the account.",
+        "If this wasn't you, do nothing at all - this address stays on the account.",
       ].join('\n'),
     });
     res.json({ pending: true, delivered, sentTo: user.email });
@@ -584,7 +584,7 @@ router.post('/confirm', async (req, res, next) => {
 
     // Only the two kinds this route can actually finish. A reset token arriving
     // here is somebody who edited the query parameter, and refusing it without
-    // spending it leaves their real link — the one in the letter — still good.
+    // spending it leaves their real link - the one in the letter - still good.
     const record = await claimChange(String(req.body?.token || ''), ['password', 'email']);
     if (!record) {
       limits.login.fail(key);
@@ -618,7 +618,7 @@ router.get('/me', async (req, res, next) => {
   try {
     if (!req.actor || req.actor.globalRole === 'anon') return res.json(req.actor);
     const user = await store.get(USERS, req.actor.userId);
-    // publicUser strips email because other people don't get to see it — but
+    // publicUser strips email because other people don't get to see it - but
     // this is you looking at yourself, so it comes back.
     res.json({ ...req.actor, user: { ...publicUser(user), email: user?.email || '' } });
   } catch (err) {

@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# App data — YOUR local "database" lives here. Never commit it.
+# App data - YOUR local "database" lives here. Never commit it.
 /data/
 
 # Build output
@@ -16,11 +16,11 @@ secrets/
 *.secret
 *.key
 
-# Personal scratch — half-formed ideas, not documentation.
+# Personal scratch - half-formed ideas, not documentation.
 notes.txt
 
 # Where a Claude session leaves its context for the next one to pick up. A
-# handoff note between sittings, not a record of the project — what matters
+# handoff note between sittings, not a record of the project - what matters
 # ends up in the README, the code comments, or NEXT-STEPS.md.
 last-session.txt
 

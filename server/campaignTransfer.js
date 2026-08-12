@@ -3,8 +3,8 @@
 /**
  * A campaign as a file: everything at a table except the people at it.
  *
- * The point is to move a prepared table between servers — your laptop to the
- * one your friends reach, a backup to a fresh install — without carrying
+ * The point is to move a prepared table between servers - your laptop to the
+ * one your friends reach, a backup to a fresh install - without carrying
  * accounts across. Which means the one thing deliberately left out is
  * membership, and with it every reference to a user id: token owners and sheet
  * access are *permissions*, and a permission that names someone who doesn't
@@ -13,7 +13,7 @@
  *
  * The shape is versioned because it will be read by a future that has changed
  * its mind about something. `format` is checked before anything else so a JSON
- * file that happens to parse — a package.json, half a save from another app —
+ * file that happens to parse - a package.json, half a save from another app -
  * is refused rather than half-imported.
  */
 
@@ -52,8 +52,8 @@ async function exportCampaign(campaign) {
 /**
  * Is this a file we can import?
  *
- * Deliberately shallow. It checks the envelope — the marker, a version we
- * understand, a campaign object, and collections that are arrays of objects —
+ * Deliberately shallow. It checks the envelope - the marker, a version we
+ * understand, a campaign object, and collections that are arrays of objects -
  * and leaves the contents to the sanitizers that already run on every write.
  * A deep schema check here would be a second copy of those rules, and the copy
  * that drifts is always the one nobody is looking at.
@@ -82,7 +82,7 @@ function validate(data) {
  * Strip what belonged to the old server's users.
  *
  * Ids of people are meaningless here, and leaving them in would either name
- * nobody or — worse, on a server where an id happens to match — name the wrong
+ * nobody or - worse, on a server where an id happens to match - name the wrong
  * person. Tokens lose their owner, so the DM reassigns them; sheets lose their
  * access map, so nobody inherits sight of a sheet they were never given.
  */
@@ -92,7 +92,7 @@ function stripUsers(name, record) {
       ...record,
       tokens: (record.tokens || []).map((t) => ({ ...t, ownerId: null })),
       // Shapes remember who drew them, for the same reason tokens remember who
-      // owns them — and the id means nothing here. Left in place it would name
+      // owns them - and the id means nothing here. Left in place it would name
       // nobody, or, on the day two servers mint the same id, the wrong person.
       shapes: (record.shapes || []).map((s) => ({ ...s, ownerId: null })),
     };

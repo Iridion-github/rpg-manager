@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import { TOOLS, sizeFields, toolNamed, usesField } from './shapes.js';
 
-// How see-through this window is, remembered per browser — the same bargain the
+// How see-through this window is, remembered per browser - the same bargain the
 // turn tracker makes, and for the same reason: it says nothing about the table,
 // only how much of the map its owner wants to keep looking at while they draw.
 const OPACITY_KEY = 'rpg:shape-window-opacity';
@@ -12,7 +12,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /**
  * The drawing box: which tool, and what it draws with.
  *
- * A floating window rather than a modal, deliberately — everything it says is
+ * A floating window rather than a modal, deliberately - everything it says is
  * about the map behind it, and a panel you have to dismiss to use what it
  * controls is not a tool. Drag it out of the way; it remembers where you left
  * it, like every other window here.
@@ -70,7 +70,7 @@ export default function ShapeTools({
   // What the fields are pointing at. A selected shape you're allowed to change
   // takes the panel over; otherwise it describes the next shape you'll draw.
   const editing = selected && canEditSelected ? selected : null;
-  // Which kind of thing the fields are about — the selection's, or the tool's.
+  // Which kind of thing the fields are about - the selection's, or the tool's.
   const kind = editing?.kind || tool;
   const values = editing || style;
   const set = editing ? onEditSelected : onStyle;
@@ -117,7 +117,7 @@ export default function ShapeTools({
               type="button"
               className={tool === t.kind ? 'active' : ''}
               aria-pressed={tool === t.kind}
-              // Choosing the tool you're already holding puts it down — which
+              // Choosing the tool you're already holding puts it down - which
               // leaves you in drawing mode with nothing loaded, still able to
               // pick up and rearrange what's already on the map.
               onClick={() => onTool(tool === t.kind ? null : t.kind)}
@@ -128,13 +128,13 @@ export default function ShapeTools({
           ))}
         </div>
 
-        {offline && <p className="hint">Offline — the board can't be drawn on right now.</p>}
+        {offline && <p className="hint">Offline - the board can't be drawn on right now.</p>}
 
         {!kind && !offline && (
           <p className="hint">
             The map answers to shapes while this is open: press one to pick it up, drag its
             border to resize it, or its centre mark to turn it. Choose a tool above to draw a
-            new one. Right-drag still moves your view and the zoom still works — only the grid
+            new one. Right-drag still moves your view and the zoom still works - only the grid
             gauge is held still.
           </p>
         )}
@@ -149,7 +149,7 @@ export default function ShapeTools({
               )}
             </p>
 
-            {/* Size is a drag when you draw and a slider afterwards — the drag
+            {/* Size is a drag when you draw and a slider afterwards - the drag
                 is faster and the slider is exact, and a table wants both. */}
             {editing &&
               sizeFields(kind).map(([name, label, min, max, step]) => (
@@ -222,7 +222,7 @@ export default function ShapeTools({
             </label>
 
             {/* Snapping is how you draw, not what you drew, so it stays with
-                the tool even while a shape is selected — it's what the *next*
+                the tool even while a shape is selected - it's what the *next*
                 drag, including a drag of that shape, will answer to. */}
             <label className="shape-field shape-check">
               <input
@@ -246,8 +246,8 @@ export default function ShapeTools({
         )}
 
         {/* Only with nothing picked. With a shape in hand the button beside it
-            says "Delete shape", and two delete buttons a few pixels apart —
-            one for this shape, one for every shape — is a mistake waiting to be
+            says "Delete shape", and two delete buttons a few pixels apart -
+            one for this shape, one for every shape - is a mistake waiting to be
             made. Not drawn at all when there's nothing it could clear. */}
         {!selected && clearable > 0 && !offline && (
           <button type="button" className="danger shape-erase" onClick={onClearAll}>

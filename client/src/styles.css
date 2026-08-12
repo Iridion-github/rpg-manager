@@ -18,7 +18,7 @@ body {
   padding: var(--shell-pad);
   display: grid;
   /* The chat's column. Wide enough that a line of dialogue is read rather than
-     spelled down the side of the window — a chat two or three words to the line
+     spelled down the side of the window - a chat two or three words to the line
      costs more of the map in scrolling than it ever saved in width. */
   grid-template-columns: minmax(0, 1fr) 375px;
   gap: 1rem;
@@ -26,7 +26,7 @@ body {
 }
 
 
-/* Outside a campaign there is no chat — the chat belongs to a table. Without
+/* Outside a campaign there is no chat - the chat belongs to a table. Without
    this the grid would still reserve that column and the directory would sit
    next to a column of nothing. */
 .app.solo {
@@ -81,7 +81,7 @@ body {
 }
 
 /* Tag and text on one row, the text wrapping under itself rather than under the
-   tag — so a three-line entry still reads as one block with one label. */
+   tag - so a three-line entry still reads as one block with one label. */
 .patch-entry {
   display: flex;
   align-items: baseline;
@@ -110,7 +110,7 @@ body {
   top: -0.05rem;
 }
 
-/* Green for new, amber for changed, blue for fixed — the palette the rest of
+/* Green for new, amber for changed, blue for fixed - the palette the rest of
    the app already uses for the same three kinds of news. Colour is never the
    only signal: each pill says its own word. */
 .patch-entry.new .patch-tag {
@@ -132,7 +132,7 @@ body {
 }
 
 /* The one row that carries who you are and where you are going. Identical in
-   and out of a campaign — walking into a table shouldn't move the furniture. */
+   and out of a campaign - walking into a table shouldn't move the furniture. */
 .topbar {
   display: flex;
   align-items: center;
@@ -154,7 +154,7 @@ header {
 }
 
 /* A landmark, not a headline. The interesting thing up here is the campaign's
-   name — or, outside one, the list of them below. Same size everywhere so the
+   name - or, outside one, the list of them below. Same size everywhere so the
    bar doesn't resize itself as you walk in and out of a table. */
 h1 {
   font-size: 1.05rem;
@@ -250,8 +250,8 @@ button {
 
 /* Selects, drawn by us rather than by the browser.
 
-   They take the same box as the text inputs above — same fill, border, radius
-   and padding — because that is what they are: a field you answer, sitting in
+   They take the same box as the text inputs above - same fill, border, radius
+   and padding - because that is what they are: a field you answer, sitting in
    rows beside the others. `appearance: none` drops the platform's own control,
    which is why the chevron below has to be supplied by hand.
 
@@ -259,7 +259,7 @@ button {
    select can't carry ::after, and a wrapper around every one of them would be a
    lot of markup for one triangle. Its colour is baked into the URI (%238b90a0
    is #8b90a0), so it has to be repeated in the disabled and hover states if it
-   is ever to differ there — right now it deliberately doesn't. */
+   is ever to differ there - right now it deliberately doesn't. */
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -300,7 +300,7 @@ select option {
 /* The open list, for browsers that will let us draw it.
 
    `appearance: base-select` swaps the platform's popup for one that lives in
-   the page, which is what makes the panel below stylable at all — before it,
+   the page, which is what makes the panel below stylable at all - before it,
    the dropdown was an OS window and CSS ended at the closed control. Chrome
    135+ today; anywhere else every declaration in here is invalid and dropped,
    leaving the appearance:none control above exactly as it was.
@@ -325,7 +325,7 @@ select option {
   }
 
   /* The same chevron the fallback draws, so the control looks identical either
-     side of the @supports line — base-select's own mark is a filled triangle. */
+     side of the @supports line - base-select's own mark is a filled triangle. */
   select::picker-icon {
     content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b90a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     color: #8b90a0;
@@ -362,7 +362,7 @@ select option {
     opacity: 1;
   }
 
-  /* Without a starting style the fade has nothing to fade *from* — the panel
+  /* Without a starting style the fade has nothing to fade *from* - the panel
      would appear at full opacity and only animate on the way out. */
   @starting-style {
     ::picker(select):popover-open {
@@ -406,7 +406,7 @@ select option {
    so it does not need to match the text inputs it stands next to. */
 /* A range is not a field, and the rule above dresses every control as one.
    On a slider that fill, border and padding become the thing you read as the
-   gauge — while the track the thumb actually travels along is the content box
+   gauge - while the track the thumb actually travels along is the content box
    inside them. The ends never line up: at maximum the thumb stops a padding's
    width short of the box, which reads as the slider failing to reach its own
    end. Stripping the field styling makes the track the gauge. */
@@ -432,7 +432,7 @@ button:hover {
 }
 
 /* Destructive, everywhere it appears. This colour used to be applied per place
-   — sheet headers, window headers, the roster — which left every other delete
+   - sheet headers, window headers, the roster - which left every other delete
    button in the app, the campaign's included, looking like an ordinary one.
    Excluding :disabled so a greyed-out delete doesn't advertise itself. */
 .del:not(:disabled) {
@@ -561,7 +561,7 @@ button.linky:hover {
 }
 
 /* On the shared row the tabs carry no margins of their own, and the rule under
-   them would be a line through the middle of the bar — the active tab's own
+   them would be a line through the middle of the bar - the active tab's own
    underline is doing that job anyway. */
 .topbar .tabs {
   margin: 0;
@@ -616,7 +616,7 @@ button.linky:hover {
 }
 
 /* The name of a bar, which is also the way to point the wheel at it. Styled to
-   read as the label it replaced — the border below is what says it's pickable,
+   read as the label it replaced - the border below is what says it's pickable,
    so it shouldn't also look like a button. */
 .wheel-pick {
   background: none;
@@ -672,7 +672,7 @@ button.linky:hover {
 }
 
 /* A label wrapping a hidden file input, so it has to carry the button metrics
-   itself — keep these in step with the base button rule. */
+   itself - keep these in step with the base button rule. */
 .upload {
   background: #2b3350;
   border: 1px solid #2c3140;
@@ -694,7 +694,7 @@ button.linky:hover {
    stopping at a fraction of it. Sized to match the chat column beside it, so
    the two bottom-align rather than one trailing off below the other.
 
-   3rem is the shell's own padding, 1.5rem top and bottom — so this column is
+   3rem is the shell's own padding, 1.5rem top and bottom - so this column is
    exactly the window minus the frame around it. Keep the two in step: too small
    a subtraction and the page grows a scrollbar over a few stray pixels, too
    large and a band of empty background sits under the map. */
@@ -732,7 +732,7 @@ button.linky:hover {
   -webkit-user-select: none;
 }
 
-/* The map and the things pinned on top of it. Only a positioning context —
+/* The map and the things pinned on top of it. Only a positioning context -
    every rule that decides how tall the map is still speaks to the scroller. */
 .map-area {
   position: relative;
@@ -868,7 +868,7 @@ button.linky:hover {
 /* --- the drawing layer ---
    Sits between the map and the grid: a shape marks out ground, and the squares
    are drawn over the ground, not under it. Deaf to the pointer unless a tool is
-   in hand — the rest of the time it's a picture, and a picture must not come
+   in hand - the rest of the time it's a picture, and a picture must not come
    between anyone and their tokens. */
 .shape-layer {
   position: absolute;
@@ -883,7 +883,7 @@ button.linky:hover {
 }
 
 /* It takes the keyboard when pressed, so that the shortcuts are the map's while
-   you're working on it — but a ring around the whole picture would be a strange
+   you're working on it - but a ring around the whole picture would be a strange
    answer to a click on it. Nothing is lost: the surface is not in the tab order,
    so this can never hide where a keyboard user actually is. */
 .surface:focus {
@@ -891,7 +891,7 @@ button.linky:hover {
 }
 
 /* With a tool in hand the shapes become the things you can reach, and the
-   tokens stop being — the map is a drawing surface for as long as that lasts.
+   tokens stop being - the map is a drawing surface for as long as that lasts.
    Which *part* of a shape answers is the whole of how one gesture does three
    jobs: the middle moves it, the outline stretches it, the mark at its centre
    turns it. They're painted in that order, so where they overlap the later one
@@ -995,7 +995,7 @@ button.linky:hover {
    A dot on the shape's own centre with half a turn drawn clockwise around it,
    arrowhead at the end so which way it goes can be read without moving
    anything. Both are inked in whichever of black or white stands furthest from
-   the fill, worked out per shape — see contrastInk in shapes.js.
+   the fill, worked out per shape - see contrastInk in shapes.js.
 
    Only while a tool is in hand. It's a handle, and a handle on a map nobody is
    drawing on is a mark on the artwork saying nothing: the table is looking at
@@ -1009,7 +1009,7 @@ button.linky:hover {
 }
 .shape-turn {
   fill: none;
-  /* Thinner along with everything else, but not below a pixel and a half —
+  /* Thinner along with everything else, but not below a pixel and a half -
      under that a curve this short stops reading as an arrow at all. */
   stroke-width: 1.4;
   stroke-linecap: round;
@@ -1070,7 +1070,7 @@ button.linky:hover {
      off zero. */
   background-size: var(--cell) var(--cell);
   /* Where the grid was dragged to. The map's image is on the surface behind
-     this and is not moved by it — which is the point: the picture holds still
+     this and is not moved by it - which is the point: the picture holds still
      and the cells slide onto whatever grid is drawn in it. */
   background-position: var(--grid-x, 0) var(--grid-y, 0);
 }
@@ -1146,7 +1146,7 @@ button.linky:hover {
    not scroll away from it if the map moves underneath. */
 .map-menu {
   position: fixed;
-  /* Above any stack of floating sheets — see the bands by .modal-backdrop. */
+  /* Above any stack of floating sheets - see the bands by .modal-backdrop. */
   z-index: 450;
   min-width: 118px;
   display: flex;
@@ -1182,7 +1182,7 @@ button.linky:hover {
 /* Nothing left to take back, or to put again. Still listed rather than hidden:
    a menu whose items move around under the cursor is a menu you have to read
    every time, and where Undo *is* is worth knowing even when it's spent. Placed
-   after the hover rules so it wins over them — a dead item shouldn't light up
+   after the hover rules so it wins over them - a dead item shouldn't light up
    under the pointer as though it would do something. */
 .map-menu button:disabled,
 .map-menu button:disabled:hover {
@@ -1221,7 +1221,7 @@ button.linky:hover {
   touch-action: none;
   cursor: default;
   /* No transition here. A token's left/top is its grid position times the cell
-     size, so *zooming* rewrites both on every token at once — and easing that
+     size, so *zooming* rewrites both on every token at once - and easing that
      turned a zoom into the whole board sliding into place. See .token.remote,
      which is the one case the easing was ever for. */
 }
@@ -1237,7 +1237,7 @@ button.linky:hover {
 }
 
 /* Someone else is dragging this one. Their positions arrive about thirty times
-   a second, which is a stutter without easing between them — so the easing
+   a second, which is a stutter without easing between them - so the easing
    lives here, on the only token that benefits, rather than on all of them. Our
    own drag is deliberately left un-eased: there, any easing reads as lag. */
 .token.remote {
@@ -1272,7 +1272,7 @@ button.linky:hover {
    theory that "which of these is mine" is the question a player asks most. It
    is gone, because it answered that question by talking over a different one.
    With no border chosen it read as a white border nobody had asked for, and
-   with one chosen it drew a second ring inside the first — so a token the DM
+   with one chosen it drew a second ring inside the first - so a token the DM
    had deliberately outlined in green came out green-on-white, which looks like
    a rendering fault rather than a fact about ownership.
 
@@ -1280,10 +1280,10 @@ button.linky:hover {
    colour naming you in the chat and marking you in the roster, so "mine" is
    still readable at a glance without the map having to shout it. */
 
-/* Hovering a square that's already taken — this drop will be refused. */
+/* Hovering a square that's already taken - this drop will be refused. */
 /* Hovering a row in the turn tracker lights its token up on the map. Placed
-   after the dashed remote-drag ring so it wins that one — while you are
-   pointing at something, that is the thing you want to be able to find — and
+   after the dashed remote-drag ring so it wins that one - while you are
+   pointing at something, that is the thing you want to be able to find - and
    before .blocked, which is more urgent than either. Drawn as an outline rather
    than a border so it can't disturb the token's size or argue with the border
    colour the DM chose for it. */
@@ -1390,7 +1390,7 @@ button.linky:hover {
   white-space: nowrap;
 }
 
-/* How many pictures are down there, including in sub-folders — the difference
+/* How many pictures are down there, including in sub-folders - the difference
    between opening a folder hopefully and opening it knowingly. */
 .token-folder-count {
   flex: none;
@@ -1435,7 +1435,7 @@ button.token-tile:hover {
   background: #1d2740;
 }
 
-/* Round, like the token it will become — you are choosing how it will look on
+/* Round, like the token it will become - you are choosing how it will look on
    the map, so it may as well be shown that way. */
 .token-tile img {
   width: 4.6rem;
@@ -1484,7 +1484,7 @@ button.token-tile:hover {
   font-size: 0.8rem;
 }
 
-/* Square rather than round — the circle is how it will look on the map, and
+/* Square rather than round - the circle is how it will look on the map, and
    this is for looking at the art the circle crops away. */
 .token-view-stage {
   width: 100%;
@@ -1593,7 +1593,7 @@ button.token-tile:hover {
   flex: none;
 }
 
-/* Green for present, amber for signed in elsewhere, grey for gone — the same
+/* Green for present, amber for signed in elsewhere, grey for gone - the same
    three colours the connection badge in the header already uses. */
 .status.present {
   color: #6ee787;
@@ -1648,7 +1648,7 @@ button.token-tile:hover {
      shares the leftover space out between them, and a fight between two
      creatures draws two rows half a window tall each. */
   align-content: start;
-  /* The list scrolls, the Next button below it does not — a long fight
+  /* The list scrolls, the Next button below it does not - a long fight
      shouldn't push the control the DM needs off the bottom of the window. */
   flex: 1;
   min-height: 0;
@@ -1664,7 +1664,7 @@ button.token-tile:hover {
   border: 1px solid #262b38;
   border-left: 3px solid transparent;
   border-radius: 8px;
-  /* Right-clicking a row opens its menu — no plain click does anything. */
+  /* Right-clicking a row opens its menu - no plain click does anything. */
   cursor: context-menu;
   user-select: none;
 }
@@ -1695,7 +1695,7 @@ button.token-tile:hover {
 }
 
 /* Name over health bar, sharing the middle column between the face and the
-   initiative — so a row grows a second line rather than a third column. */
+   initiative - so a row grows a second line rather than a third column. */
 .turn-who {
   flex: 1;
   min-width: 0;
@@ -1782,7 +1782,7 @@ button.token-tile:hover {
   white-space: nowrap;
 }
 
-/* Label left, value right — so several rows read as a small table. */
+/* Label left, value right - so several rows read as a small table. */
 .token-tip-row {
   display: flex;
   justify-content: space-between;
@@ -1902,7 +1902,7 @@ button.token-tile:hover {
 
 /* A reset link the admin has been handed. Boxed and set apart from the list
    because it is about one person while sitting under all of them, and amber
-   rather than the usual border since it is a live credential on screen — the
+   rather than the usual border since it is a live credential on screen - the
    one thing in this tab worth being slightly alarmed by. */
 .reset-issued {
   margin-top: 1rem;
@@ -1965,7 +1965,7 @@ button.token-tile:hover {
 }
 
 /* Someone who has asked not to be shown motion gets a mark that simply sits
-   there — it still says "something is happening here", which is the whole job. */
+   there - it still says "something is happening here", which is the whole job. */
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation: none;
@@ -2007,7 +2007,7 @@ button.token-tile:hover {
   border-color: #35406a;
 }
 
-/* The one currently up in the window — the list stays on screen behind it, so
+/* The one currently up in the window - the list stays on screen behind it, so
    it should be obvious which card you're looking at. */
 .sheet-card.open {
   background: #1e2430;
@@ -2571,7 +2571,7 @@ button.token-tile:hover {
 }
 
 /* Three thin columns are unreadable; collapse gracefully instead.
-   Measured against the *window* the sheet is in, not the screen — the sheet is
+   Measured against the *window* the sheet is in, not the screen - the sheet is
    resized by dragging its own edges now, so the viewport says nothing useful
    about how much room it actually has. (.win-body declares the container.) */
 @container (max-width: 1150px) {
@@ -2777,7 +2777,7 @@ button.token-tile:hover {
   color: #6ee787;
 }
 
-/* Sits in the tab row but isn't a tab — it takes you out of the campaign
+/* Sits in the tab row but isn't a tab - it takes you out of the campaign
    rather than to another view of it. */
 .tabs button.leave {
   border-bottom: none;
@@ -2806,7 +2806,7 @@ button.token-tile:hover {
 /* Folded away by default. The panel is consulted when a character changes
    hands, which happens once; the sheet under it is read every session, and it
    should not have to start an inch further down the window for that. The
-   summary still carries the answer, so the fold costs no information — you can
+   summary still carries the answer, so the fold costs no information - you can
    see who has the character without opening anything. */
 .access-panel > summary {
   cursor: pointer;
@@ -2849,7 +2849,7 @@ button.token-tile:hover {
   white-space: nowrap;
 }
 
-/* Only its place in the row — this one used to restate the whole control's
+/* Only its place in the row - this one used to restate the whole control's
    appearance, which is now the shared `select` rule's job. Widened from 9rem
    when that rule took a gutter on the right for the chevron: "Not at this
    table" is the longest thing it has to say and no longer fitted. */
@@ -2947,7 +2947,7 @@ button.token-tile:hover {
   flex-wrap: wrap;
 }
 
-/* Green while the note is out with the players — the same "on" pair the
+/* Green while the note is out with the players - the same "on" pair the
    connection badge and the shared flag in the list already use, so the three
    ways the app says "this is live" agree with each other. */
 .note-share-toggle.on {
@@ -2968,7 +2968,7 @@ button.token-tile:hover {
 
 /* The same note, popped out. In a window the height is the window's, so the
    body grows to fill whatever's left instead of standing at the page-sized
-   height the side pane wants — and the window resizes it, not a drag handle
+   height the side pane wants - and the window resizes it, not a drag handle
    in its corner. */
 .win-body .note-edit,
 .win-body .note-read {
@@ -3040,7 +3040,7 @@ button.token-tile:hover {
 }
 
 /* One block per thing that can change, each with its own explanation and its
-   own answer — a single form with three buttons would leave you guessing which
+   own answer - a single form with three buttons would leave you guessing which
    message belonged to what you just pressed. */
 .account-form {
   display: flex;
@@ -3085,14 +3085,14 @@ button.token-tile:hover {
 }
 
 /* Sits under the second password box while the two disagree. Quiet rather than
-   alarming — nothing has gone wrong yet, and the field is still being typed
+   alarming - nothing has gone wrong yet, and the field is still being typed
    into. */
 .account-mismatch {
   color: #ff9a9a;
   font-size: 0.75rem;
 }
 
-/* The two ways out of a confirmation link, side by side — neither is the
+/* The two ways out of a confirmation link, side by side - neither is the
    dangerous one, so neither is dressed as a warning. */
 .confirm-actions {
   display: flex;
@@ -3106,19 +3106,19 @@ button.token-tile:hover {
 .sidebar {
   position: sticky;
   /* The shell's own padding, so a stuck sidebar rests exactly where an unstuck
-     one starts — flush with the top of the map beside it. */
+     one starts - flush with the top of the map beside it. */
   top: var(--shell-pad);
   display: flex;
   flex-direction: column;
   /* No gap of its own: a flex gap is held between the two whether or not the
-     music bar is showing anything, and with nothing playing — which is most of
-     the time — that is half a centimetre of the chat's height spent on a rule
+     music bar is showing anything, and with nothing playing - which is most of
+     the time - that is half a centimetre of the chat's height spent on a rule
      between it and an empty box. The space belongs to the bar instead, below. */
   gap: 0;
   /* Same window-minus-frame as .app.map .main, and for the same reason: this
      column is what the map bottom-aligns with. Both are the viewport less the
      shell's padding top and bottom, written the same way so they can't drift
-     apart again — they once did, and the chat stopped an inch short of the
+     apart again - they once did, and the chat stopped an inch short of the
      bottom of the map. Change one, change both. */
   height: calc(100vh - 2 * var(--shell-pad));
   min-width: 0;
@@ -3159,7 +3159,7 @@ button.token-tile:hover {
   /* Deliberately *not* overflow-x: hidden. Everything inside this box is set up
      to wrap, so nothing should reach the edge in the first place; if some future
      message still does, being able to scroll to it beats having it quietly cut
-     off — which is the one outcome this whole section is here to prevent. */
+     off - which is the one outcome this whole section is here to prevent. */
   min-width: 0;
 }
 
@@ -3172,7 +3172,7 @@ button.token-tile:hover {
   margin: 0.1rem 0 0;
   font-size: 0.87rem;
   line-height: 1.35;
-  /* Honour the newlines people type — but `pre-wrap`, not `pre`: their line
+  /* Honour the newlines people type - but `pre-wrap`, not `pre`: their line
      breaks are kept and ours are still added where a line runs out of room. */
   white-space: pre-wrap;
   min-width: 0;
@@ -3267,7 +3267,7 @@ button.token-tile:hover {
   gap: 0.3rem;
 }
 
-/* The tools panel's own toggle, lit while its window is open — the same lit
+/* The tools panel's own toggle, lit while its window is open - the same lit
    state the tool buttons inside that window use. */
 .map-tools-body button.active,
 .shape-picker button.active {
@@ -3276,7 +3276,7 @@ button.token-tile:hover {
   color: #e7e9ee;
 }
 
-/* Label, control, readout — the same three-part row the map's own bars use, so
+/* Label, control, readout - the same three-part row the map's own bars use, so
    the two panels read as one instrument. */
 .shape-field {
   display: flex;
@@ -3368,7 +3368,7 @@ button.token-tile:hover {
   margin-top: 0.2rem;
 }
 
-/* The owner's colour beside their name in a token's tooltip — the same mark as
+/* The owner's colour beside their name in a token's tooltip - the same mark as
    the pip on the token, so the two are plainly the same fact. */
 .token-tip-swatch {
   display: inline-block;
@@ -3598,7 +3598,7 @@ button.token-tile:hover {
   color: #ff9a9a;
 }
 
-/* The die advantage discarded — shown so you can see what it beat. */
+/* The die advantage discarded - shown so you can see what it beat. */
 .roll-dice b.dropped {
   background: #1a1e27;
   color: #6b7180;
@@ -3671,7 +3671,7 @@ button.token-tile:hover {
 /* --- floating window --- */
 /* Above the page and the sidebar, but below .modal-backdrop's 50: a dice roll
    started from inside a window still belongs on top of that window.
-   Positioned with left/top rather than a transform, deliberately — a transform
+   Positioned with left/top rather than a transform, deliberately - a transform
    would make this the containing block for every fixed-position thing inside. */
 .win {
   position: fixed;
@@ -3691,7 +3691,7 @@ button.token-tile:hover {
   overflow: hidden;
 }
 
-/* The drag surface. It reads as a title bar, but it is a handle first — hence
+/* The drag surface. It reads as a title bar, but it is a handle first - hence
    the grab cursor and no text selection to fight with the drag. */
 .win-head {
   display: flex;
@@ -3719,7 +3719,7 @@ button.token-tile:hover {
 /* Rolled up by a double-click on the bar: the window *is* the bar. It borrows
    the header's own background so that if the measured height and the header
    ever disagree by a pixel, the remainder is the same colour rather than a
-   stripe. The header keeps its natural height on purpose — stretching it to
+   stripe. The header keeps its natural height on purpose - stretching it to
    fill would make the measurement that sets that height circular. */
 .win-min {
   background: #20252f;
@@ -3739,7 +3739,7 @@ button.token-tile:hover {
 
 
 /* Fades the window it sits in. Narrow, and allowed to shrink further, because
-   the header it shares is as small as 190px on the turn tracker — and the
+   the header it shares is as small as 190px on the turn tracker - and the
    window's own two buttons past it are not optional. */
 .win-opacity {
   display: flex;
@@ -3759,7 +3759,7 @@ button.token-tile:hover {
    Sized and spaced alike so they read as one set rather than two decisions. */
 /* Qualified by .win-head, not left as bare classes: these are .linky buttons,
    and `button.linky` carries the underline at a specificity a lone class can't
-   beat — so the rule that's meant to drop it has to outweigh the element it's
+   beat - so the rule that's meant to drop it has to outweigh the element it's
    overriding. Same shape as .modal-head .linky above.
 
    Equal square targets with their contents centred, so the mark inside each one
@@ -3780,7 +3780,7 @@ button.token-tile:hover {
 
 /* currentColor, so the icon dims and lights with the button's own text. */
 .win-fold svg {
-  /* Sized to the ✕ beside it rather than to a round number — a stroked square
+  /* Sized to the ✕ beside it rather than to a round number - a stroked square
      reads smaller than a glyph of the same box, so it needs the extra. */
   width: 0.78rem;
   height: 0.78rem;
@@ -3912,7 +3912,7 @@ button.token-tile:hover {
 }
 
 /* Red only once it will actually do something. Disabled, it's the same grey as
-   any other dead control — a button that can't be pressed shouldn't shout. */
+   any other dead control - a button that can't be pressed shouldn't shout. */
 .confirm-delete .modal-actions .del:not(:disabled) {
   background: #3a1d1d;
   border-color: #5c2b2b;
@@ -3951,13 +3951,13 @@ button.token-tile:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  /* A grid item's default min-width is auto, so a file input — which is as wide
-     as the filename it holds — would push the dialog wider than the screen
+  /* A grid item's default min-width is auto, so a file input - which is as wide
+     as the filename it holds - would push the dialog wider than the screen
      instead of shrinking inside its column. */
   min-width: 0;
 }
 
-/* Numbers are short — a field as wide as its column would say the opposite. */
+/* Numbers are short - a field as wide as its column would say the opposite. */
 .token-stat {
   display: flex;
   align-items: center;
@@ -3975,7 +3975,7 @@ button.token-tile:hover {
   white-space: nowrap;
 }
 
-/* The worked-out initiative total, standing in for the input it replaces —
+/* The worked-out initiative total, standing in for the input it replaces -
    same height and weight, visibly not typeable. */
 .token-total {
   width: 4.5rem;
@@ -4116,7 +4116,7 @@ button.token-tile:hover {
     height: 60vh;
   }
 
-  /* One column here, so there's nothing to bottom-align with — and a
+  /* One column here, so there's nothing to bottom-align with - and a
      full-height map would push the chat clean off the bottom of a phone. */
   .app.map .main {
     display: block;
@@ -4128,7 +4128,7 @@ button.token-tile:hover {
   }
 
   /* The note list becomes a strip above the note instead of a column beside
-     it — 220px of sidebar is most of a phone. */
+     it - 220px of sidebar is most of a phone. */
   .notes-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4226,7 +4226,7 @@ button.token-tile:hover {
 /* The gap the sidebar doesn't keep, carried by the thing that needs it: the bar
    holds the chat off only while it has something to hold it off with. Idle and
    hidden both collapse to nothing, and there the chat runs to the bottom of the
-   column — level with the bottom of the map, which is the point. */
+   column - level with the bottom of the map, which is the point. */
 .sidebar > .music-bar {
   margin-top: 0.5rem;
 }
@@ -4253,8 +4253,8 @@ button.token-tile:hover {
   padding: 0.5rem;
 }
 
-/* Nothing playing: the element stays mounted — tearing the iframe down and
-   rebuilding it would cost a beat on the next play — but takes up no room. */
+/* Nothing playing: the element stays mounted - tearing the iframe down and
+   rebuilding it would cost a beat on the next play - but takes up no room. */
 .music-bar.idle {
   padding: 0;
   border: none;
@@ -4266,7 +4266,7 @@ button.token-tile:hover {
 }
 
 /* Players hear the music and see nothing of it. The iframe is parked off-screen
-   rather than removed or display:none'd — a frame that isn't rendered can have
+   rather than removed or display:none'd - a frame that isn't rendered can have
    its playback suspended by the browser, and silence is the one outcome this
    must not produce. */
 .music-bar.hidden {

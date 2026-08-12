@@ -6,7 +6,7 @@ import { api } from './api.js';
  * can change about it.
  *
  * The three are deliberately not alike, and the screen doesn't pretend they
- * are. Your shown name is a label — it changes when you say so. A password and
+ * are. Your shown name is a label - it changes when you say so. A password and
  * an address are how you get back in, so each needs something the person at the
  * keyboard might not have: the current password, and then either the signup
  * code or an answer to a letter.
@@ -56,7 +56,7 @@ export default function Account({ actor, config, onChanged, offline }) {
    * Read the account this screen is about.
    *
    * Its failure used to be swallowed, which was worse than it sounds: with
-   * nothing loaded every question below answers "no" — no address, no name —
+   * nothing loaded every question below answers "no" - no address, no name -
    * and the page went on to state those as facts about your account, telling
    * people with a perfectly good address on file that they hadn't one. A screen
    * that can't read the thing it describes has to say so, not guess.
@@ -67,7 +67,7 @@ export default function Account({ actor, config, onChanged, offline }) {
     try {
       const data = await api.whoami();
       if (!data?.user) {
-        // /me answered, but about nobody — the session ended under us.
+        // /me answered, but about nobody - the session ended under us.
         setLoadError('Your session has ended. Sign in again to manage your account.');
         setMe(null);
         return;
@@ -91,7 +91,7 @@ export default function Account({ actor, config, onChanged, offline }) {
   const canMail = Boolean(config?.canSendMail);
   const hasEmail = Boolean(me?.email);
   // With no address on file there is nowhere to send a confirmation, so the
-  // code is the only way through — which is exactly the bargain an account
+  // code is the only way through - which is exactly the bargain an account
   // registered without one already made.
   const mustUseCode = !hasEmail;
   // Both boxes agree. Compared rather than trimmed: a space at either end of a
@@ -146,7 +146,7 @@ export default function Account({ actor, config, onChanged, offline }) {
         setPwNote(
           settled(
             'ok',
-            'Nothing has changed yet — and this server has no mail set up, so the link was written to its log instead of being sent. Whoever runs it can find it there.'
+            'Nothing has changed yet - and this server has no mail set up, so the link was written to its log instead of being sent. Whoever runs it can find it there.'
           )
         );
       }
@@ -173,14 +173,14 @@ export default function Account({ actor, config, onChanged, offline }) {
         setMailNote(
           settled(
             'ok',
-            `Nothing has changed yet. A warning went to ${answer.sentTo} — the address you're leaving — and the link in it finishes the move.`
+            `Nothing has changed yet. A warning went to ${answer.sentTo} - the address you're leaving - and the link in it finishes the move.`
           )
         );
       } else {
         setMailNote(
           settled(
             'ok',
-            'Nothing has changed yet — and this server has no mail set up, so the link was written to its log instead of being sent.'
+            'Nothing has changed yet - and this server has no mail set up, so the link was written to its log instead of being sent.'
           )
         );
       }
@@ -197,8 +197,8 @@ export default function Account({ actor, config, onChanged, offline }) {
   /**
    * Nothing is claimed about an account that couldn't be read.
    *
-   * Every form below turns on what the account holds — whether there's an
-   * address to send a confirmation to, most of all — so rendering them against
+   * Every form below turns on what the account holds - whether there's an
+   * address to send a confirmation to, most of all - so rendering them against
    * a blank would be inventing answers. One honest sentence and a way to try
    * again is the whole of what this screen can offer here.
    */
@@ -216,7 +216,7 @@ export default function Account({ actor, config, onChanged, offline }) {
     <div className="account">
       <h2>My account</h2>
 
-      {offline && <p className="error">Offline — nothing here can be changed right now.</p>}
+      {offline && <p className="error">Offline - nothing here can be changed right now.</p>}
 
       {/* What the server holds. The username is here and has no form beside it
           on purpose: it's how you are identified, to the server and to every
@@ -225,17 +225,17 @@ export default function Account({ actor, config, onChanged, offline }) {
       <dl className="account-facts">
         <div>
           <dt>Username</dt>
-          <dd>{me?.username || '—'}</dd>
+          <dd>{me?.username || '-'}</dd>
         </div>
         <div>
           <dt>Shown name</dt>
-          <dd>{me?.name || '—'}</dd>
+          <dd>{me?.name || '-'}</dd>
         </div>
         <div>
           <dt>Email</dt>
           {/* The same dash every other empty row here uses. "None on file" was a
               sentence explaining an absence that the dash already states. */}
-          <dd>{me?.email || '—'}</dd>
+          <dd>{me?.email || '-'}</dd>
         </div>
         <div>
           <dt>Role</dt>
@@ -267,7 +267,7 @@ export default function Account({ actor, config, onChanged, offline }) {
         <section className="account-form">
           <h3>Password</h3>
           <p className="hint">
-            The admin password is the server's own configuration — change ADMIN_PASSWORD where the
+            The admin password is the server's own configuration - change ADMIN_PASSWORD where the
             server is run, not here.
           </p>
         </section>
@@ -278,7 +278,7 @@ export default function Account({ actor, config, onChanged, offline }) {
             {mustUseCode
               ? 'This account has no address on file, so the signup code is the only way to finish a password change.'
               : hasCode
-                ? 'The current password is always needed. Then either type the signup code to finish here and now, or leave it blank and a link will be sent to your address — nothing changes until you open it.'
+                ? 'The current password is always needed. Then either type the signup code to finish here and now, or leave it blank and a link will be sent to your address - nothing changes until you open it.'
                 : 'The current password is always needed. A link will be sent to your address, and nothing changes until you open it.'}
           </p>
           <label>
@@ -320,7 +320,7 @@ export default function Account({ actor, config, onChanged, offline }) {
           {hasCode && (
             <label>
               Signup code{' '}
-              <small>{mustUseCode ? 'required' : 'optional — skips the emailed link'}</small>
+              <small>{mustUseCode ? 'required' : 'optional - skips the emailed link'}</small>
               <input
                 value={pwCode}
                 autoComplete="off"
@@ -358,7 +358,7 @@ export default function Account({ actor, config, onChanged, offline }) {
         <h3>Email</h3>
         <p className="hint">
           {mustUseCode
-            ? 'There is no address here yet, so there is nowhere to send a warning — the signup code is what sets the first one.'
+            ? 'There is no address here yet, so there is nowhere to send a warning - the signup code is what sets the first one.'
             : hasCode
               ? 'The warning goes to the address you are leaving, not the one you are moving to: the person who owns it is the one who agrees to lose it. The signup code skips that step.'
               : 'The warning goes to the address you are leaving, not the one you are moving to. Nothing changes until you open the link in it.'}
@@ -378,7 +378,7 @@ export default function Account({ actor, config, onChanged, offline }) {
         {hasCode && (
           <label>
             Signup code{' '}
-            <small>{mustUseCode ? 'required' : 'optional — skips the emailed link'}</small>
+            <small>{mustUseCode ? 'required' : 'optional - skips the emailed link'}</small>
             <input
               value={mailCode}
               autoComplete="off"

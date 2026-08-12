@@ -4,7 +4,7 @@
  * Attempt limiting for the endpoints where guessing pays.
  *
  * Without this, a signup code or a password is only as strong as it is long,
- * because an attacker can try as fast as the server can answer — a four-digit
+ * because an attacker can try as fast as the server can answer - a four-digit
  * code is ten thousand requests, which is minutes. With it, the same code costs
  * days and gets noticed.
  *
@@ -19,7 +19,7 @@
  */
 
 // Sweep interval for entries nobody has touched. unref() so a quiet server can
-// still exit — a cleanup timer should never be the reason a process lingers.
+// still exit - a cleanup timer should never be the reason a process lingers.
 const SWEEP_MS = 5 * 60_000;
 
 function createLimiter({ max, windowMs, name }) {
@@ -40,7 +40,7 @@ function createLimiter({ max, windowMs, name }) {
      * Is this key allowed another try? Returns seconds to wait, or 0.
      *
      * Checked before the credential is, so a blocked caller costs nothing to
-     * refuse — no password hashing, no database read.
+     * refuse - no password hashing, no database read.
      */
     retryAfter(key) {
       const entry = attempts.get(key);
@@ -76,13 +76,13 @@ function createLimiter({ max, windowMs, name }) {
 const login = createLimiter({ max: 10, windowMs: 15 * 60_000, name: 'login' });
 
 // Registration is rarer, and the only failure worth counting is a wrong signup
-// code — a rejected password length is a typo, not an attack.
+// code - a rejected password length is a typo, not an attack.
 const signup = createLimiter({ max: 10, windowMs: 60 * 60_000, name: 'signup' });
 
 /**
  * A ceiling on *all* requests, not just the ones that failed.
  *
- * The limiters above defend secrets — they only count wrong answers, because a
+ * The limiters above defend secrets - they only count wrong answers, because a
  * thousand correct logins are not an attack. This counts everything, because
  * the thing it defends is the machine: a script that never guesses wrong can
  * still fill a disk with uploads or keep the process pinned.
@@ -118,8 +118,8 @@ function createThrottle({ max, windowMs, name }) {
 }
 
 /**
- * Generous on purpose. A table in full flow — dropping tokens, rolling dice,
- * typing in chat — is a handful of writes a second at worst, and this sits an
+ * Generous on purpose. A table in full flow - dropping tokens, rolling dice,
+ * typing in chat - is a handful of writes a second at worst, and this sits an
  * order of magnitude above that. It is here to stop a script, not to pace a
  * game, and the failure it prevents (one player's browser locking the table
  * out) is worse than the one it allows.
@@ -135,12 +135,12 @@ const uploads = createThrottle({ max: 40, windowMs: 60 * 60_000, name: 'uploads'
  * A throttle rather than a limiter, because this endpoint has no failures to
  * count: it answers the same way whether or not the account exists, which is
  * the whole point of it, and a limiter that only counted wrong answers would
- * count none of these. What needs a ceiling is the *asking* — every request
+ * count none of these. What needs a ceiling is the *asking* - every request
  * that finds a real account posts a letter, so an unlimited form is a way to
  * bury somebody's mailbox using a server they don't run.
  *
  * Low, because the honest use is once or twice: you ask, you go and read your
- * mail. Not *as* low as that suggests, though — four friends at one table can
+ * mail. Not *as* low as that suggests, though - four friends at one table can
  * share an address, and a limit tuned to one person would have the third of
  * them to forget their password locked out by the first two. Keyed by caller
  * and by the account named, so neither one address working through the roster
@@ -161,7 +161,7 @@ const bucketOf = (req) =>
 /**
  * Who is asking?
  *
- * Behind a proxy — Render's router, or a Cloudflare Tunnel — every request
+ * Behind a proxy - Render's router, or a Cloudflare Tunnel - every request
  * arrives from the same address unless Express is told to trust the forwarding
  * header. Getting that wrong doesn't fail quietly here: it would put the whole
  * table in one bucket and let one person's bad password lock everybody out. See

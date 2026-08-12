@@ -3,7 +3,7 @@ import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import { UNITS, formatDistance, unitNamed } from './measure.js';
 
 // Remembered per browser, like the drawing box's. How see-through a panel is
-// says nothing about the table — only how much of the map its owner wants to
+// says nothing about the table - only how much of the map its owner wants to
 // keep looking at while they work.
 const OPACITY_KEY = 'rpg:measure-window-opacity';
 
@@ -16,7 +16,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  * one: everything in it is about the map behind it. Four controls and a total,
  * because a ruler that needs more than that has stopped being a ruler.
  *
- * The panel never holds the measurements themselves — those belong to the map,
+ * The panel never holds the measurements themselves - those belong to the map,
  * and the map is what draws them. All this does is say how to read them.
  */
 export default function MeasureTools({
@@ -109,7 +109,7 @@ export default function MeasureTools({
         </label>
         <p className="hint measure-shared-note">
           {offline
-            ? "Offline — there's nobody to show it to right now."
+            ? "Offline - there's nobody to show it to right now."
             : shared
               ? 'Everyone at the table can see this ruler, and the grid while it is up.'
               : 'Only you can see this. Nothing is sent to anybody.'}

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
- * "What table are we starting?" — a name, a subtitle, and optionally a whole
+ * "What table are we starting?" - a name, a subtitle, and optionally a whole
  * campaign in a file.
  *
  * The file is read and checked here rather than on submit, so that "is this
@@ -11,9 +11,9 @@ import { createPortal } from 'react-dom';
  * checked again on the way in; this is the fast answer, not the authority.
  *
  * Three states, and they behave differently on purpose:
- *   nothing   — no file chosen, both buttons offered
- *   accepted  — green, and an Undo that puts you back to nothing
- *   rejected  — red, and it *stays* red until the next attempt, because an
+ *   nothing   - no file chosen, both buttons offered
+ *   accepted  - green, and an Undo that puts you back to nothing
+ *   rejected  - red, and it *stays* red until the next attempt, because an
  *               error that clears itself is one you can miss entirely
  */
 
@@ -22,7 +22,7 @@ const FORMAT = 'rpg-manager-campaign';
 const VERSION = 1;
 
 /**
- * The same envelope check the server makes, for the same reasons — the marker
+ * The same envelope check the server makes, for the same reasons - the marker
  * first, so a JSON file that merely parses is refused rather than half-read.
  * Not a schema check: the server sanitizes every record it writes, and a second
  * copy of those rules here would be the copy that drifts.
@@ -77,7 +77,7 @@ export default function CreateCampaignModal({ onCreate, onClose }) {
     setError('');
     // The fields are left as they are. They may have been filled from the file,
     // but by now they may also have been edited, and there is no way to tell
-    // the two apart — clearing them would throw away work to undo a click.
+    // the two apart - clearing them would throw away work to undo a click.
   }
 
   async function submit(e) {

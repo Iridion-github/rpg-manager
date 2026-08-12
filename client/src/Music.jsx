@@ -6,7 +6,7 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 /**
  * The campaign's playlist.
  *
- * Only a list and some buttons — the audio itself is MusicPlayer's job, and it
+ * Only a list and some buttons - the audio itself is MusicPlayer's job, and it
  * deliberately lives outside this tab so that switching to the Tabletop doesn't
  * unmount the player and stop the music mid-scene.
  *
@@ -64,7 +64,7 @@ export default function Music({ canControl, offline }) {
     e.preventDefault();
     return guard(async () => {
       // Not optimistic: the server decides whether the link is a video at all,
-      // and — when you haven't named it yourself — it's the one that goes and
+      // and - when you haven't named it yourself - it's the one that goes and
       // asks YouTube for the title.
       const record = await api.addTrack(url, title);
       setTracks((prev) => [...prev, record]);
@@ -83,7 +83,7 @@ export default function Music({ canControl, offline }) {
    * Put the YouTube link on the clipboard.
    *
    * The clipboard API needs a secure context, which the tunnel gives you but a
-   * plain-http LAN address does not — so a refusal falls back to showing the
+   * plain-http LAN address does not - so a refusal falls back to showing the
    * link in a prompt, where it can still be copied by hand.
    */
   async function copyLink(track) {
@@ -130,7 +130,7 @@ export default function Music({ canControl, offline }) {
 
       <p className="hint">
         {canControl
-          ? 'Paste a YouTube link and save it — name it yourself, or leave that blank and take the title from YouTube. Pressing play starts it for everyone at the table; they join wherever the track has got to, so nobody restarts it by arriving late.'
+          ? 'Paste a YouTube link and save it - name it yourself, or leave that blank and take the title from YouTube. Pressing play starts it for everyone at the table; they join wherever the track has got to, so nobody restarts it by arriving late.'
           : "Your DM's playlist. They choose what plays."}
       </p>
 
@@ -173,7 +173,7 @@ export default function Music({ canControl, offline }) {
                   onBlur={(e) => {
                     const next = e.target.value.trim();
                     // Blank means "I didn't mean to change it" rather than a
-                    // nameless track — put the old name back.
+                    // nameless track - put the old name back.
                     if (!next) return (e.target.value = t.title);
                     if (next !== t.title) rename(t, next);
                   }}
@@ -217,7 +217,7 @@ export default function Music({ canControl, offline }) {
       {confirmTrack && (
         <ConfirmDeleteModal
           name={confirmTrack.title || 'this track'}
-          description="This takes the track off the campaign's playlist for everyone. The music itself isn't yours to delete — only the link to it."
+          description="This takes the track off the campaign's playlist for everyone. The music itself isn't yours to delete - only the link to it."
           confirmLabel="Remove track"
           onConfirm={() => remove(confirmTrack.id)}
           onClose={() => setConfirmDeleteId('')}

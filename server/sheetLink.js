@@ -7,14 +7,14 @@
  * seen from two directions: one is where it stands, the other is what it is.
  * Linking them means the numbers they share stop being two numbers.
  *
- * **The link is stored in one place only** — `sheetId` on the token. The sheet
+ * **The link is stored in one place only** - `sheetId` on the token. The sheet
  * holds no pointer back. That is what makes the relation impossible to
  * contradict: with an id at both ends there is a state where they disagree, and
  * then something has to decide which end is lying. Reading "what is this sheet
  * attached to?" costs a scan of the campaign's tokens, which is a list of a few
  * dozen at a table that has been going for years.
  *
- * **One to one, both ways.** A token names at most one sheet by construction —
+ * **One to one, both ways.** A token names at most one sheet by construction -
  * it is a single field. A sheet is held by at most one token because linking
  * releases whatever else was holding it; see `link`.
  *
@@ -24,8 +24,8 @@
  *   hit points          both ways. The same number in two places: the DM
  *                       applies damage on the map, the player heals on their
  *                       sheet, and either way both show it.
- *   initiative modifier sheet to token only. On the sheet it is *derived* —
- *                       dexterity plus a bonus — so there is no single number
+ *   initiative modifier sheet to token only. On the sheet it is *derived* -
+ *                       dexterity plus a bonus - so there is no single number
  *                       for a token edit to write back to. Editing it on the
  *                       token would be editing a shadow.
  *   name, picture, size the token's own, always. A token is often deliberately
@@ -48,7 +48,7 @@ const int = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number
  * A D&D ability modifier: (score - 10) halved, rounding down.
  *
  * A twin of `abilityMod` in client/src/sheet/rules.js, and deliberately not
- * imported from there — that file is browser code and this is not. Two lines
+ * imported from there - that file is browser code and this is not. Two lines
  * that have been the same since 1974 are a cheaper dependency than a shared
  * module across the client/server boundary, but they do have to stay in step:
  * if one changes, so does the other.
@@ -63,7 +63,7 @@ const initiativeModOf = (sheet) =>
  * The token fields a sheet decides, in the shape a token stores them.
  *
  * `initiative` is recomputed only when the token has a die on record: the total
- * is the roll plus the modifier, so changing the modifier changes the total —
+ * is the roll plus the modifier, so changing the modifier changes the total -
  * but a token whose initiative was typed in as a bare number has no roll to add
  * to, and overwriting that with the modifier alone would replace an answer with
  * a fragment of one.
@@ -84,8 +84,8 @@ function tokenFieldsFromSheet(sheet, token = {}) {
 
 /**
  * Every token in the campaign, with where it lives, so a caller can write it
- * back. Tokens are in two places — the bench, and inside each scene's `tokens`
- * array — and every operation here has to work on both.
+ * back. Tokens are in two places - the bench, and inside each scene's `tokens`
+ * array - and every operation here has to work on both.
  */
 async function allTokens(campaignId) {
   const found = [];
@@ -121,7 +121,7 @@ async function patchToken(campaignId, found, patch) {
 /**
  * Couple a token to a sheet, releasing whatever else held either of them.
  *
- * The token's own previous sheet needs no clearing — `sheetId` is one field and
+ * The token's own previous sheet needs no clearing - `sheetId` is one field and
  * the new value replaces it. The sheet's previous *token* does: that is a
  * different record, and leaving it pointing here is what "one sheet, one token"
  * exists to prevent. Released rather than refused, because the DM dragging a
@@ -140,7 +140,7 @@ async function link(campaignId, found, sheet) {
   return patch;
 }
 
-/** Uncouple one token. The sheet is untouched — it never knew. */
+/** Uncouple one token. The sheet is untouched - it never knew. */
 async function unlink(campaignId, found) {
   // Its hit points stay where they are. They were the character's a moment ago
   // and they are the token's now: a figure that healed to full on being taken
@@ -150,7 +150,7 @@ async function unlink(campaignId, found) {
 }
 
 /**
- * A sheet has changed — carry it to the token holding it, if any.
+ * A sheet has changed - carry it to the token holding it, if any.
  *
  * Cheap when nothing is linked, which is the common case: one scan of the
  * campaign's tokens and no writes.
@@ -160,7 +160,7 @@ async function pushSheetToToken(campaignId, sheet) {
   const found = await tokenForSheet(campaignId, sheet.id);
   if (!found) return;
   const patch = tokenFieldsFromSheet(sheet, found.token);
-  // Nothing to write is the usual answer — most sheet edits are about spells
+  // Nothing to write is the usual answer - most sheet edits are about spells
   // and inventory, and a write here would broadcast a scene change to the whole
   // table for a note nobody can see on the map.
   const same = Object.entries(patch).every(([key, value]) => found.token[key] === value);
@@ -169,7 +169,7 @@ async function pushSheetToToken(campaignId, sheet) {
 }
 
 /**
- * A token's hit points have changed — carry them back to its sheet.
+ * A token's hit points have changed - carry them back to its sheet.
  *
  * Only the hit points. The modifier is the sheet's to decide and the rest of
  * the token was never the sheet's business, so this writes exactly the two
@@ -192,7 +192,7 @@ async function pushTokenToSheet(campaignId, token) {
 }
 
 /**
- * A sheet is being deleted — release the token that held it.
+ * A sheet is being deleted - release the token that held it.
  *
  * Without this the token keeps an id that resolves to nothing, which is not
  * dangerous but is a link the interface would have to explain. The token keeps

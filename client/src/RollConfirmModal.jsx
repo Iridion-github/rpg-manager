@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import { notation } from './dice.js';
 
 /**
- * "Roll this?" — the step between clicking something on a character sheet and
+ * "Roll this?" - the step between clicking something on a character sheet and
  * a result landing in the chat.
  *
  * Takes one or more prepared rolls (an attack has two: to hit and damage) and
- * confirms them together, under one set of options — a secret attack whose
+ * confirms them together, under one set of options - a secret attack whose
  * damage everyone could see would give the game away. Cancelling does nothing
  * at all: no request, no message. Advantage is offered only where it means
  * something.
@@ -40,7 +40,7 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
   }
 
   // Into <body>, not where it was called from: the sheet this was clicked on
-  // lives inside the floating window, and that window is a query container —
+  // lives inside the floating window, and that window is a query container -
   // layout containment would make it the containing block for our fixed
   // backdrop and pin the dialog inside the sheet instead of over the page.
   return createPortal(

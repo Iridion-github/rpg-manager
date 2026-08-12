@@ -7,7 +7,7 @@ import { api } from './api.js';
  * The sibling of ConfirmChange, and different from it in the one way that
  * matters. That page agrees to a change somebody already decided on; this one
  * is where the deciding happens. Nothing was chosen when the link was asked
- * for — see /auth/forgot — precisely so that the password ends up being the one
+ * for - see /auth/forgot - precisely so that the password ends up being the one
  * typed *here*, by whoever opened the mail, rather than one a stranger picked
  * and then talked you into confirming.
  *
