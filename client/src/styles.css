@@ -1582,19 +1582,41 @@ button.token-tile:hover {
   gap: 0.4rem;
 }
 
+/* A grid, not a flex row, and that is the whole of what keeps the columns
+   straight. Under flex the role badge at the end is as wide as its own word, so
+   a row saying "Player" pushed Status and Last-signed-in four characters left of
+   where a row saying "DM" put them: the name is `1fr` and absorbed the
+   difference. Named tracks make every cell start at the same place whatever is
+   in it, and the badge column is wide enough for the longer of the two words. */
 .player-rows li {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    [swatch] auto
+    [name] minmax(0, 1fr)
+    [status] 6.5rem
+    [seen] 11rem
+    [role] 4.6rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.7rem;
   background: #1a1e27;
+  /* The left border is three pixels on every row and merely changes colour on
+     your own. As a 1px border that grew to 3px for one row it moved that row's
+     entire contents two pixels right, which is a misalignment nothing else
+     could explain. */
   border: 1px solid #262b38;
+  border-left: 3px solid #262b38;
   border-radius: 8px;
 }
 
 /* Your own row, marked the same way the campaign list marks yours. */
 .player-rows li.me {
-  border-left: 3px solid #58a6ff;
+  border-left-color: #58a6ff;
+}
+
+/* The empty state spans the lot rather than sitting in the first column. */
+.player-rows li.empty {
+  grid-template-columns: 1fr;
 }
 
 .player-rows li.me,
@@ -1616,14 +1638,14 @@ button.token-tile:hover {
   font-size: 0.85rem;
 }
 
-/* Fixed width so the dots line up down the column rather than wandering with
-   the length of each word beside them. */
+/* Its width comes from the grid track now. It stays a flex box for its own two
+   children - the dot and the word - which is what puts every word at the same
+   distance from its dot. */
 .status {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  flex: none;
-  width: 6.5rem;
+  min-width: 0;
   font-size: 0.82rem;
   color: #8b90a0;
 }
@@ -1656,17 +1678,35 @@ button.token-tile:hover {
 }
 
 .player-seen {
-  flex: none;
-  width: 11rem;
+  min-width: 0;
   text-align: right;
   color: #8b90a0;
   font-size: 0.78rem;
+  /* Digits of equal width, so the dates form a column rather than a ragged
+     edge that shifts as the numbers in them change. */
   font-variant-numeric: tabular-nums;
+}
+
+/* The badge is a pill sized by its own text, so the track is what aligns the
+   rows; this only says where in the track it sits. Start rather than centre:
+   "DM" and "Player" then begin at the same x instead of being centred about
+   the same axis, which is what the eye reads as a column. */
+.player-rows .badge.role {
+  justify-self: start;
 }
 
 @media (max-width: 700px) {
   /* The timestamp is the first thing to go: it's the least urgent column and
-     the widest. */
+     the widest. The track has to go with it, or the row keeps an 11rem hole
+     where the dates used to be. */
+  .player-rows li {
+    grid-template-columns:
+      [swatch] auto
+      [name] minmax(0, 1fr)
+      [status] 6.5rem
+      [role] 4.6rem;
+  }
+
   .player-seen {
     display: none;
   }
@@ -1879,58 +1919,108 @@ button.token-tile:hover {
   gap: 0.4rem;
 }
 
+/**
+ * One set of tracks, shared by the heading and every row.
+ *
+ * As flex rows these could not line up and no amount of fixed widths would have
+ * fixed it: the `admin` badge exists on one row only, and the two action buttons
+ * only on the rows an admin may act on, so Last online sat in a different place
+ * on almost every row and under its own heading on none of them. Reserving a
+ * track for each optional thing means an absent one leaves a gap of exactly its
+ * own size rather than closing it up.
+ */
+.roster-head,
 .player-list li {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    [dot] 0.65rem
+    [name] minmax(0, 1fr)
+    [tag] 3.9rem
+    [seen] 9rem
+    [reset] 1.5rem
+    [remove] 1.5rem;
   align-items: center;
   gap: 0.6rem;
+}
+
+.player-list li {
   background: #1a1e27;
   border: 1px solid #262b38;
   border-radius: 8px;
   padding: 0.45rem 0.6rem;
 }
 
-.player-list .del {
-  flex: none;
+/* Nothing to divide into columns. */
+.player-list li.empty {
+  grid-template-columns: 1fr;
 }
 
-/* Header and rows share these two, so the dates line up under the word that
-   names them however long the names beside them are. */
 .roster-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
   /* The list is the first thing in this tab now that the paragraph above it has
      gone, so the header carries the gap that paragraph used to. */
   margin-top: 0.75rem;
-  /* The dot's width plus the row's gap, so "Name" starts above the names
-     rather than above the dots. */
-  padding: 0 0.6rem 0 1.65rem;
+  /* The rows' own padding, plus a transparent border standing in for theirs, so
+     the heading's tracks begin exactly where each row's do. Guessing at an
+     indent was what the old left padding did, and it was only ever right for
+     rows with no buttons on them. */
+  padding: 0 0.6rem;
+  border: 1px solid transparent;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #8b90a0;
 }
 
+/* Named columns, so each label sits over the thing it names rather than over
+   whichever cell happens to come next. */
+.roster-head .roster-who {
+  grid-column: name;
+}
+
+.roster-head .roster-seen {
+  grid-column: seen;
+}
+
 .roster-who {
-  flex: 1;
+  grid-column: name;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Placed by name rather than by order, because the badge before it is missing
+   on all but one row and source order alone would let this slide left. */
 .roster-seen {
-  flex: none;
-  width: 9rem;
+  grid-column: seen;
   text-align: right;
   font-size: 0.82rem;
   color: #8b90a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-list .badge.role {
+  grid-column: tag;
+  justify-self: start;
+}
+
+/* The two actions, each pinned to its own track so a row that has one but not
+   the other still leaves the gap where the missing one would have been. */
+.player-list .roster-reset {
+  grid-column: reset;
+  justify-self: center;
+}
+
+.player-list .del {
+  grid-column: remove;
+  justify-self: center;
 }
 
 /* Green for here, red for not. Bigger than the three-state dot in a campaign's
    player list, because this one carries the whole answer rather than sitting
    beside a word that says it. */
 .presence-dot {
+  grid-column: dot;
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;

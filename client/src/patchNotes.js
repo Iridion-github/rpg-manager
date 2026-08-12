@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-12',
     entries: [
       {
+        kind: 'fix',
+        text: 'The Players and Users lists line up properly. Each column now sits in the same place on every row, so the Online and Offline labels, the dates and the role badges all read down the page instead of stepping about; in the Users list the column headings sit over their own columns too.',
+      },
+      {
         kind: 'new',
         text: 'Grid settings, behind a button in the scene bar for the DM. The grid now has a colour, a thickness and an opacity as well as a cell size, and everything you change is previewed on your own map alone until you press Save changes; Cancel puts it all back. The scene bar keeps just the Show grid checkbox.',
       },

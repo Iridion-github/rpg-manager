@@ -133,7 +133,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
                     asking, the link expires on its own, and issuing a second
                     one silently retires the first. */}
                 <button
-                  className="linky"
+                  className="linky roster-reset"
                   onClick={() => issueReset(u)}
                   title={`Get a password reset link for ${u.name}`}
                 >
