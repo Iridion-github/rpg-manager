@@ -262,6 +262,20 @@ export const api = {
   createCampaignToken: (data) => post(table('/tokens'), data),
   updateCampaignToken: (tokenId, data) => put(table(`/tokens/${tokenId}`), data),
   deleteCampaignToken: (tokenId) => del(table(`/tokens/${tokenId}`)),
+  /**
+   * Couple a token to a character sheet, or pass null to set it loose.
+   *
+   * One call behind both screens — the Characters tab asks it "which token is
+   * this character?" and the Tokens tab "which character is this token?", which
+   * are the same fact written from two ends. The link is stored on the token
+   * alone, so there is only ever one record to change and no way for the two
+   * ends to disagree.
+   *
+   * A route of its own rather than a field on the token edit, for the same
+   * reason a sheet's access has one: it releases whatever else held that sheet,
+   * checks the caller may edit it, and copies the character's numbers across.
+   */
+  linkTokenSheet: (tokenId, sheetId) => put(table(`/tokens/${tokenId}/sheet`), { sheetId }),
 
   // The drawing layer. Anyone playing may add one; the server decides whose is
   // whose from the session, so there is no owner to pass here.

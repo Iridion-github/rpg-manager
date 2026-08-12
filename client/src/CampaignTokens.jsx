@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { socket } from './socket.js';
 import TokenModal from './TokenModal.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import SheetTokenLink from './SheetTokenLink.jsx';
 
 /**
  * This campaign's own tokens — its cast, made in advance of needing them.
@@ -22,9 +23,15 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
  * handing somebody a second character doesn't cost that person the right to
  * have made their own.
  *
- * What isn't here: hit points and initiative. Those are decided in the moment
- * on the tabletop, by whoever is looking at the fight, and a token carries them
- * across untouched by anything on this screen.
+ * What isn't in the *edit form*: hit points and initiative. Those are decided
+ * in the moment on the tabletop, by whoever is looking at the fight, and a
+ * token carries them across untouched by anything that form can reach.
+ *
+ * The exception is the character picker on each row, which is the one control
+ * here that does touch them — coupling a token to a sheet copies the
+ * character's hit points and initiative modifier across, and keeps the hit
+ * points in step from then on. That is the point of coupling, and it is why it
+ * is a control of its own rather than a field in the form.
  */
 export default function CampaignTokens({ actor, players, isDm, offline }) {
   const [rows, setRows] = useState([]);
@@ -33,6 +40,16 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
   // The token being made or edited: { token } for an edit, {} for a new one.
   const [form, setForm] = useState(null);
   const [confirmId, setConfirmId] = useState('');
+  /**
+   * The characters this person could couple a token to.
+   *
+   * The server sends only the sheets they may *see*, which is a wider set than
+   * the ones they may link — linking needs edit access, since it writes hit
+   * points in both directions afterwards. So this is filtered again below, and
+   * the server checks it a third time on the way in.
+   */
+  const [sheets, setSheets] = useState([]);
+  const [linkingId, setLinkingId] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -45,9 +62,26 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
     }
   }, [offline]);
 
+  const loadSheets = useCallback(async () => {
+    try {
+      setSheets(await api.listSheets());
+    } catch {
+      // Being unable to read the characters costs the link picker, not the
+      // list of tokens this screen is actually for.
+      setSheets([]);
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (offline) return undefined;
+    loadSheets();
+    socket.on('sheets:changed', loadSheets);
+    return () => socket.off('sheets:changed', loadSheets);
+  }, [loadSheets, offline]);
 
   // A token placed, taken off a map, or edited from the tabletop is a token
   // whose row here is out of date. The nudge carries nothing; asking again is
@@ -88,6 +122,33 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
   }
 
   const doomed = rows.find((t) => t.id === confirmId) || null;
+
+  /**
+   * Characters this person may actually couple something to.
+   *
+   * Edit access, not merely sight. A character somebody has been allowed to
+   * read is not one they may weld their figure to — the link carries hit points
+   * back and forth once it exists, so the right question is "may you change
+   * this?" rather than "may you see it?".
+   */
+  const linkable = sheets.filter((s) => isDm || s.access?.[actor?.userId] === 'edit');
+
+  async function linkToken(token, sheetId) {
+    setLinkingId(token.id);
+    setError('');
+    try {
+      // The route releases whatever else held that character, so moving one
+      // from figure to figure is a single call with no moment in between where
+      // two tokens claim it.
+      await api.linkTokenSheet(token.id, sheetId);
+      await load();
+    } catch (e) {
+      setError(e.message);
+      await load();
+    } finally {
+      setLinkingId('');
+    }
+  }
 
   return (
     <section className="campaign-tokens">
@@ -150,6 +211,28 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
                   {t.sceneId ? `on ${t.sceneName}` : 'not placed'}
                 </small>
               </span>
+
+              {/* The same coupling the Characters tab offers, asked from this
+                  end: which character is this figure. Drawn in the row rather
+                  than inside the Edit form, because it is not part of what a
+                  token *looks like* — and because acting on change keeps it the
+                  same gesture it is over there. */}
+              {!offline && (
+                <SheetTokenLink
+                  label="Character"
+                  value={t.sheetId || ''}
+                  busy={linkingId === t.id}
+                  options={linkable.map((s) => ({
+                    id: s.id,
+                    name: s.name || 'Unnamed',
+                    takenBy:
+                      s.id !== t.sheetId && rows.some((other) => other.sheetId === s.id)
+                        ? rows.find((other) => other.sheetId === s.id)?.label || 'another token'
+                        : '',
+                  }))}
+                  onChange={(sheetId) => linkToken(t, sheetId)}
+                />
+              )}
 
               {!offline && (
                 <>

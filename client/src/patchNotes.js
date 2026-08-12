@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Characters and tokens can be coupled, from either the Characters tab or the Tokens tab. Linked, the two share hit points in both directions — damage on the map lands on the sheet, healing on the sheet shows on the map — and the token takes its initiative modifier from the character. Its name, picture and size stay its own. One character per token and one token per character; you can couple your own, and the DM can couple anything.',
+      },
+      {
+        kind: 'new',
         text: 'Patch notes — this page. Every change worth knowing about, newest first.',
       },
       {

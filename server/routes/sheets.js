@@ -17,7 +17,8 @@
 
 const express = require('express');
 const store = require('../store');
-const { broadcastPerActor } = require('../realtime');
+const { broadcast, broadcastPerActor } = require('../realtime');
+const sheetLink = require('../sheetLink');
 const {
   scoped,
   requireDm,
@@ -132,7 +133,17 @@ router.put('/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'This sheet is read-only for you.' });
     }
 
+    // Carry the shared numbers to the token holding this character, if one is.
+    // After the write rather than inside it: the sheet is the record being
+    // saved, and a token that could not be updated must not cost somebody the
+    // edit they were making to their own character.
+    await sheetLink.pushSheetToToken(req.campaignId, record);
+
     announce(req, record);
+    // The token is on a scene, and the tabletop is watching a different event.
+    if (await sheetLink.tokenForSheet(req.campaignId, record.id)) {
+      broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: record.id } });
+    }
     res.json(record);
   } catch (err) {
     next(err);
@@ -161,6 +172,12 @@ router.put('/:id/access', requireDm, async (req, res, next) => {
 // one running the campaign it is in.
 router.delete('/:id', requireDm, async (req, res, next) => {
   try {
+    // Release the token first. Doing it after the delete would be the same
+    // outcome, but a failure between the two would leave a token pointing at a
+    // sheet that no longer exists — whereas a failure here leaves a released
+    // token and a sheet that is still there, which is merely the state before
+    // somebody pressed the button.
+    await sheetLink.releaseSheet(req.campaignId, req.params.id);
     const ok = await store.remove(sheetsOf(req), req.params.id);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     // A deletion is safe to tell the table about: an id they can't resolve to a

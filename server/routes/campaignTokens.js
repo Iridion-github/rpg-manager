@@ -24,7 +24,8 @@ const crypto = require('node:crypto');
 const store = require('../store');
 const { broadcast } = require('../realtime');
 const { requireUser } = require('../auth');
-const { scoped, canMoveToken, isDm } = require('../campaigns');
+const { scoped, canMoveToken, canViewSheet, canEditSheet, isDm } = require('../campaigns');
+const sheetLink = require('../sheetLink');
 
 const router = express.Router({ mergeParams: true });
 
@@ -218,6 +219,61 @@ router.put('/:tokenId', requireUser, async (req, res, next) => {
     broadcast(req, 'scenes:changed', { action: 'token:update', record: scene });
     const updated = scene.tokens.find((t) => t.id === req.params.tokenId);
     res.json({ ...updated, sceneId: scene.id, sceneName: scene.name });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Couple this token to a character sheet, or set it loose.
+ *
+ * One route for both tabs. The Characters tab asks "which token is this
+ * character?" and the Tokens tab asks "which character is this token?", but
+ * they are the same fact written from two ends, and two endpoints would be two
+ * chances for the ends to disagree about what it means.
+ *
+ * **Who may.** The DM may couple anything to anything at their own table. Anyone
+ * else needs both halves to be theirs: a token they could move, and a sheet
+ * they could edit. Requiring *edit* rather than mere sight is the point — a
+ * character somebody has been allowed to read is not a character they may weld
+ * their figure to, and the link writes hit points in both directions
+ * afterwards.
+ *
+ * Both halves are checked even for a token the caller owns, because the two
+ * permissions come from different places: owning the figure says nothing about
+ * being trusted with the character.
+ */
+router.put('/:tokenId/sheet', requireUser, async (req, res, next) => {
+  try {
+    const found = await locate(req, req.params.tokenId);
+    if (!found) return res.status(404).json({ error: 'Not found' });
+    if (!canMoveToken(req.actor, req.campaignRole, found.token)) {
+      throw new HttpError(403, 'You can only link your own token.');
+    }
+
+    const sheetId = req.body?.sheetId ? String(req.body.sheetId) : null;
+
+    if (!sheetId) {
+      const patch = await sheetLink.unlink(req.campaignId, found);
+      broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: found.token.id } });
+      return res.json({ ...found.token, ...patch });
+    }
+
+    const sheet = await store.get(scoped(req.campaignId, 'sheets'), sheetId);
+    // Invisible reads as absent here too: a player guessing at ids should not
+    // be able to learn which of them are sheets.
+    if (!sheet || !canViewSheet(req.actor, req.campaignRole, sheet)) {
+      return res.status(404).json({ error: 'No such character sheet.' });
+    }
+    if (!canEditSheet(req.actor, req.campaignRole, sheet)) {
+      throw new HttpError(403, 'You can only link a character you can edit.');
+    }
+
+    const patch = await sheetLink.link(req.campaignId, found, sheet);
+    // A roster nudge rather than a scene update: the token may be on the bench,
+    // and the tab that cares is listening for this either way.
+    broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: found.token.id } });
+    res.json({ ...found.token, ...patch });
   } catch (err) {
     next(err);
   }

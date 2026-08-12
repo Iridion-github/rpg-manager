@@ -3409,6 +3409,61 @@ button.token-tile:hover {
   padding: 0.45rem 0.6rem;
 }
 
+/* --- coupling a token to a character ---
+   The same control at both ends: a labelled select that acts on change. In a
+   sheet window it stacks (label above, hint below); in a token row it has to
+   fit on the line, which is what the override further down does. */
+.link-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+}
+
+.link-pair label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #8b90a0;
+}
+
+.link-pair label > span {
+  flex: none;
+  width: 4.2rem;
+}
+
+.link-pair select {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-pair .hint {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+/* In a token row the picker is one item among several on a single line, so it
+   loses the stacked layout and the label column and is simply given a width it
+   can hold a character's name in. */
+.cast-list .link-pair {
+  flex: none;
+  width: 13rem;
+  margin: 0;
+}
+
+.cast-list .link-pair label > span {
+  /* Off-screen rather than deleted: the row is a list of tokens and the word
+     "Character" beside every one of them is noise to read past, but a select
+     with no label at all is a puzzle to anybody using a screen reader. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The face it wears on the board, so a row is recognised the way the map is. */
 .cast-face {
   flex: none;

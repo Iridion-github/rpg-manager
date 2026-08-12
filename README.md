@@ -771,6 +771,53 @@ the WebSocket, where each connection is sent only what that connection may know.
 Revoking access takes effect live — the player's copy is dropped from their
 screen rather than lingering until they reload.
 
+### Coupling a character to a token
+A character sheet and a token are the same creature seen from two directions —
+what it *is*, and where it stands. Link them and the numbers they share stop
+being two numbers.
+
+The same control appears at both ends, and does the same thing: **Token** at the
+top of an open character sheet, and **Character** on each row of the Tokens tab.
+Pick from the dropdown; there is nothing to save.
+
+| | Which way it travels |
+| --- | --- |
+| Current and maximum hit points | **both ways** — damage on the map lands on the sheet, healing on the sheet shows on the map |
+| Initiative modifier | **sheet to token only** |
+| Name, picture, size | neither — the token's own, always |
+
+Hit points go both ways because they are one number in two places, and a table
+needs the HP bar on the map to stay usable in a fight. The initiative modifier
+goes one way because on a sheet it is *derived* — dexterity plus a bonus — so
+there is no single number for a token edit to write back to; a linked token
+takes it from the sheet whatever an initiative request claims, though what the
+creature **rolled** is still the player's to say. Name, picture and size stay
+the token's because a figure is often deliberately called something else on the
+map.
+
+**One to one, both ways.** A token names at most one character and a character
+is held by at most one token. Pointing a character at a second figure *releases*
+the first rather than refusing — moving a character across is what you meant —
+and the dropdown says which character is already spoken for, and by what, before
+you choose it.
+
+**Who may.** The DM may couple anything to anything. Anyone else needs both
+halves to be theirs: a token they could move, and a sheet they could **edit**.
+Edit rather than merely view, because the link writes hit points in both
+directions once it exists — a character you have been allowed to read is not one
+you may weld your figure to.
+
+The link is stored in exactly one place, `sheetId` on the token; the sheet holds
+no pointer back. With an id at both ends there is a state where they disagree,
+and then something has to decide which end is lying. It survives a token being
+benched and placed again, and deleting a character sets its token loose with
+whatever hit points it had — a figure healing to full because its sheet was
+deleted mid-fight would be a strange thing to happen.
+
+Coupling has a route of its own for the same reason access does: it releases
+whatever else held the sheet, checks both permissions, and copies the numbers
+across. A `sheetId` sent in an ordinary token edit is ignored.
+
 Changing who may edit a sheet is a **separate endpoint** from editing the sheet,
 so the two can never be the same request. A player editing their own character
 sends the whole sheet back; if access travelled in that body, they could promote

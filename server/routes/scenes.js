@@ -15,8 +15,9 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
-const { broadcast } = require('../realtime');
-const { scoped, requireDm, canMoveToken } = require('../campaigns');
+const { broadcast, broadcastPerActor } = require('../realtime');
+const { scoped, requireDm, canMoveToken, canViewSheet } = require('../campaigns');
+const sheetLink = require('../sheetLink');
 
 const COLLECTION = 'scenes';
 const router = express.Router({ mergeParams: true });
@@ -153,8 +154,19 @@ function sanitizeToken(body = {}, existing = {}) {
     y = existing.y ?? 0,
     size = existing.size ?? 1,
     ownerId = existing.ownerId ?? null,
-    sheetId = existing.sheetId ?? null,
   } = body;
+  /**
+   * Which character this token is, taken from the stored token and never from
+   * the body — the same rule `access` follows on a sheet, for the same reason.
+   *
+   * Coupling has a route of its own (PUT /tokens/:tokenId/sheet) because it is
+   * not one field: it has to release whatever else held that sheet, check that
+   * the caller may edit it, and copy the character's numbers across. A `sheetId`
+   * accepted here would do none of those, and would quietly leave two tokens
+   * claiming one character — which is the one thing the relation promises can't
+   * happen.
+   */
+  const sheetId = existing.sheetId ?? null;
   return {
     label: String(label).slice(0, 60),
     color: hexOr(color, '#58a6ff'),
@@ -365,8 +377,25 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
       };
     });
     if (!scene) return res.status(404).json({ error: 'Not found' });
+    const updated = scene.tokens.find((t) => t.id === req.params.tokenId);
+    // Damage applied on the map is damage the character took. Hit points are
+    // the one thing here that means the same at both ends, so they travel back
+    // to the sheet — the modifier does not, since on the sheet it is derived
+    // from dexterity and has no single number to write to.
+    const movedSheet = await sheetLink.pushTokenToSheet(req.campaignId, updated);
+    // And the table is told, per person: an open sheet window should show the
+    // wound as it lands rather than whenever its reader next reloads. Per actor
+    // because who may see a sheet varies, and this is the same record the
+    // sheets router would be broadcasting.
+    if (movedSheet) {
+      broadcastPerActor(req, 'sheets:changed', (actor, role) =>
+        canViewSheet(actor, role, movedSheet)
+          ? { action: 'update', record: movedSheet }
+          : { action: 'delete', record: { id: movedSheet.id } }
+      );
+    }
     announce(req, 'token:update', scene);
-    res.json(scene.tokens.find((t) => t.id === req.params.tokenId));
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -384,6 +413,23 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
  */
 router.put('/:id/tokens/:tokenId/initiative', async (req, res, next) => {
   try {
+    /**
+     * A linked token's modifier is its sheet's, whatever the request says.
+     *
+     * Read before the write, because the mutate below is synchronous and this
+     * needs a second record. What a creature *rolled* is still the player's to
+     * say — only the modifier is decided elsewhere, and it is decided elsewhere
+     * because on the sheet it is dexterity plus a bonus rather than a number
+     * anybody typed.
+     */
+    const before = await store.get(scenesOf(req), req.params.id);
+    const linkedTo = (before?.tokens || []).find((t) => t.id === req.params.tokenId)?.sheetId;
+    let sheetMod = null;
+    if (linkedTo) {
+      const sheet = await store.get(scoped(req.campaignId, 'sheets'), linkedTo);
+      if (sheet) sheetMod = sheetLink.initiativeModOf(sheet);
+    }
+
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
       if (!canMoveToken(req.actor, req.campaignRole, existing)) {
@@ -394,7 +440,7 @@ router.put('/:id/tokens/:tokenId/initiative', async (req, res, next) => {
       const rolled = rolledInitiative(
         req.body?.initiative,
         req.body?.initiativeDie,
-        req.body?.initiativeMod
+        sheetMod === null ? req.body?.initiativeMod : sheetMod
       );
       return {
         ...current,

@@ -3,6 +3,7 @@ import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
 import CharacterSheet from './sheet/CharacterSheet.jsx';
+import SheetTokenLink from './SheetTokenLink.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import { abilityMod, blankSheet, signed } from './sheet/rules.js';
@@ -60,6 +61,17 @@ export default function CharacterSheets({
   // windows are open — two of these on screen would be a way to answer the
   // wrong one.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  /**
+   * This campaign's tokens, so a character can be pointed at one.
+   *
+   * The server sends only the tokens this person may move, which is exactly the
+   * set they may link — so the list needs no filtering here, and a player is
+   * never shown somebody else's figure as an option they'd be refused.
+   */
+  const [tokens, setTokens] = useState([]);
+  // The token whose link is being changed, so its dropdown can go quiet while
+  // the call is in flight rather than the whole page doing so.
+  const [linkingId, setLinkingId] = useState('');
 
   // Edits waiting to be written, keyed by sheet id, plus their debounce timers.
   // Refs, not state: changing them must not re-render, and the socket handler
@@ -218,6 +230,68 @@ export default function CharacterSheets({
       socket.off('sheets:changed', applyRemote);
     };
   }, [refresh, applyRemote]);
+
+  /**
+   * The token list, kept fresh alongside the sheets.
+   *
+   * Listening to `scenes:changed` as well as loading once: a token created,
+   * deleted, placed or linked from anywhere else changes what this picker
+   * should offer and what it should say is already taken. Failures are
+   * swallowed — being unable to read the tokens costs the link control, not the
+   * character sheet somebody is trying to read.
+   */
+  const loadTokens = useCallback(async () => {
+    try {
+      setTokens(await api.listCampaignTokens());
+    } catch {
+      setTokens([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (offline) return undefined;
+    loadTokens();
+    socket.on('scenes:changed', loadTokens);
+    socket.on('connect', loadTokens);
+    return () => {
+      socket.off('scenes:changed', loadTokens);
+      socket.off('connect', loadTokens);
+    };
+  }, [loadTokens, offline]);
+
+  /**
+   * Point this character at a token, or at none.
+   *
+   * Not optimistic. The server may release another token in the process, and
+   * guessing at which one would mean drawing a board that is briefly wrong in
+   * two places rather than one — so both lists are re-read from the answer
+   * instead. It is one small request against a list of a few dozen.
+   */
+  async function linkSheet(sheet, tokenId) {
+    const previous = tokens.find((t) => t.sheetId === sheet.id) || null;
+    // Unlinking is aimed at whichever token currently holds it; linking is
+    // aimed at the token being chosen. Either way the call names a token,
+    // because the link is a field on the token.
+    const target = tokenId || previous?.id;
+    if (!target) return;
+    setLinkingId(sheet.id);
+    setError('');
+    try {
+      // Moving a character from one figure to another is a single call: the
+      // route releases whatever else held the sheet as part of taking it, so
+      // there is no window where two tokens claim the same character.
+      await api.linkTokenSheet(target, tokenId ? sheet.id : null);
+      await loadTokens();
+      // The sheet's own hit points may have moved to match the token's, so it
+      // is worth re-reading rather than assuming this changed nothing here.
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+      await loadTokens();
+    } finally {
+      setLinkingId('');
+    }
+  }
 
   // Don't lose a debounced edit when the tab is hidden or closed.
   useEffect(() => {
@@ -499,6 +573,30 @@ export default function CharacterSheets({
                   </>
                 )}
               </details>
+            )}
+
+            {/* Which figure on the map is this character. Not the DM's alone,
+                unlike the access panel above it: a player coupling their own
+                character to their own token is arranging their own things, and
+                the server checks both halves regardless of what this offers. */}
+            {!readOnly && (
+              <SheetTokenLink
+                label="Token"
+                value={tokens.find((t) => t.sheetId === sheet.id)?.id || ''}
+                busy={linkingId === sheet.id}
+                options={tokens.map((t) => ({
+                  id: t.id,
+                  name: t.label,
+                  // Named so the choice is informed: picking this one takes it
+                  // off the character it currently is.
+                  takenBy:
+                    t.sheetId && t.sheetId !== sheet.id
+                      ? sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
+                      : '',
+                }))}
+                hint="Linked, the two share hit points — damage on the map lands on this sheet and healing here shows on the map — and the token takes its initiative modifier from these abilities. Its name, picture and size stay its own."
+                onChange={(tokenId) => linkSheet(sheet, tokenId)}
+              />
             )}
 
             <CharacterSheet sheet={sheet} onChange={queueSave} readOnly={readOnly} />
