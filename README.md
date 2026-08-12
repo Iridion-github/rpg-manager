@@ -527,30 +527,92 @@ different places, and cells stop being a unit at all when the grid is off.
 Neither ping nor focus is ever stored. They live on the socket and nowhere else:
 a minute later there is nothing that could have been saved.
 
-### Grid ratio
+### The grid
+The scene bar carries two things: **Show grid**, with its checkbox, and a
+DM-only **Grid settings** button. The first answers "is there a grid", which the
+whole table has to agree on and which takes effect the moment it is pressed. The
+second answers "what does it look like", which is the DM's to settle in private
+first.
+
+#### Grid settings
+A floating window, and everything in it is a **preview on the DM's own map
+only**. A grid being retuned goes through every wrong answer on the way to the
+right one, and the table should not have to watch that happen over the map they
+are playing on.
+
+| | |
+| --- | --- |
+| **Cell size** | how many map pixels one cell covers, with the cell count beside it |
+| **Opacity** | 2 to 100 percent |
+| **Thickness** | 1 to 6 pixels, held constant on screen rather than growing with the map |
+| **Colour** | any colour, disabled under adaptive contrast |
+| **Adaptive contrast** | see below |
+
+**Cancel** drops the draft and closes; nothing was written, so there is nothing
+to put back. **Save changes** writes to the scene and reaches everybody at once,
+and is greyed out until something has actually changed, so opening the window
+and closing it again writes nothing and records no undo. A failed save leaves
+the window open holding the draft rather than discarding it. The whole sitting
+is a single undo entry, because undo should put the grid back the way the table
+last saw it rather than step through a tuning session nobody else witnessed.
+
+Saved settings apply whether or not **Show grid** is on. Turning it off and back
+on later shows the tuned grid, not the old one.
+
+#### Adaptive contrast
+Each grid line takes the **exact opposite** of what is under it, pixel by pixel:
+black over white ground, white over black, cyan over red. White lines composited
+with `mix-blend-mode: difference`, which gives `1 - backdrop` per channel.
+
+No sampling and no canvas; the compositor does it, so it costs nothing and stays
+correct as the map is panned and zoomed. The surface sets `isolation: isolate`
+so the blend stops at the edge of the map instead of inverting the page behind
+it.
+
+**Colour and opacity are both set aside while it is on**, and neither is a
+simplification:
+
+- White is the only ink that gives a true inversion. With `difference` the ink is
+  the operand rather than the result, so any other colour tints what comes out
+  rather than colouring the lines.
+- Opacity is applied *after* the blend, compositing the inverted result back over
+  the very colour it inverted. At 20% you get a fifth of the opposite and four
+  fifths of the original, and a half-strength inversion disappears completely
+  over mid-grey, which is where a grid most needs the help. An inversion is only
+  an inversion at full strength.
+
+Both values are kept rather than cleared, so unticking the box gives back the
+colour and the fade that were chosen before it.
+
+**The one blind spot** is mid-grey: the opposite of `#808080` is `#7f7f7f`, so a
+map that is flat mid-grey in a patch has a grid that fades out there. That is
+inherent to "the opposite colour" as a rule rather than to this implementation;
+a plain colour at a suitable opacity is the better answer for such a map.
+
+#### Sizing and moving
 A scene stores the map's **pixel size** and a `gridSize` - how many of those
-pixels one cell covers. The DM's **Grid** slider changes only that ratio, so the
-map never resizes; slide right for bigger (fewer) cells, left for smaller (more).
-Column and row counts are derived from `width / gridSize`, never stored, so the
-two can't drift out of agreement.
+pixels one cell covers. Changing it changes only that ratio, so the map never
+resizes; bigger cells means fewer of them. Column and row counts are derived
+from `width / gridSize`, never stored, so the two can't drift out of agreement.
 
-Note that tokens are positioned *by cell*, so re-tuning the grid moves them
-relative to the art - settle the grid before placing tokens.
+Tokens are positioned *by cell*, so re-tuning the grid moves them relative to
+the art; settle the grid before placing tokens.
 
-**Moving the grid.** Sizing the cells is only half of matching a map that came
-with squares drawn on it; the other half is where those squares *start*. With
-the **Grid** gauge selected, right-drag on the map slides the grid over the
-picture, which stays exactly where it is. Get the size right by scrolling, then
-push the grid onto the drawn one.
+Sizing the cells is only half of matching a map that came with squares drawn on
+it; the other half is where those squares *start*. **While Grid settings is
+open**, right-drag on the map slides the grid over the picture, which stays
+exactly where it is, and the wheel resizes the cells. Both gestures are armed by
+that window and released when it closes, which is also when the pan and the zoom
+get them back.
 
-The offset is stored on the scene as `gridOffsetX`/`gridOffsetY` in map pixels,
-held to one cell in each direction - a grid repeats, so a whole cell of travel
-reaches every alignment there is. Tokens and shapes ride the grid rather than
-the artwork, so a token in a cell stays in that cell as it moves.
+The offset is stored as `gridOffsetX`/`gridOffsetY` in map pixels, held to one
+cell in each direction - a grid repeats, so a whole cell of travel reaches every
+alignment there is. It is part of the draft like everything else in the window,
+so a drag is previewed and saved with the rest.
 
-While a drawing tool is in hand the Grid gauge is disabled: its gesture is a
-right-drag, and that's how you move your view while drawing. One of the two has
-to give, and it can't be the one that reaches the part of the map you're on.
+While a drawing tool is in hand or the ruler is out, Grid settings is disabled:
+setting a grid up needs the right-drag and the wheel, and in those modes both
+are already spoken for.
 
 ### Drawing shapes
 **Tools → Draw mode** opens a floating window and turns the map into a drawing

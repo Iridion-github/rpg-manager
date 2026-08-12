@@ -650,21 +650,18 @@ button.linky:hover {
   color: #9fb4ff;
 }
 
-.grid-ratio input[type='range'] {
-  width: 7rem;
+/* "Show grid" and its box, then the way in to the rest. The label comes first
+   and the checkbox sits to its right; the cell-size slider and the cell count
+   that used to follow have moved into the Grid settings window. */
+.grid-ratio label {
+  cursor: pointer;
+  user-select: none;
 }
 
-/* Sits to the left of the word "Grid" and toggles the whole thing on and off. */
 .grid-ratio input[type='checkbox'] {
-  margin: 0 0.1rem 0 0;
+  margin: 0 0.2rem 0 0;
   accent-color: #58a6ff;
   cursor: pointer;
-}
-
-.grid-ratio small {
-  color: #8b90a0;
-  min-width: 3.2rem;
-  /* stops the bar jittering as the count changes */
 }
 
 .map-picker {
@@ -863,6 +860,12 @@ button.linky:hover {
   background-repeat: no-repeat;
   /* Stops the browser treating a token drag as a scroll/pan gesture. */
   touch-action: none;
+  /* A blend stops here. The grid in adaptive-contrast mode inverts what is beneath
+     it, and without this the "beneath" would include the page behind the map:
+     the grid would invert the app's own background wherever the map is narrower
+     than the window. Isolating the surface makes the map the whole world as far
+     as that blend is concerned. */
+  isolation: isolate;
 }
 
 /* --- the drawing layer ---
@@ -1057,13 +1060,27 @@ button.linky:hover {
   user-select: none;
 }
 
+/* Colour, weight and strength come from the scene, through custom properties
+   set on the surface; the defaults here are what the grid looked like before
+   any of them were settable, so a scene that has never been near Grid settings
+   is unchanged. Opacity is the element's rather than the colour's alpha, so
+   that adaptive contrast below can override the fade entirely. */
 .grid-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  opacity: var(--grid-alpha, 0.13);
   background-image:
-    repeating-linear-gradient(to right, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell)),
-    repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.13) 0 1px, transparent 1px var(--cell));
+    repeating-linear-gradient(
+      to right,
+      var(--grid-ink, #ffffff) 0 var(--grid-line, 1px),
+      transparent var(--grid-line, 1px) var(--cell)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--grid-ink, #ffffff) 0 var(--grid-line, 1px),
+      transparent var(--grid-line, 1px) var(--cell)
+    );
   /* One cell per tile, so the pattern repeats on the cell rather than on the
      map: a map that isn't a whole number of cells wide would otherwise show a
      short column where the element-sized tile wrapped, once the grid is moved
@@ -1073,6 +1090,32 @@ button.linky:hover {
      this and is not moved by it - which is the point: the picture holds still
      and the cells slide onto whatever grid is drawn in it. */
   background-position: var(--grid-x, 0) var(--grid-y, 0);
+}
+
+/* --- adaptive contrast ---
+   The grid drawn as the exact opposite of whatever is under it, pixel by pixel.
+   White lines blended with `difference` give `1 - backdrop` per channel: white
+   ground turns the line black, black turns it white, and red turns it cyan. No
+   sampling and no canvas; the compositor does it, so it costs nothing and stays
+   correct as the map is panned and zoomed.
+
+   Two things have to be forced for that to be true, and both were bugs before
+   they were rules:
+
+   `opacity: 1` regardless of the slider. Element opacity is applied *after* the
+   blend, compositing the inverted result back over the very colour it inverted
+   - so at the default 13% you get 13% of the opposite and 87% of the original,
+   which is a grid you can barely see. Worse, a half-strength inversion vanishes
+   completely over mid-grey, which is exactly where a grid most needs help. The
+   mode is called adaptive contrast; half of it is no contrast.
+
+   `--grid-ink: #ffffff`, because white is the only operand that gives a true
+   inversion. Any other colour tints the result rather than colouring the lines,
+   which is why the picker is disabled while this is on. */
+.grid-overlay.adaptive-contrast {
+  --grid-ink: #ffffff;
+  mix-blend-mode: difference;
+  opacity: 1;
 }
 
 /* --- ping ---
@@ -3329,6 +3372,37 @@ button.token-tile:hover {
 
 .shape-check > span {
   width: auto;
+}
+
+/* --- the grid settings window ---
+   The drawing box's shape, with a readout on the right of each row and its two
+   answers pinned to the foot. */
+.grid-field small {
+  flex: none;
+  width: 3.4rem;
+  text-align: right;
+  color: #8b90a0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A disabled colour well should look unavailable rather than merely refuse to
+   open; under adaptive contrast neither colour nor opacity bears on what is drawn. */
+.grid-settings input[type='color']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Set apart from the controls above by a rule, because these two are the only
+   things in the window that leave it: everything else is a preview, and these
+   decide whether the preview becomes what the table sees. */
+.grid-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #2c3140;
 }
 
 /* --- the measuring panel ---

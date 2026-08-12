@@ -28,6 +28,18 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Grid settings, behind a button in the scene bar for the DM. The grid now has a colour, a thickness and an opacity as well as a cell size, and everything you change is previewed on your own map alone until you press Save changes; Cancel puts it all back. The scene bar keeps just the Show grid checkbox.',
+      },
+      {
+        kind: 'new',
+        text: 'Adaptive contrast for the grid, in Grid settings. Each line takes the exact opposite of what is under it, pixel by pixel: black over white, white over black, cyan over red. Handy on a map that is pale in one corner and dark in the other.',
+      },
+      {
+        kind: 'change',
+        text: 'The grid is sized and slid from inside Grid settings now: while that window is open the wheel resizes the cells and right-dragging the map moves the grid over it. Close it and the wheel goes back to zooming.',
+      },
+      {
+        kind: 'new',
         text: 'Characters and tokens can be coupled, from either the Characters tab or the Tokens tab. Linked, the two share hit points in both directions - damage on the map lands on the sheet, healing on the sheet shows on the map - and the token takes its initiative modifier from the character. Its name, picture and size stay its own. One character per token and one token per character; you can couple your own, and the DM can couple anything.',
       },
       {

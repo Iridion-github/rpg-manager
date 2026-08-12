@@ -9,6 +9,7 @@ import InitiativeModal from './InitiativeModal.jsx';
 import SpawnModal from './SpawnModal.jsx';
 import ShapeTools from './ShapeTools.jsx';
 import MeasureTools from './MeasureTools.jsx';
+import GridSettings from './GridSettings.jsx';
 import {
   cellCentre,
   cellsBetween,
@@ -62,9 +63,6 @@ import {
 const DRAG_EMIT_MS = 33;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-
-// How long a grid-slider drag settles before we save it.
-const GRID_SAVE_MS = 400;
 
 // Where this browser remembers whether the map's tools panel is rolled up.
 const TOOLS_MIN_KEY = 'rpg:map-tools-min';
@@ -382,16 +380,26 @@ export default function Tabletop({ actor, players, offline }) {
   const [maps, setMaps] = useState([]); // built-in maps from public/maps
   const [activeId, setActiveId] = useState('');
   const [zoom, setZoom] = useState(1);
-  // Live grid-slider value. Null means "whatever the scene says" - we only hold
-  // a local value while the GM is actually dragging, so another GM's change
-  // isn't masked by a stale draft.
+  /**
+   * The grid as the DM is currently tuning it, or null.
+   *
+   * Non-null means the Grid settings window is open, and this *is* that window:
+   * there is no second flag, because a draft with nowhere to be edited and an
+   * editor with nothing to edit are both states nobody wants to reason about.
+   *
+   * Everything in it is local. A grid being retuned passes through every wrong
+   * answer on the way to the right one, and the rest of the table should not
+   * have to watch that happen over the map they are playing on - so the scene
+   * is not written until Save, and Cancel simply drops this.
+   *
+   * It also holds the offset, which is set by right-dragging the map rather
+   * than by a control in the window. Same rule: drafted while open, saved with
+   * everything else.
+   */
   const [gridDraft, setGridDraft] = useState(null);
-  // The same for where the grid sits, while it's being dragged into place.
-  // Null means "whatever the scene says", for the same reason.
-  const [offsetDraft, setOffsetDraft] = useState(null);
-  // Which bar the wheel drives while the cursor is over the map. Zoom to begin
-  // with: it's the one everybody reaches for, and the one a player has at all.
-  const [wheelTarget, setWheelTarget] = useState('zoom');
+  // What the wheel drives is no longer a choice anybody makes: it is the zoom,
+  // unless Grid settings is open, in which case it is the cell size. See the
+  // wheel handler, which reads `gridDraft` for that.
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // Where other people's tokens are *right now*, mid-drag. Never persisted.
@@ -451,7 +459,6 @@ export default function Tabletop({ actor, players, offline }) {
   const dragRef = useRef(null);
   const panRef = useRef(null);
   const pannedRef = useRef(false);
-  const gridTimer = useRef(null);
   // The drawing drag in flight: either a new shape being pulled out, or one
   // being pushed around. A ref for the same reason the token drag is one -
   // pointer handlers must see the current values, not a render's idea of them.
@@ -653,10 +660,11 @@ export default function Tabletop({ actor, players, offline }) {
     [offline, refresh]
   );
 
-  // A draft belongs to the scene it was made on, and so does a pulse on the map.
+  // A draft belongs to the scene it was made on, and so does a pulse on the
+  // map. Changing scene therefore closes Grid settings rather than carrying a
+  // half-tuned grid onto a different board.
   useEffect(() => {
     setGridDraft(null);
-    setOffsetDraft(null);
     setPings([]);
     setMenu(null);
     // A shape belongs to the scene it was drawn on, so a selection can't
@@ -664,10 +672,7 @@ export default function Tabletop({ actor, players, offline }) {
     // what you're doing, not about which board you're looking at.
     setSelectedShapeId(null);
     setSketch(null);
-    clearTimeout(gridTimer.current);
   }, [selectedId]);
-
-  useEffect(() => () => clearTimeout(gridTimer.current), []);
 
   // Pings outlive the component if nobody stops them: each one is a pending
   // timer holding a setState.
@@ -778,12 +783,34 @@ export default function Tabletop({ actor, players, offline }) {
   // The map keeps its own size; the grid is laid over it. So the surface is
   // sized from the image and only the *cell* size follows the grid slider -
   // sliding right makes cells bigger and therefore fewer, not the map larger.
-  const gridSize = gridDraft ?? scene?.gridSize ?? 70;
+  /**
+   * The grid as it should be drawn *for this person, right now*.
+   *
+   * The scene's own settings, unless this is the DM with the Grid settings
+   * window open - in which case it is their draft, and only theirs. One place
+   * that decides, so no part of the map can end up measuring against a
+   * different grid from the one on screen.
+   */
+  const sceneGrid = {
+    gridSize: scene?.gridSize ?? 70,
+    gridOffsetX: scene?.gridOffsetX ?? 0,
+    gridOffsetY: scene?.gridOffsetY ?? 0,
+    gridColor: scene?.gridColor ?? '#ffffff',
+    gridOpacity: scene?.gridOpacity ?? 13,
+    gridThickness: scene?.gridThickness ?? 1,
+    gridContrast: scene?.gridContrast === true,
+  };
+  const grid = gridDraft ?? sceneGrid;
+  const gridSize = grid.gridSize;
   // Absent means on, matching the server: scenes made before the toggle existed
   // had a grid.
+  //
+  // Deliberately *not* part of the draft. Show grid stays in the scene bar and
+  // takes effect for everyone the moment it is pressed: it answers "is there a
+  // grid", which the table needs to agree on, while the window answers "what
+  // does it look like", which is the DM's to settle in private first.
   const gridOn = scene?.gridOn !== false;
-  // The grid bar is the GM's, and only while they can write. Everyone else has
-  // zoom and nothing to choose between, so the wheel stays on it for them.
+  // Tuning the grid is the GM's, and only while they can write.
   const canTuneGrid = isDm && !offline;
   const mapW = scene?.width || 1200;
   const mapH = scene?.height || 840;
@@ -791,8 +818,8 @@ export default function Tabletop({ actor, players, offline }) {
   // Where cell (0,0) starts, in map pixels. Everything measured in cells -
   // the lines, the tokens, the square a pointer is over - is measured from
   // here, so moving it slides the whole grid across a map that stays put.
-  const gridOffX = offsetDraft?.x ?? scene?.gridOffsetX ?? 0;
-  const gridOffY = offsetDraft?.y ?? scene?.gridOffsetY ?? 0;
+  const gridOffX = grid.gridOffsetX;
+  const gridOffY = grid.gridOffsetY;
   // The same corner in screen pixels, which is what the layout wants.
   const offXPx = gridOffX * zoom;
   const offYPx = gridOffY * zoom;
@@ -941,26 +968,6 @@ export default function Tabletop({ actor, players, offline }) {
     applyRuler(after);
     recordMeasure(label, before, after);
   }
-
-  /**
-   * While a tool is in hand the wheel belongs to the zoom.
-   *
-   * Not a preference so much as a consequence: the grid gauge's own gesture is
-   * a right-drag, and a right-drag is how you move the view while you draw. One
-   * of the two has to give, and it can't be the one that lets you reach the
-   * part of the map you're drawing on.
-   */
-  const pickWheel = useCallback(
-    (target) => {
-      if (target === 'grid' && (drawing || measuring)) return;
-      setWheelTarget(target);
-    },
-    [drawing, measuring]
-  );
-
-  useEffect(() => {
-    if (drawing || measuring) setWheelTarget('zoom');
-  }, [drawing, measuring]);
 
   // A tool put down, or the box closed, leaves nothing selected: the panel is
   // what the selection was for.
@@ -1418,13 +1425,18 @@ export default function Tabletop({ actor, players, offline }) {
   /**
    * Whether a right-drag moves the grid instead of the view.
    *
-   * With the Grid gauge selected the same gesture is aimed at the grid rather
-   * than the camera: the map stays exactly where it is and the cells slide over
-   * it. That's what makes a map with a grid already drawn on it usable - size
-   * the cells to match the art, then push them onto it. The view still has its
-   * scrollbars, and picking Zoom again gives the pan back.
+   * While Grid settings is open the gesture is aimed at the grid rather than
+   * the camera: the map stays exactly where it is and the cells slide over it.
+   * That is what makes a map with a grid already drawn on it usable - size the
+   * cells to match the art, then push them onto it. The view still has its
+   * scrollbars, and closing the window gives the pan back.
+   *
+   * It used to be armed by selecting a Grid gauge in the scene bar. The gauge
+   * has gone into the window, and the window is now what arms it: the two
+   * always belonged together, since the only reason to slide a grid is that you
+   * are in the middle of setting one up.
    */
-  const canNudgeGrid = canTuneGrid && gridOn && wheelTarget === 'grid';
+  const canNudgeGrid = canTuneGrid && Boolean(gridDraft);
 
   function onPanStart(e) {
     pannedRef.current = false; // any fresh press starts a new gesture
@@ -1444,13 +1456,10 @@ export default function Tabletop({ actor, players, offline }) {
       // otherwise turn a nudge into a pan halfway through it.
       grid: canNudgeGrid,
       // Where the grid started, and where it has got to - kept here rather than
-      // read back from the draft, so the save at the end can't pick up a value
-      // from a render that hasn't happened yet. The start is kept as well as
-      // the running total: it's what Undo puts back.
+      // read back from the draft, so a move can't pick up a value from a render
+      // that hasn't happened yet.
       offX: gridOffX,
       offY: gridOffY,
-      fromX: gridOffX,
-      fromY: gridOffY,
     };
     setGesture(canNudgeGrid ? 'grid' : 'pan');
   }
@@ -1474,7 +1483,9 @@ export default function Tabletop({ actor, players, offline }) {
       // The travel so far has been spent; measure the next move from here.
       p.x = e.clientX;
       p.y = e.clientY;
-      setOffsetDraft({ x: p.offX, y: p.offY });
+      // Into the draft, like everything else the window changes. Nothing is
+      // written when the button comes up; Save is what sends it to the table.
+      changeGrid({ gridOffsetX: p.offX, gridOffsetY: p.offY });
       return;
     }
     const el = scrollRef.current;
@@ -1494,11 +1505,8 @@ export default function Tabletop({ actor, players, offline }) {
     } catch {
       /* pointer already gone */
     }
-    // Saved when the hand comes off the map rather than once per pixel of
-    // travel - the same bargain the cell-size slider makes with its timer.
-    if (p.grid && pannedRef.current) {
-      saveGridOffset(p.offX, p.offY, { gridOffsetX: p.fromX, gridOffsetY: p.fromY });
-    }
+    // Nothing to save here any more. The drag has been writing into the draft
+    // as it went, and the draft is written to the scene by Save changes.
   }
 
   // --- scroll to adjust ---
@@ -1524,11 +1532,16 @@ export default function Tabletop({ actor, players, offline }) {
       if (!notches) return;
       wheelAcc.current -= notches * WHEEL_NOTCH;
 
-      // Scrolling down (positive delta) means less of whatever is selected -
-      // zoomed further out, or smaller cells.
-      if (wheelTarget === 'grid' && canTuneGrid) {
+      // Scrolling down (positive delta) means less of whatever the wheel is
+      // driving - zoomed further out, or smaller cells.
+      //
+      // The wheel goes to the grid exactly while Grid settings is open, which
+      // is the same condition that gives the right-drag to the grid. One mode,
+      // both gestures: inside that window the map is a thing being set up, and
+      // outside it the map is a thing being played on.
+      if (gridDraft && canTuneGrid) {
         const next = clamp(gridSize - notches * GRID_WHEEL_STEP, GRID_MIN, GRID_MAX);
-        if (next !== gridSize) onGridSlide(next);
+        if (next !== gridSize) changeGrid({ gridSize: next });
         return;
       }
 
@@ -1553,9 +1566,9 @@ export default function Tabletop({ actor, players, offline }) {
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-    // `scene` is in here because onGridSlide saves it alongside the new size;
-    // a stale one would write back an old scene.
-  }, [zoom, selectedId, wheelTarget, canTuneGrid, gridSize, scene]);
+    // `gridDraft` decides which of the two the wheel is driving, so the
+    // listener has to be rebound when the window opens or closes.
+  }, [zoom, selectedId, canTuneGrid, gridSize, gridDraft]);
 
   // Re-pin the anchor point after the zoom has been laid out.
   useLayoutEffect(() => {
@@ -2274,50 +2287,47 @@ export default function Tabletop({ actor, players, offline }) {
       await patchScene({ imageUrl: url, width, height });
     });
 
-  // Slider moves are previewed locally and saved once the GM settles, rather
-  // than firing a write per pixel of slider travel.
-  function onGridSlide(value) {
-    setGridDraft(value);
-    clearTimeout(gridTimer.current);
-    gridTimer.current = setTimeout(async () => {
-      // What the scene said before this settle - one entry per time the hand
-      // comes to rest, rather than one per pixel of slider travel.
-      const before = { gridSize: scene.gridSize ?? 70 };
-      try {
-        const updated = await api.updateScene(scene.id, { ...scene, gridSize: value });
-        setScenes((prev) =>
-          prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
-        );
-        const after = { gridSize: updated.gridSize };
-        if (!matches(after, before)) recordSceneEdit({ sceneId: updated.id, before, after });
-        setGridDraft(null); // back to following the scene
-      } catch (e) {
-        setError(e.message);
-      }
-    }, GRID_SAVE_MS);
-  }
+  // --- grid settings ---
+  const GRID_FIELDS = [
+    'gridSize',
+    'gridOffsetX',
+    'gridOffsetY',
+    'gridColor',
+    'gridOpacity',
+    'gridThickness',
+    'gridContrast',
+  ];
+  // Whether the draft has anything in it worth saving. Drives the Save button,
+  // so a window opened and closed again writes nothing and records no undo.
+  const gridDirty = Boolean(gridDraft) && !matches(pick(gridDraft, GRID_FIELDS), sceneGrid);
 
-  // Where the drag left the grid. No timer: a nudge ends when the button comes
-  // up, which is a moment the slider never gets.
-  async function saveGridOffset(x, y, before) {
+  // Opening takes a copy of the scene as it stands; from then until Cancel or
+  // Save, this person's map follows the copy and nobody else's changes at all.
+  const openGridSettings = () => setGridDraft({ ...sceneGrid });
+  const changeGrid = (changes) => setGridDraft((d) => (d ? { ...d, ...changes } : d));
+  // Cancel is simply dropping the draft: nothing was written, so there is
+  // nothing to put back beyond letting the scene speak for itself again.
+  const cancelGridSettings = () => setGridDraft(null);
+
+  async function saveGridSettings() {
+    if (!gridDraft || !scene) return;
+    const before = pick(sceneGrid, GRID_FIELDS);
+    const after = pick(gridDraft, GRID_FIELDS);
     try {
-      const updated = await api.updateScene(scene.id, {
-        ...scene,
-        // The slider's own draft, if one is mid-flight - otherwise saving the
-        // offset would write the cell size back to what it was before it moved.
-        gridSize,
-        gridOffsetX: x,
-        gridOffsetY: y,
-      });
+      const updated = await api.updateScene(scene.id, { ...scene, ...after });
       setScenes((prev) =>
         prev.map((s) => (s.id === updated.id ? { ...updated, tokens: s.tokens } : s))
       );
-      // One entry for the whole drag: where the grid sat when the button went
-      // down, and where it sat when it came up.
-      const after = pick(updated, ['gridOffsetX', 'gridOffsetY']);
-      if (!matches(after, before)) recordSceneEdit({ sceneId: updated.id, before, after });
-      setOffsetDraft(null); // back to following the scene
+      // One entry for the whole sitting, whatever was fiddled with inside it.
+      // Undo should put the grid back the way the table last saw it, not step
+      // backwards through a tuning session nobody else witnessed.
+      if (!matches(pick(updated, GRID_FIELDS), before)) {
+        recordSceneEdit({ sceneId: updated.id, before, after: pick(updated, GRID_FIELDS) });
+      }
+      setGridDraft(null);
     } catch (e) {
+      // The window stays open holding the draft: a failed save must not be a
+      // silently discarded one.
       setError(e.message);
     }
   }
@@ -2448,19 +2458,12 @@ export default function Tabletop({ actor, players, offline }) {
           ))}
         </select>
 
-        {/* A div, not a label: the name is a button that picks what the wheel
-            drives, and inside a label every click on it would also be a click
-            on the control next to it. */}
-        <div className={`zoom${wheelTarget === 'zoom' ? ' wheel-target' : ''}`}>
-          <button
-            type="button"
-            className="wheel-pick"
-            aria-pressed={wheelTarget === 'zoom'}
-            onClick={() => pickWheel('zoom')}
-            title="Scroll over the map to zoom"
-          >
-            Zoom
-          </button>
+        {/* Zoom is a plain label again. It used to be a button that pointed
+            the wheel at this bar rather than at the grid gauge beside it; the
+            gauge has moved into Grid settings, which arms the wheel by being
+            open, so there is nothing left to choose between. */}
+        <label className="zoom">
+          <span>Zoom</span>
           <input
             type="range"
             min={ZOOM_MIN}
@@ -2469,65 +2472,46 @@ export default function Tabletop({ actor, players, offline }) {
             value={zoom}
             aria-label="Zoom"
             onChange={(e) => setZoom(Number(e.target.value))}
-            // Taking hold of a bar is as much a way of choosing it as clicking
-            // its name - you've said which one you're working on either way.
-            onPointerDown={() => pickWheel('zoom')}
             title="Scroll over the map to zoom"
           />
           <small>{Math.round(zoom * 100)}%</small>
-        </div>
+        </label>
 
         {isDm && !offline && (
           <>
-            {/* Grid ratio: how much of the map one cell covers. The map does
-                not change size - only the number of cells over it does. */}
-            <div className={`zoom grid-ratio${wheelTarget === 'grid' ? ' wheel-target' : ''}`}>
+            {/* Two things, and only two. Whether there is a grid, which the
+                whole table sees the moment it is pressed; and a way in to what
+                it looks like, which is the DM's to settle in private. The cell
+                size and the cell count moved into that window, where the rest
+                of the grid's settings now live. */}
+            <div className="zoom grid-ratio">
+              <label htmlFor="grid-on">Show grid</label>
               <input
+                id="grid-on"
                 type="checkbox"
                 checked={gridOn}
                 onChange={(e) => patchScene({ gridOn: e.target.checked })}
                 title="Show the grid and snap tokens to it"
-                aria-label="Show the grid and snap tokens to it"
               />
-              {/* The word used to be the checkbox's label. It picks the wheel
-                  now, so the checkbox carries its own aria-label instead -
-                  otherwise choosing what to scroll would flick the grid off. */}
               <button
                 type="button"
-                className="wheel-pick"
-                aria-pressed={wheelTarget === 'grid'}
-                onClick={() => pickWheel('grid')}
-                // Held still while a drawing tool is in hand, and while the
-                // ruler is out: the gauge's own gesture is a right-drag, and
-                // that is how you move the view in both of those modes. Said
-                // out loud rather than left to be noticed.
+                onClick={openGridSettings}
+                aria-pressed={Boolean(gridDraft)}
+                className={gridDraft ? 'active' : ''}
+                // Held still while a drawing tool is in hand or the ruler is
+                // out: setting a grid up needs the right-drag and the wheel,
+                // and in those modes both are already spoken for.
                 disabled={drawing || measuring}
                 title={
                   drawing
                     ? 'Put the drawing tool down to retune the grid'
                     : measuring
                       ? 'Leave measuring mode to retune the grid'
-                      : 'Scroll over the map to resize the cells, right-drag to move the grid'
+                      : 'Size, colour, thickness and opacity of the grid'
                 }
               >
-                Grid
+                Grid settings
               </button>
-              {/* The slider stays live with the grid off: cell size is still
-                  the scale tokens are measured in, even when no cells are
-                  drawn. Only the readout changes, since there are no rows and
-                  columns to count. */}
-              <input
-                type="range"
-                min={GRID_MIN}
-                max={GRID_MAX}
-                step="1"
-                value={gridSize}
-                aria-label="Cell size"
-                onChange={(e) => onGridSlide(Number(e.target.value))}
-                onPointerDown={() => pickWheel('grid')}
-                title={gridOn ? 'Cell size relative to the map' : 'Token scale relative to the map'}
-              />
-              <small>{gridOn ? `${cols}×${rows}` : `${gridSize}px`}</small>
             </div>
 
             <input
@@ -2624,6 +2608,12 @@ export default function Tabletop({ actor, players, offline }) {
             // the stylesheet and stays where it is while they change.
             '--grid-x': `${offXPx}px`,
             '--grid-y': `${offYPx}px`,
+            '--grid-ink': grid.gridColor,
+            '--grid-alpha': grid.gridOpacity / 100,
+            // The lines keep their width on screen rather than growing with the
+            // map: a two-pixel grid line is a choice about how the grid reads,
+            // not a distance across the ground.
+            '--grid-line': `${grid.gridThickness}px`,
           }}
           onPointerDown={onDrawStart}
           onPointerMove={onPointerMove}
@@ -2669,8 +2659,15 @@ export default function Tabletop({ actor, players, offline }) {
           </svg>
 
           {/* Borrowed while a ruler is on the board, whoever's it is - see
-              gridShown. The scene's own setting is untouched. */}
-          {gridShown && <div className="grid-overlay" />}
+              gridShown. The scene's own setting is untouched.
+
+              Drawn for the DM while Grid settings is open even with Show grid
+              off: they are looking at what they are tuning. Everyone else still
+              sees nothing until the checkbox is on, which is the promise the
+              window makes. */}
+          {(gridShown || gridDraft) && (
+            <div className={`grid-overlay${grid.gridContrast ? ' adaptive-contrast' : ''}`} />
+          )}
 
           {/* Inside the surface, so a ping sits at its map position and stays
               there through panning and zooming rather than at a point on glass. */}
@@ -2916,6 +2913,23 @@ export default function Tabletop({ actor, players, offline }) {
             setShapeWindow(false);
           }}
           offline={offline}
+        />
+      )}
+
+      {/* Grid settings, the DM's alone and previewed on their map only. The
+          draft's existence is what opens it, so there is no separate flag that
+          could disagree with whether there is anything to edit. */}
+      {gridDraft && canTuneGrid && (
+        <GridSettings
+          draft={gridDraft}
+          cols={cols}
+          rows={rows}
+          sizeMin={GRID_MIN}
+          sizeMax={GRID_MAX}
+          dirty={gridDirty}
+          onChange={changeGrid}
+          onCancel={cancelGridSettings}
+          onSave={saveGridSettings}
         />
       )}
 

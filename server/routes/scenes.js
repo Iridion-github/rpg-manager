@@ -65,8 +65,37 @@ function sanitizeScene(body = {}) {
     // Absent means on: every scene that existed before this flag did had a
     // grid, and they should keep it.
     gridOn: body.gridOn !== false,
+    ...gridLook(body),
     width: clamp(Math.round(num(body.width, 0) || fallbackW), 32, 12000),
     height: clamp(Math.round(num(body.height, 0) || fallbackH), 32, 12000),
+  };
+}
+
+/**
+ * How the grid is drawn, as against where it sits.
+ *
+ * Four fields the DM sets in Grid settings. Every default is what the grid
+ * looked like before any of them existed, so a scene saved by an older version
+ * comes back looking exactly as it did rather than as a design decision nobody
+ * made: white lines, one pixel wide, at 13 percent.
+ *
+ * `gridContrast` is the odd one. With it on the colour is ignored and the lines
+ * are drawn by inverting whatever is beneath them, per pixel, so the grid is
+ * legible on a map that is white in one corner and black in the other. It is a
+ * flag rather than a colour because there is no colour that means it; the
+ * client draws it with a blend mode (see .grid-overlay in styles.css).
+ */
+function gridLook(body = {}) {
+  return {
+    gridColor: hexOr(body.gridColor, '#ffffff'),
+    // Percent, and floored above zero: an invisible grid is what the Show grid
+    // checkbox is for, and a slider that can reach the same state is a way to
+    // lose the grid with no clue as to why.
+    gridOpacity: clamp(Math.round(num(body.gridOpacity, 13)), 2, 100),
+    // Whole pixels. Past about six the lines stop being a grid and start being
+    // a lattice the map shows through.
+    gridThickness: clamp(Math.round(num(body.gridThickness, 1)), 1, 6),
+    gridContrast: body.gridContrast === true,
   };
 }
 
