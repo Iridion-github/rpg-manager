@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Use clipboard, beside every Upload button: one for the scene image and one for a token picture. Copy a picture anywhere - a crop out of a PDF, a screenshot, an image on a web page - and put it straight in without saving it to disk first. If what you copied is not a picture it says so and nothing else happens.',
+      },
+      {
+        kind: 'new',
         text: 'Count as movement, in the measuring box. Tick it and the ruler prices a route the way the table does: take two diagonals in a row and the second one costs 10 ft, and any straight step in between clears that, so a zig-zag stays at 5 ft a square. Turning a corner does not clear it, and the ruler walks each leg the cheapest way round, which is what you would do yourself. Leave it off for ranges and spell radii, where every diagonal counts the same.',
       },
       {

@@ -687,6 +687,33 @@ button.linky:hover {
   display: none;
 }
 
+/* "Use clipboard", which stands beside every Upload the app offers. The button
+   inside is a plain button and takes the surrounding row's own styling, so this
+   only has to hold the two together.
+
+   Allowed to wrap, and the button told not to shrink: one of these rows sits in
+   a dialog next to a file input that claims all the spare width, and the button
+   must keep its own size there whatever the message beside it is doing. When
+   there is no room for both the message goes underneath. */
+.clipboard-pick {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.clipboard-pick button {
+  flex: none;
+}
+
+/* Small on purpose. It says one short thing about the last press of one button,
+   and it takes itself down again after a few seconds. */
+.clipboard-error {
+  color: #ff9a9a;
+  font-size: 0.72rem;
+}
+
 /* On the tabletop tab the map runs to the bottom of the window instead of
    stopping at a fraction of it. Sized to match the chat column beside it, so
    the two bottom-align rather than one trailing off below the other.

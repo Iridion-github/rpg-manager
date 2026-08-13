@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
+import ClipboardImage from './ClipboardImage.jsx';
 import TokenLibrary from './TokenLibrary.jsx';
 
 /**
@@ -353,6 +354,10 @@ export default function TokenModal({
               disabled={uploading}
               onChange={(e) => pickImage(e.target.files?.[0])}
             />
+            {/* The same act by another road: a picture that is already on the
+                clipboard has nowhere on disk to be chosen from, and saving it
+                out just to pick it up again is a step for the sake of one. */}
+            <ClipboardImage onImage={pickImage} disabled={uploading} />
           </span>
         </div>
 

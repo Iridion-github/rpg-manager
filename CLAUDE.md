@@ -49,3 +49,10 @@ Use instead, depending on what the sentence is doing:
 This applies to new and edited text. The existing files are full of em dashes
 from before the rule; they are not to be swept up wholesale, but any line
 being edited for another reason should lose its em dashes on the way past.
+
+## 3. Always include the Clipboard for img upload
+
+Whenever an image upload system is included somewhere, unless specified otherwise, 
+it should always be coupled with the existing system that lets you paste
+the content of your clipboard, expecting an image, and showing a tiny red
+error in case of data incompatibility.

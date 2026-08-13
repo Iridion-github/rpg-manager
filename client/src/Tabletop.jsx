@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
+import ClipboardImage from './ClipboardImage.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
@@ -2657,6 +2658,10 @@ export default function Tabletop({ actor, players, offline }) {
                 }}
               />
             </label>
+            {/* Beside Upload image because it is the same act: a map cropped
+                out of a PDF is on the clipboard already, and saving it to disk
+                first is a step that exists only to satisfy a file picker. */}
+            <ClipboardImage onImage={uploadMap} disabled={busy} />
             <button onClick={newScene} disabled={busy}>
               + Scene
             </button>
