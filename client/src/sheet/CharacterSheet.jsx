@@ -110,7 +110,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   // alone. Each roll carries its own log label, so what appears never depends
   // on how many rolls happened to be in the batch; `secret` applies to all of
   // them, since half a hidden attack is not hidden.
-  async function runRolls({ advantage, secret, skipped }) {
+  async function runRolls({ swing, secret, skipped }) {
     for (const r of confirming.rolls) {
       // The ability's modifier is added into the roll's own here, where one
       // number is what is wanted. `ability` itself is dropped rather than sent:
@@ -120,7 +120,11 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
       await api.rollDice({
         ...spec,
         modifier: modifier + (r.abilityBonus || 0),
-        advantage: advantage && r.advantage,
+        // `r.advantage` is whether this roll can swing at all - a d20 can, the
+        // damage die it is followed by cannot - and the chosen swing is what
+        // it does when it can.
+        advantage: r.advantage && swing === 'advantage',
+        disadvantage: r.advantage && swing === 'disadvantage',
         secret,
         label: characterRollLabel(sheet.name, r.logLabel),
         // Whatever the dialog left ticked. Skipping is per effect rather than

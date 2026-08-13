@@ -220,8 +220,20 @@ export const api = {
   // modifiers - each some dice, some flat bonus, or both. The server rolls them
   // with it and folds them into the same total, so an extra d4 is part of the
   // attack rather than a second line in the chat.
-  rollDice: ({ count, sides, modifier, advantage, label, secret, extras }) =>
-    post(table('/chat/roll'), { count, sides, modifier, advantage, label, secret, extras }),
+  // `advantage` and `disadvantage` are the two ways a d20 is thrown twice. Both
+  // at once is not an error and not refused: the game says they cancel, and the
+  // server reads them that way.
+  rollDice: ({ count, sides, modifier, advantage, disadvantage, label, secret, extras }) =>
+    post(table('/chat/roll'), {
+      count,
+      sides,
+      modifier,
+      advantage,
+      disadvantage,
+      label,
+      secret,
+      extras,
+    }),
 
   // The list comes back already filtered by role - a player is never sent an
   // unshared note, so there is nothing here for the UI to have to hide.

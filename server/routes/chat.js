@@ -132,19 +132,31 @@ function describeExtra(extra) {
 
 // Plain-text form of a roll, so a message still reads sensibly anywhere that
 // doesn't render the structured version - the offline cache included.
-function describeRoll({ count, sides, modifier, rolls, total, advantage, label, extras = [] }) {
+function describeRoll({
+  count,
+  sides,
+  modifier,
+  rolls,
+  total,
+  advantage,
+  disadvantage,
+  label,
+  extras = [],
+}) {
   if (sides === COIN) {
     return `flipped ${count} coin${count === 1 ? '' : 's'}: ${rolls.map(coinFace).join(', ')}`;
   }
   const sign = modifier > 0 ? `+${modifier}` : `${modifier}`;
   const notation = `${count}d${sides}${modifier ? sign : ''}`;
   const what = label ? `${label} (${notation})` : notation;
-  const kept = advantage ? ` → kept ${Math.max(...rolls)}` : '';
+  // Which of the two dice counted, named so the line explains its own total.
+  const swing = advantage ? 'advantage' : disadvantage ? 'disadvantage' : '';
+  const kept = swing ? ` → kept ${advantage ? Math.max(...rolls) : Math.min(...rolls)}` : '';
   // Each extra named where it lands, between the dice and the total, so the
   // sum can be followed: a number that grew by four should say what the four
   // was for.
   const plus = extras.map((e) => `, ${describeExtra(e)}`).join('');
-  return `rolled ${what}${advantage ? ' with advantage' : ''}: ${rolls.join(', ')}${kept}${plus} = ${total}`;
+  return `rolled ${what}${swing ? ` with ${swing}` : ''}: ${rolls.join(', ')}${kept}${plus} = ${total}`;
 }
 
 /**
@@ -226,11 +238,23 @@ router.post('/roll', async (req, res, next) => {
         ? 0
         : clamp(Math.round(Number(req.body?.modifier) || 0), -MAX_MODIFIER, MAX_MODIFIER);
 
-    // Advantage is a d20 thing: roll two and keep the better one, rather than
-    // summing them. It replaces the dice count instead of multiplying it.
-    const advantage = Boolean(req.body?.advantage) && sides === 20;
+    /**
+     * Advantage and disadvantage: a d20 thing, and the same mechanism twice
+     * over. Two dice are rolled and one is kept - the better or the worse -
+     * rather than summed, so this replaces the dice count instead of
+     * multiplying it.
+     *
+     * Asking for both is not refused, because the game already answers it: they
+     * cancel, and you roll one die like anybody else. Refusing would be this
+     * inventing a rule to replace one that exists.
+     */
+    const wants = (key) => Boolean(req.body?.[key]) && sides === 20;
+    const both = wants('advantage') && wants('disadvantage');
+    const advantage = wants('advantage') && !both;
+    const disadvantage = wants('disadvantage') && !both;
+    const swings = advantage || disadvantage;
     const label = String(req.body?.label ?? '').trim().slice(0, 100);
-    const rolled = advantage ? 2 : count;
+    const rolled = swings ? 2 : count;
 
     // A roll the rest of the table doesn't get to see. The DM always does -
     // this hides a result from the other players, it isn't a way to roll where
@@ -250,8 +274,13 @@ router.post('/roll', async (req, res, next) => {
 
     const rolls = Array.from({ length: rolled }, () => crypto.randomInt(1, sides + 1));
     // The modifier lands on the total once, not on each die: 2d20+5 rolling
-    // 5 and 15 is 25, not 30.
-    const base = advantage ? Math.max(...rolls) : rolls.reduce((sum, r) => sum + r, 0);
+    // 5 and 15 is 25, not 30. With a swing on, one of the two dice is kept -
+    // the higher for advantage, the lower for disadvantage - and the other is
+    // still reported, so the table can see what it beat or what it escaped.
+    let base;
+    if (advantage) base = Math.max(...rolls);
+    else if (disadvantage) base = Math.min(...rolls);
+    else base = rolls.reduce((sum, r) => sum + r, 0);
     const total = base + modifier + extraTotal;
 
     const roll = {
@@ -261,6 +290,9 @@ router.post('/roll', async (req, res, next) => {
       rolls,
       total,
       advantage,
+      // Absent on every roll made before this existed, which reads as false
+      // wherever it is asked about.
+      ...(disadvantage ? { disadvantage: true } : {}),
       label,
       // Carried only when there are any, so an ordinary roll keeps the shape it
       // has always had - including in a browser holding an older cached log.

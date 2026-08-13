@@ -177,14 +177,18 @@ function extraNote(extra) {
 }
 
 function RollResult({ roll }) {
-  const { count, sides, modifier, rolls, total, advantage, label } = roll;
+  const { count, sides, modifier, rolls, total, advantage, disadvantage, label } = roll;
+  // Which way this d20 was thrown, if either. Absent on every roll made before
+  // disadvantage existed, which reads as the advantage-or-nothing it was.
+  const swing = advantage ? 'advantage' : disadvantage ? 'disadvantage' : '';
   // Named things that rolled with this one and are already in its total. Absent
   // on every roll made before they existed, and on most made since.
   const extras = roll.extras || [];
   const sign = modifier > 0 ? `+${modifier}` : `${modifier}`;
-  // With advantage only the best die counts; the other is shown struck through
-  // so you can see what it beat.
-  const best = advantage ? Math.max(...rolls) : null;
+  // Only one of the two dice counts; the other is shown struck through, so you
+  // can see what it beat or what it escaped. The better one for advantage, the
+  // worse for disadvantage.
+  const winner = swing ? (advantage ? Math.max(...rolls) : Math.min(...rolls)) : null;
   let keptSeen = false;
 
   if (sides === 2) {
@@ -209,13 +213,13 @@ function RollResult({ roll }) {
         {count}d{sides}
         {modifier ? sign : ''}
         {extras.length ? ` · ${extras.map(extraNote).join(', ')}` : ''}
-        {advantage ? ' · advantage' : ''}
+        {swing ? ` · ${swing}` : ''}
       </span>
       <span className="roll-dice">
         {rolls.map((r, i) => {
           // Exactly one die is kept, even when both rolled the same number.
-          const dropped = advantage && !(r === best && !keptSeen);
-          if (advantage && r === best && !keptSeen) keptSeen = true;
+          const dropped = swing && !(r === winner && !keptSeen);
+          if (swing && r === winner && !keptSeen) keptSeen = true;
           return (
             <b
               key={i}

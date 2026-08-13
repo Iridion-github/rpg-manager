@@ -4,14 +4,31 @@ import { notation } from './dice.js';
 import { extrasNotation } from './sheet/rules.js';
 
 /**
+ * The three ways a d20 can be thrown.
+ *
+ * One choice rather than two tickboxes, because they are not two things you
+ * could have at once: 5e says advantage and disadvantage cancel, so a form that
+ * let you ask for both would be a form with an answer of its own.
+ *
+ * Named and not explained. Everyone at the table knows what advantage is, and a
+ * dialog that spelled out the rule every time you swung a sword would be one
+ * more thing to read past on the way to the button.
+ */
+const SWINGS = [
+  { key: 'normal', label: 'Normal' },
+  { key: 'advantage', label: 'Advantage' },
+  { key: 'disadvantage', label: 'Disadvantage' },
+];
+
+/**
  * "Roll this?" - the step between clicking something on a character sheet and
  * a result landing in the chat.
  *
  * Takes one or more prepared rolls (an attack has two: to hit and damage) and
  * confirms them together, under one set of options - a secret attack whose
  * damage everyone could see would give the game away. Cancelling does nothing
- * at all: no request, no message. Advantage is offered only where it means
- * something.
+ * at all: no request, no message. Advantage and disadvantage are offered only
+ * where they mean something.
  *
  * A roll can also carry `extras`: the sheet's global modifiers, already worked
  * out for that half of the attack. They are listed once each with a tick, so a
@@ -20,7 +37,9 @@ import { extrasNotation } from './sheet/rules.js';
  * again.
  */
 export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfirm, onClose }) {
-  const [advantage, setAdvantage] = useState(false);
+  // Which of the three is chosen. Normal is where every roll starts: the sheet
+  // says what you can do, and the circumstances of one attack are yours to say.
+  const [swing, setSwing] = useState('normal');
   const [secret, setSecret] = useState(false);
   const [skipped, setSkipped] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -65,7 +84,7 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
     setBusy(true);
     setError('');
     try {
-      await onConfirm({ advantage, secret, skipped });
+      await onConfirm({ swing, secret, skipped });
       onClose();
     } catch (e) {
       setError(e.message);
@@ -106,7 +125,9 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
                       reads like what you clicked. */}
                   {notation(r.spec, r.abilityBonus)}
                   {riding && <span className="roll-extra"> {riding}</span>}
-                  {advantage && r.advantage ? ' with advantage' : ''}
+                  {/* Only on the rolls it reaches: a d20 to hit swings, the
+                      damage die that follows it does not. */}
+                  {swing !== 'normal' && r.advantage ? ` with ${swing}` : ''}
                 </b>
               </li>
             );
@@ -130,15 +151,24 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
           </div>
         )}
 
+        {/* Offered only where it means something - a damage die has no highest
+            of two to keep - which is what `allowAdvantage` decides. It gates
+            the whole choice, disadvantage included; the name is the one the
+            game gives the pair. */}
         {allowAdvantage && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={advantage}
-              onChange={(e) => setAdvantage(e.target.checked)}
-            />
-            Advantage (roll 2d20, keep the highest)
-          </label>
+          <div className="roll-swing">
+            {SWINGS.map((s) => (
+              <label className="check" key={s.key}>
+                <input
+                  type="radio"
+                  name="roll-swing"
+                  checked={swing === s.key}
+                  onChange={() => setSwing(s.key)}
+                />
+                {s.label}
+              </label>
+            ))}
+          </div>
         )}
 
         <label className="check">

@@ -2464,6 +2464,17 @@ button.token-tile:hover {
   color: #9aa0b2;
 }
 
+/* The three ways to throw a d20, kept together and set apart from the tickboxes
+   below them: those are independent answers, these are one answer with three
+   possible values, and grouping is what says so before the radios do. */
+.roll-swing {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  background: #10131a;
+  border-radius: 8px;
+}
+
 .prof-row {
   display: flex;
   align-items: center;

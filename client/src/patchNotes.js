@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Disadvantage, wherever advantage was already offered. The roll box now asks how you are throwing it: Normal, Advantage or Disadvantage. The chat shows both dice with the discarded one struck through, the same way it always has for advantage.',
+      },
+      {
+        kind: 'new',
         text: 'Attacks can key off an attribute. Setting the To hit or Damage dice now offers an Attribute row between the die and the modifier: pick Dexterity and that attack carries your Dexterity modifier, so it reads 1d20+4+3 rather than a number you worked out yourself and typed in. It follows the score, so levelling up or a belt of giant strength changes every attack that asked for it with nothing to go and edit. None is the default and is what every attack you already have says.',
       },
       {
