@@ -56,6 +56,10 @@ export default function TokenModal({
 }) {
   const editing = Boolean(token);
   const [label, setLabel] = useState(token?.label ?? 'NPC');
+  // Whether the name is written on the board under the token, or only shown
+  // when somebody hovers it. Off unless the token says otherwise, which covers
+  // both a new token and every token made before this existed.
+  const [showNameplate, setShowNameplate] = useState(token?.showNameplate === true);
   const [color, setColor] = useState(token?.color ?? '#e5534b');
   // Null is a real value here, not a missing one: it means "leave the ring as
   // the stylesheet draws it" rather than any particular colour.
@@ -144,6 +148,7 @@ export default function TokenModal({
       // tooltip says, and what the chat calls it.
       await onSubmit({
         label: label.trim() || 'Token',
+        showNameplate,
         color,
         borderColor,
         size,
@@ -195,6 +200,22 @@ export default function TokenModal({
             onChange={(e) => setLabel(e.target.value)}
             placeholder="NPC"
           />
+        </label>
+
+        {/* Directly under the name, and aligned under the box it is about
+            rather than out in the label column: it decides whether that word is
+            on the board all the time or only when somebody points at it. Off by
+            default - a map where every token is captioned is a map you cannot
+            see, and the tooltip has always been there for the rest. */}
+        <label className="token-field token-check">
+          <span>
+            <input
+              type="checkbox"
+              checked={showNameplate}
+              onChange={(e) => setShowNameplate(e.target.checked)}
+            />
+            Show nameplate
+          </span>
         </label>
 
         {/* The one field that hands something over. Everything else here is

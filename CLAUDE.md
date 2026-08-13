@@ -56,3 +56,8 @@ Whenever an image upload system is included somewhere, unless specified otherwis
 it should always be coupled with the existing system that lets you paste
 the content of your clipboard, expecting an image, and showing a tiny red
 error in case of data incompatibility.
+
+## 4. Always restart the app when done implementing changes
+
+Don't force the dev to restart themselves the server and app, restart it yourself 
+once you're finished with the changes of the prompt.

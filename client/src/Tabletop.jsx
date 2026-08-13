@@ -89,6 +89,58 @@ const MEASURE_KEY = 'rpg:measure-setup';
 const MEASURE_THICK_MIN = 1;
 const MEASURE_THICK_MAX = 12;
 
+/**
+ * How much board a nameplate needs, in cells.
+ *
+ * Not the plate's real height: that is fixed in pixels and so covers more of
+ * the board the further you zoom out. This is the strip of *board* the plate is
+ * treated as sitting over when deciding whether it lands on top of something,
+ * and half a cell is the honest answer at the zooms anybody plays at.
+ */
+const PLATE_STRIP = 0.5;
+
+/**
+ * Which side of its token a nameplate sits on.
+ *
+ * Above and centred is the default, and it stays there unless there is a reason
+ * to move: a caption that wandered from token to token as the board filled up
+ * would be a caption nobody could find twice.
+ *
+ * The two reasons are the edge of the board and another token. A plate above
+ * the top row hangs over nothing and can be scrolled out of reach; a plate on
+ * top of the figure standing behind hides that figure, which is the thing the
+ * map is for. Either sends it under the token instead - and if under is no
+ * better, it goes back above, because it has to go somewhere and above is where
+ * people will look for it.
+ *
+ * Positions are the live ones, drags included. A plate that dodged the square a
+ * token has already left would be dodging nothing.
+ */
+function plateSide(token, pos, others, minRow, maxRow) {
+  const size = token.size || 1;
+  // Does anything stand on the strip whose top edge is here? Measured against
+  // the token's own column, which is what "above it" means - a figure standing
+  // diagonally back and to the left is not something the plate covers.
+  const taken = (top) =>
+    others.some((other) => {
+      if (other.id === token.id) return false;
+      const s = other.size || 1;
+      return (
+        other.x < pos.x + size &&
+        other.x + s > pos.x &&
+        other.y < top + PLATE_STRIP &&
+        other.y + s > top
+      );
+    });
+
+  // The board's own top and bottom, not zero and a count: on a nudged grid the
+  // first row is a negative number - see minRow where it is worked out.
+  if (pos.y - PLATE_STRIP < minRow) return 'below';
+  if (!taken(pos.y - PLATE_STRIP)) return 'above';
+  if (pos.y + size + PLATE_STRIP > maxRow + 1) return 'above';
+  return taken(pos.y + size) ? 'above' : 'below';
+}
+
 // How near a right-click has to land, in cells, to be about a measurement
 // rather than about the bare map - and, inside that, to be about one of its
 // points rather than the line between two. The point radius is the smaller
@@ -895,8 +947,53 @@ export default function Tabletop({ actor, players, offline }) {
   // The same corner in screen pixels, which is what the layout wants.
   const offXPx = gridOffX * zoom;
   const offYPx = gridOffY * zoom;
-  const cols = Math.max(1, Math.floor(mapW / gridSize));
-  const rows = Math.max(1, Math.floor(mapH / gridSize));
+  /**
+   * The board's first and last square in each direction.
+   *
+   * Not `0` to `count - 1`, which is what these used to be, and the difference
+   * is the whole of a bug that made the top row of some maps unusable.
+   *
+   * The grid is drawn by a repeating gradient positioned at the grid offset,
+   * and a repeating pattern tiles *backwards* from its origin as readily as
+   * forwards. So a map nudged down by a whole cell - which the offset allows,
+   * and which looks identical to no nudge at all - still shows a line at the
+   * very top of the map, and the row under it looks like every other row. In
+   * cells that row is number -1, because cell 0 begins one cell lower down. It
+   * could be seen and never used: every clamp stopped at zero.
+   *
+   * So the board is defined as what can actually be seen instead: a square
+   * belongs to it when its *centre* is on the map. The centre rather than any
+   * part of it, because a sliver one pixel wide along an edge is not somewhere
+   * a token can stand, and counting it would put a column in the grid window
+   * that nobody could use. This also settles the far edge, which had the
+   * opposite fault: a nudged map offered a bottom row that had slid off it.
+   *
+   * On a map with no nudge that divides evenly into cells, these come to
+   * exactly the numbers this used to work out.
+   */
+  const firstCell = (offset) => Math.round(-offset / gridSize);
+  const lastCell = (span, offset) => Math.round((span - offset) / gridSize) - 1;
+  const minCol = firstCell(gridOffX);
+  const minRow = firstCell(gridOffY);
+  const maxCol = Math.max(minCol, lastCell(mapW, gridOffX));
+  const maxRow = Math.max(minRow, lastCell(mapH, gridOffY));
+  // How many squares that comes to, which is what the grid window reports.
+  const cols = maxCol - minCol + 1;
+  const rows = maxRow - minRow + 1;
+
+  /**
+   * Every token as it stands *this frame*: the stored board, with our own drag
+   * and everybody else's laid over it.
+   *
+   * Built once rather than per token, since the nameplates ask about it once
+   * each and would otherwise walk the same list a second time apiece. Only the
+   * three fields the placement rule reads, so a drag - which carries a position
+   * and nothing else - can be spread over a token without pretending to be one.
+   */
+  const tokensNow = (scene?.tokens || []).map((t) => {
+    const at = (drag?.tokenId === t.id ? drag : ghosts[t.id]) || t;
+    return { id: t.id, x: at.x, y: at.y, size: t.size };
+  });
 
   // One token per cell. Footprints are rectangles because a token can be bigger
   // than one cell, so this mirrors the server's check - the server is still the
@@ -2016,13 +2113,31 @@ export default function Tabletop({ actor, players, offline }) {
    * Where a right-click landed, in cells.
    *
    * Measured from the grid's own corner, so it follows the grid when that has
-   * been slid across the map. Rounded to a square where there is a grid to
-   * round to, and clamped to the board - you can right-click beside a map that
-   * is narrower than its scroller.
+   * been slid across the map, and clamped to the board - you can right-click
+   * beside a map that is narrower than its scroller.
+   *
+   * Floored, not rounded. The question here is "which square is this point
+   * inside", and that is the whole of the difference: rounding answers "which
+   * grid *line* is this point nearest", which is a different question with an
+   * answer half a cell out. It shifted every placement up and to the left by
+   * half a square, and it made the first row and the first column half the
+   * target every other one is - a click anywhere in the lower half of row 0
+   * landed in row 1, so the top row could only be hit by catching its top few
+   * pixels. Dragging is unaffected and stays rounded: there the number is a
+   * token's own corner being snapped to the nearest grid line, which is exactly
+   * the other question.
    */
   const cellAt = (mx, my) => ({
-    x: clamp(gridOn ? Math.round((mx - gridOffX) / gridSize) : round2((mx - gridOffX) / gridSize), 0, cols - 1),
-    y: clamp(gridOn ? Math.round((my - gridOffY) / gridSize) : round2((my - gridOffY) / gridSize), 0, rows - 1),
+    x: clamp(
+      gridOn ? Math.floor((mx - gridOffX) / gridSize) : round2((mx - gridOffX) / gridSize),
+      minCol,
+      maxCol
+    ),
+    y: clamp(
+      gridOn ? Math.floor((my - gridOffY) / gridSize) : round2((my - gridOffY) / gridSize),
+      minRow,
+      maxRow
+    ),
   });
 
   function openTokenModal() {
@@ -2265,8 +2380,11 @@ export default function Tabletop({ actor, players, offline }) {
     const d = dragRef.current;
     if (!d) return;
     const { px, py } = pointerCell(e);
-    const x = clamp(px - d.grabX, 0, cols - 1);
-    const y = clamp(py - d.grabY, 0, rows - 1);
+    // Held to the squares that exist, which on a nudged grid starts before
+    // zero - see minCol/minRow. A token dragged onto the top row was otherwise
+    // pinned to the row below it and snapped back on release.
+    const x = clamp(px - d.grabX, minCol, maxCol);
+    const y = clamp(py - d.grabY, minRow, maxRow);
     d.x = x;
     d.y = y;
     setDrag({ tokenId: d.tokenId, x, y });
@@ -2795,6 +2913,12 @@ export default function Tabletop({ actor, players, offline }) {
               const mine = drag?.tokenId === token.id ? drag : null;
               const ghost = ghosts[token.id];
               const pos = mine || ghost || token;
+              // Which side its nameplate goes on, worked out against where the
+              // other tokens are *now* rather than where they are stored. Only
+              // asked when there is a plate to place.
+              const plate = token.showNameplate
+                ? plateSide(token, pos, tokensNow, minRow, maxRow)
+                : null;
               const movable = canMove(token);
               // Whose token this is. A token can name somebody who has since left
               // the table, and an owner nobody can find is drawn as no owner at
@@ -2850,6 +2974,14 @@ export default function Tabletop({ actor, players, offline }) {
                   {/* The picture stands in for the name. Printing both would put
                     text over a face at the size a token actually is. */}
                   {!token.imageUrl && <span className="token-label">{token.label}</span>}
+
+                  {/* The nameplate: the same name, outside the token and always
+                      on, for the figures a table needs to keep track of by name
+                      rather than by face. Sized in pixels rather than as a
+                      fraction of the token, so it stays readable when the map
+                      is zoomed out - which is exactly when a board full of
+                      similar-looking figures needs its labels most. */}
+                  {plate && <span className={`token-plate ${plate}`}>{token.label}</span>}
 
                   {/* Whose it is, in their own colour - the same colour that
                     names them in the chat and marks them in the roster, so the

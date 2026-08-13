@@ -27,6 +27,18 @@ export const PATCH_NOTES = [
     date: '2026-08-13',
     entries: [
       {
+        kind: 'fix',
+        text: 'The top row and the left column of the grid can be used. On a map whose grid had been nudged, the row along the top edge was drawn like any other but no token could be put in it, by dragging or otherwise: the squares of the board started one row further down than the squares you could see. Every square that is drawn is now one you can use, and the far edges no longer offer a row that has slid off the map.',
+      },
+      {
+        kind: 'fix',
+        text: 'Placing a token now puts it in the square you right-clicked. Every placement was landing half a square up and to the left of where you asked for it, which made the top row and the left column nearly impossible to use: a click anywhere in the lower half of the first row put the token in the second one. Dragging a token was never affected.',
+      },
+      {
+        kind: 'new',
+        text: 'Show nameplate, a tickbox under the Name in the token form. Tick it and that token wears its name on the map all the time instead of only when somebody hovers it, which is what you want for the four guards who all look alike. The plate sits above the token, and moves below it when there is another token in the way or when the token is against the top edge. Off unless you ask for it, so nothing on your maps has changed.',
+      },
+      {
         kind: 'new',
         text: 'Use clipboard, beside every Upload button: one for the scene image and one for a token picture. Copy a picture anywhere - a crop out of a PDF, a screenshot, an image on a web page - and put it straight in without saving it to disk first. If what you copied is not a picture it says so and nothing else happens.',
       },

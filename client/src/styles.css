@@ -1398,6 +1398,52 @@ button.linky:hover {
   white-space: nowrap;
 }
 
+/* --- the nameplate ---
+   The token's name written on the board rather than waiting for a hover, for
+   the figures a table keeps track of by name. Above and centred by default; the
+   `below` class is put on by the map when there is something up there already,
+   which is the whole of what the two rules here have to do.
+
+   Sized and offset in pixels, not in cells: it is lettering, and lettering that
+   shrank with the map would be unreadable at exactly the zoom where a board
+   full of similar figures most needs its labels. Never takes the pointer - the
+   thing under it is a token somebody is trying to pick up. */
+.token-plate {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Over the ordinary tokens, since a long name reaches past its own figure and
+     would otherwise be half-hidden by whichever neighbour happens to be drawn
+     after it. Still under the one being dragged (5) and the one the turn
+     tracker is pointing at (4), which are the two that should come through. */
+  z-index: 3;
+  /* Wider than its token whenever the name is longer, which is most of the
+     time, so it centres on the figure rather than being boxed inside it. */
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: rgba(16, 19, 26, 0.82);
+  color: #e7e9ee;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.4;
+  pointer-events: none;
+  user-select: none;
+}
+
+.token-plate.above {
+  bottom: 100%;
+  margin-bottom: 4px;
+}
+
+.token-plate.below {
+  top: 100%;
+  margin-top: 4px;
+}
+
 /* --- the token library --- */
 .tokens-view {
   max-width: 1200px;
@@ -4151,6 +4197,15 @@ button.token-tile:hover {
   /* Or the padding and border are added to the 100% and the field hangs a
      dozen pixels past its column. */
   box-sizing: border-box;
+}
+
+/* A checkbox row with nothing in the label column: the box lines up under the
+   field it qualifies, and says what it does itself. */
+.token-check > span {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .token-colour,

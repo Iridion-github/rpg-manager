@@ -154,6 +154,10 @@ function hitPoints(maxHp, hp) {
 function sanitizeToken(body = {}, existing = {}) {
   const {
     label = existing.label ?? 'Token',
+    // Whether that label is written on the board all the time. False for every
+    // token that has never been asked - which is every token made before this
+    // field existed, and is the answer they were already getting.
+    showNameplate = existing.showNameplate ?? false,
     color = existing.color ?? '#58a6ff',
     // Null means "whatever the stylesheet draws" - the dark ring every token
     // had before this was a choice. Kept nullable so old tokens don't have to
@@ -198,6 +202,7 @@ function sanitizeToken(body = {}, existing = {}) {
   const sheetId = existing.sheetId ?? null;
   return {
     label: String(label).slice(0, 60),
+    showNameplate: showNameplate === true,
     color: hexOr(color, '#58a6ff'),
     borderColor: borderColor === null ? null : hexOr(borderColor, null),
     imageUrl: String(imageUrl).slice(0, 500),
