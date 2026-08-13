@@ -8,6 +8,7 @@ import {
   signedMod as signed,
   notation,
 } from './dice.js';
+import { ABILITIES, abilityMod } from './sheet/rules.js';
 
 /**
  * Pick a number of dice, a die, and a modifier.
@@ -15,12 +16,18 @@ import {
  * Used two ways: the chat roller confirms by *rolling*, and an attack row
  * confirms by *storing* the spec for later. Same controls either way - the
  * caller supplies the wording and what confirming means.
+ *
+ * `abilities` are a character's six scores, and passing them is what adds the
+ * Attribute row. Only an attack on a sheet has an ability to key off; a roll
+ * typed into the chat belongs to nobody in particular, so it is not offered
+ * one and the dialog is exactly what it was.
  */
 export default function DiceModal({
   title = 'Roll dice',
   confirmLabel = 'Roll',
   allowed, // sides to offer; defaults to all of them
   initial,
+  abilities,
   onClose,
   onConfirm,
 }) {
@@ -34,11 +41,17 @@ export default function DiceModal({
   // What the modifier field shows while typing. Kept separate from the number
   // so half-finished input like "-" isn't parsed and rewritten under the cursor.
   const [modText, setModText] = useState(signed(initial?.modifier ?? 0));
+  // Which ability's modifier rides on this roll, by key. Empty is None, which
+  // is what every spec made before this existed says.
+  const [ability, setAbility] = useState(initial?.ability ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const firstRef = useRef(null);
   const isCoin = sides === 2;
+  // A coin has no total to add to, so it has no ability either - the same rule
+  // the modifier follows two fields down.
+  const bonus = ability && !isCoin ? abilityMod(abilities?.[ability]) : 0;
 
   useEffect(() => {
     firstRef.current?.focus();
@@ -49,7 +62,7 @@ export default function DiceModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const spec = { count, sides, modifier: isCoin ? 0 : modifier };
+  const spec = { count, sides, modifier: isCoin ? 0 : modifier, ability: isCoin ? '' : ability };
 
   async function confirm() {
     if (busy) return;
@@ -117,6 +130,31 @@ export default function DiceModal({
           </div>
         </div>
 
+        {/* Between the die and the modifier, which is the order the preview
+            reads in. Only when the caller has a character to take the scores
+            from - see the note on `abilities` above. */}
+        {abilities && (
+          <label className="dice-field">
+            <span>Attribute</span>
+            <select
+              className="dice-ability"
+              value={ability}
+              disabled={isCoin}
+              title={isCoin ? 'A coin has no value to modify' : "Adds that ability's modifier"}
+              onChange={(e) => setAbility(e.target.value)}
+            >
+              <option value="">None</option>
+              {ABILITIES.map((a) => (
+                <option key={a.key} value={a.key}>
+                  {/* The bonus in the label, so the choice can be made without
+                      going back to the sheet to work out what it is worth. */}
+                  {a.label} ({signed(abilityMod(abilities[a.key]))})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label className="dice-field">
           <span>Modifier</span>
           <input
@@ -139,7 +177,7 @@ export default function DiceModal({
           />
         </label>
 
-        <p className="dice-preview">{notation(spec)}</p>
+        <p className="dice-preview">{notation(spec, bonus)}</p>
 
         {error && <p className="error">{error}</p>}
 

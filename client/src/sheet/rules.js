@@ -80,6 +80,55 @@ export const spellAttackBonus = (sheet) =>
     ? proficiencyBonus(sheet.level) + abilityMod(sheet.abilities?.[sheet.spellcasting.ability])
     : null;
 
+/**
+ * What the ability a dice spec names is worth, or zero when it names none.
+ *
+ * The spec stores the ability's *key* and this works the number out, for the
+ * reason at the top of this file: a stored +4 outlives the 18 Dexterity it came
+ * from, and then the sheet says two things at once. Levelling up or drinking a
+ * belt of giant strength changes every attack that asked for it, with nothing
+ * to go and edit.
+ */
+export const specAbilityBonus = (sheet, spec) =>
+  spec?.ability ? abilityMod(sheet?.abilities?.[spec.ability]) : 0;
+
+/**
+ * The global modifiers in force right now.
+ *
+ * Two switches have to agree: the section's own, which turns the whole idea on,
+ * and the effect's, which says whether this one is running. Both because a
+ * fight is a sequence of things starting and stopping - Bless lands, Rage ends
+ * - and turning the set off wholesale between fights should not cost you the
+ * list you built.
+ */
+export const activeModifiers = (sheet) =>
+  sheet.globalModifiers?.on ? (sheet.globalModifiers.effects || []).filter((e) => e.active) : [];
+
+/** Those of them that land on one half of an attack, shaped as roll extras. */
+export const modifierExtras = (effects, which) =>
+  effects
+    .filter((e) => e.applies === which || e.applies === 'both')
+    .map((e) => ({
+      id: e.id,
+      label: e.name || 'Modifier',
+      count: e.count || 0,
+      sides: e.sides || 0,
+      modifier: e.modifier || 0,
+    }));
+
+/**
+ * What a set of extras comes to, said the way a dice field says it: "+1d4 +2".
+ *
+ * The dice stay separate rather than being counted up, because 1d4 and 1d6 are
+ * not 2 of anything; the flat bonuses do add up, because they are all just
+ * numbers. Empty when nothing applies, which is what hides the line.
+ */
+export function extrasNotation(extras = []) {
+  const dice = extras.filter((e) => e.sides).map((e) => `+${e.count}d${e.sides}`);
+  const flat = extras.reduce((sum, e) => sum + (e.modifier || 0), 0);
+  return [...dice, ...(flat ? [signed(flat)] : [])].join(' ');
+}
+
 /** A blank sheet, matching the server's defaults. */
 export function blankSheet() {
   return {
@@ -104,6 +153,9 @@ export function blankSheet() {
     hitDice: { die: 'd8', total: 1, used: 0 },
     deathSaves: { successes: 0, failures: 0 },
     attacks: [],
+    // Situational things that ride along on every attack roll: Bless, Rage, a
+    // magic weapon. Off and empty until somebody says otherwise.
+    globalModifiers: { on: false, effects: [] },
     equipment: '',
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     personalityTraits: '',

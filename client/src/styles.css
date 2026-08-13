@@ -2568,6 +2568,220 @@ button.token-tile:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* What the global modifiers are adding to this roll, tinted off the dice it is
+   riding on so the two read as the attack and the things helping it. */
+.roll-extra {
+  color: #c3b2f0;
+}
+
+/* The modifiers themselves, one tick each. A heading because by this point the
+   dialog has three groups of controls and they are about different things. */
+.roll-mods {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem;
+  background: #10131a;
+  border-radius: 8px;
+}
+
+.roll-mods h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
+  font-weight: 600;
+}
+
+.roll-mods b {
+  color: #c3b2f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-mods small {
+  color: #8b90a0;
+}
+
+/* --- global modifiers ---
+   The switch under the attacks table, and the list it opens. */
+.gm-row-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.gm-names {
+  color: #c3b2f0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gm-live {
+  display: block;
+  margin-top: 0.2rem;
+  color: #8b90a0;
+}
+
+/* Sized by what is in it rather than to a fixed width: an empty list needs a
+   fraction of the room six fields in a row do.
+
+   Written as `.modal.gm-modal` rather than `.gm-modal`, which is how the other
+   dialogs that resize themselves are written here, and for a reason worth
+   knowing: the base `.modal` rule sets a width of its own and sits further down
+   this file, so at equal specificity it wins and a lone `.gm-modal` would be
+   silently ignored. The 100% keeps it inside the backdrop's own padding, so it
+   can never be wider than the window it is centred in; the base rule supplies
+   max-height and the scrolling that goes with it. */
+.modal.gm-modal {
+  /* fit-content is already "as wide as the content wants, but never wider than
+     the room there is", so no floor is set: one would be a width the dialog
+     could not shrink below, which on a narrow window is the whole of how a
+     dialog ends up hanging off the side of it. With an empty list the hint
+     below sets the width, which is a sensible size for a dialog holding a
+     sentence and two buttons. */
+  width: fit-content;
+  max-width: min(48rem, 100%);
+}
+
+/* Left to itself this sentence is the widest thing in the dialog, and a
+   paragraph's natural width is the whole of it on one line - so it, rather than
+   the fields, would decide how wide the dialog is. Held to a readable measure
+   instead, which hands that decision back to the rows. */
+.gm-modal .hint {
+  max-width: 42ch;
+}
+
+/* The list scrolls on its own rather than letting the dialog grow: with a dozen
+   effects, Save and Cancel must not be pushed somewhere you have to go looking
+   for them. */
+.gm-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 50vh;
+  overflow-y: auto;
+  min-height: 0;
+  /* Room for the scrollbar to sit beside the rows instead of over their edge. */
+  padding-right: 0.2rem;
+}
+
+/* One effect. Wraps onto as many lines as it needs: at a comfortable width all
+   six sit in a row, and as the dialog narrows they fall onto the next line one
+   at a time rather than squeezing each other into uselessness. The border is
+   what keeps a wrapped effect readable as one thing. */
+.gm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.4rem 0.5rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  background: #171b24;
+}
+
+/* A caption over its own control, so a field means the same thing wherever it
+   has wrapped to. */
+.gm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.gm-field > span {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b90a0;
+  white-space: nowrap;
+}
+
+/* Every control fills the field it is in, and none of them may refuse to shrink
+   - a control with an intrinsic minimum wider than its share is exactly how a
+   row overflows instead of wrapping. */
+.gm-field input,
+.gm-field select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* The flex bases below are the widths these want; the min-widths are the point
+   past which wrapping is better than shrinking. */
+.gm-on {
+  flex: 0 0 auto;
+}
+
+.gm-on input {
+  width: auto;
+  margin: 0.25rem 0;
+}
+
+.gm-name {
+  flex: 1 1 9rem;
+}
+
+.gm-where {
+  flex: 0 1 8rem;
+  min-width: 7rem;
+}
+
+.gm-bonus {
+  flex: 0 1 5rem;
+  min-width: 4.5rem;
+}
+
+.gm-dice {
+  flex: 0 1 10rem;
+  min-width: 8.5rem;
+}
+
+.gm-dice-pair {
+  display: flex;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* A count is two digits at the most; the die names it applies to are longer. */
+.gm-dice-pair input {
+  flex: 0 0 3.4rem;
+}
+
+.gm-dice-pair select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Pushed to the end of whatever line it lands on, and sitting level with the
+   controls rather than with the captions above them. */
+.gm-del {
+  margin-left: auto;
+  align-self: flex-end;
+}
+
+/* The two numbers the whole list exists to produce, set apart from the rows
+   that produce them. */
+.gm-summary {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  background: #171b24;
+  font-size: 0.8rem;
+  color: #8b90a0;
+}
+
+.gm-summary b {
+  color: #c3b2f0;
+  font-variant-numeric: tabular-nums;
+}
+
 .rank {
   background: none;
   border: none;
@@ -3853,6 +4067,21 @@ button.token-tile:hover {
   font-style: normal;
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* What a global modifier put into the roll: kept beside the attack's own dice
+   so the sum can be followed, tinted apart so it is plainly a passenger rather
+   than part of the weapon. Grouped per modifier, so two of them running at once
+   do not read as one heap of dice. */
+.roll-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.roll-dice b.extra {
+  background: #2b2440;
+  color: #c3b2f0;
 }
 
 .roll-dice b.max {

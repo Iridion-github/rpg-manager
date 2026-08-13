@@ -6,12 +6,17 @@ import RollConfirmModal from '../RollConfirmModal.jsx';
 import { api } from '../api.js';
 import { TO_HIT_DICE, DAMAGE_DICE, notation } from '../dice.js';
 import { attackRollLabels, characterRollLabel } from './rollLabels.js';
+import GlobalModifiers from './GlobalModifiers.jsx';
 import {
   ABILITIES,
   SKILLS,
   ALIGNMENTS,
   SPELL_LEVELS,
   abilityMod,
+  activeModifiers,
+  extrasNotation,
+  modifierExtras,
+  specAbilityBonus,
   proficiencyBonus,
   signed,
   saveBonus,
@@ -63,6 +68,10 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   const askAttack = (attack) => {
     const names = attackRollLabels(attack);
     const type = (attack.damageType || '').trim();
+    // The global modifiers in force, split by which half of the attack each
+    // one lands on. Worked out here rather than in the dialog so that what is
+    // confirmed and what is sent are built from one list.
+    const effects = activeModifiers(sheet);
     const rolls = [];
     if (attack.toHit) {
       rolls.push({
@@ -71,6 +80,11 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
         logLabel: names.toHit,
         advantage: true,
         spec: attack.toHit,
+        // Kept beside the spec rather than added into it, so the dialog can
+        // print the two terms the sheet prints. They are added together at the
+        // moment of rolling, which is the only place one number is wanted.
+        abilityBonus: specAbilityBonus(sheet, attack.toHit),
+        extras: modifierExtras(effects, 'toHit'),
       });
     }
     if (attack.damage) {
@@ -80,6 +94,8 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
         logLabel: names.damage,
         advantage: false,
         spec: attack.damage,
+        abilityBonus: specAbilityBonus(sheet, attack.damage),
+        extras: modifierExtras(effects, 'damage'),
       });
     }
     if (!rolls.length) return; // nothing set on this attack yet
@@ -94,13 +110,23 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   // alone. Each roll carries its own log label, so what appears never depends
   // on how many rolls happened to be in the batch; `secret` applies to all of
   // them, since half a hidden attack is not hidden.
-  async function runRolls({ advantage, secret }) {
+  async function runRolls({ advantage, secret, skipped }) {
     for (const r of confirming.rolls) {
+      // The ability's modifier is added into the roll's own here, where one
+      // number is what is wanted. `ability` itself is dropped rather than sent:
+      // it is a question about a character, and the roller knows nothing about
+      // characters.
+      const { ability, modifier = 0, ...spec } = r.spec;
       await api.rollDice({
-        ...r.spec,
+        ...spec,
+        modifier: modifier + (r.abilityBonus || 0),
         advantage: advantage && r.advantage,
         secret,
         label: characterRollLabel(sheet.name, r.logLabel),
+        // Whatever the dialog left ticked. Skipping is per effect rather than
+        // per roll, so turning Bless off for this attack turns it off on both
+        // halves of it - it is one spell, not two.
+        extras: (r.extras || []).filter((x) => !skipped?.has(x.id)),
       });
     }
   }
@@ -181,6 +207,18 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
   const attacks = sheet.attacks || [];
   // Which attack field is currently being picked: { id, field }.
   const [picking, setPicking] = useState(null);
+  // Whether the global modifiers list is open over the sheet.
+  const [editingModifiers, setEditingModifiers] = useState(false);
+
+  // What the attacks are carrying, said two ways: the names, for the row beside
+  // the switch, and the arithmetic, for the line under it.
+  const running = activeModifiers(sheet);
+  const modifierNames = running
+    .map((e) => e.name)
+    .filter(Boolean)
+    .join(', ');
+  const liveToHit = extrasNotation(modifierExtras(running, 'toHit'));
+  const liveDamage = extrasNotation(modifierExtras(running, 'damage'));
 
   const setAttack = (id, field, value) =>
     onChange({
@@ -422,7 +460,10 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                       disabled={readOnly}
                       onClick={() => setPicking({ id: a.id, field: 'toHit' })}
                     >
-                      {notation(a.toHit) || 'Set…'}
+                      {/* The ability's own contribution shown as its own term,
+                          so the cell reads the way the dialog that set it did
+                          and the way the roll will. */}
+                      {notation(a.toHit, specAbilityBonus(sheet, a.toHit)) || 'Set…'}
                     </button>
                   </td>
                   <td>
@@ -432,7 +473,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                       disabled={readOnly}
                       onClick={() => setPicking({ id: a.id, field: 'damage' })}
                     >
-                      {notation(a.damage) || 'Set…'}
+                      {notation(a.damage, specAbilityBonus(sheet, a.damage)) || 'Set…'}
                     </button>
                   </td>
                   <td>
@@ -467,12 +508,69 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           </table>
           {!readOnly && <button onClick={addAttack}>+ Attack</button>}
 
+          {/* Under the attacks rather than beside them, because it is about all
+              of them at once: whatever is set here is added to every one of
+              those dice buttons.
+
+              Ticking the box is what opens the list the first time - it is the
+              only sensible thing an empty switch can do - but Edit is what
+              reopens it afterwards. Without that, the way back in would be to
+              untick and retick, which turns every visit into a round trip
+              through having the thing switched off. */}
+          <div className="gm-row-inline">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={Boolean(sheet.globalModifiers?.on)}
+                disabled={readOnly}
+                onChange={(e) => {
+                  set('globalModifiers.on')(e.target.checked);
+                  if (e.target.checked) setEditingModifiers(true);
+                }}
+              />
+              Global modifiers
+            </label>
+            {modifierNames && <small className="gm-names">{modifierNames}</small>}
+            {!readOnly && sheet.globalModifiers?.on && (
+              <button type="button" className="linky" onClick={() => setEditingModifiers(true)}>
+                Edit
+              </button>
+            )}
+          </div>
+          {/* What every attack is currently carrying, in the same words the
+              roll dialog will use. Only when there is something to say. */}
+          {(liveToHit || liveDamage) && (
+            <small className="gm-live">
+              {liveToHit && <>To hit {liveToHit}</>}
+              {liveToHit && liveDamage && <>, </>}
+              {liveDamage && <>damage {liveDamage}</>}
+            </small>
+          )}
+
+          {editingModifiers && (
+            <GlobalModifiers
+              effects={sheet.globalModifiers?.effects || []}
+              onClose={() => setEditingModifiers(false)}
+              onSave={(effects) => {
+                set('globalModifiers.effects')(effects);
+                setEditingModifiers(false);
+              }}
+            />
+          )}
+
           {picking && (
             <DiceModal
               title={picking.field === 'toHit' ? 'Attack roll' : 'Damage roll'}
-              confirmLabel="Use"
+              // "Save", not "Roll": from here the dialog is writing the dice
+              // onto the attack for later rather than rolling them now, which
+              // is the one thing about it that differs from the chat's.
+              confirmLabel="Save"
               allowed={picking.field === 'toHit' ? TO_HIT_DICE : DAMAGE_DICE}
               initial={attacks.find((a) => a.id === picking.id)?.[picking.field]}
+              // What turns the Attribute row on, and what it reads the bonuses
+              // from. Passed rather than looked up, so the dialog stays usable
+              // from the chat, where there is no character.
+              abilities={sheet.abilities}
               onClose={() => setPicking(null)}
               onConfirm={(spec) => setAttack(picking.id, picking.field, spec)}
             />

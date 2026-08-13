@@ -28,6 +28,10 @@ const DICE = new Set([2, 4, 6, 8, 10, 12, 20, 100]);
 const COIN = 2;
 const MAX_DICE = 50;
 const MAX_MODIFIER = 99;
+// How many named extras one roll may carry. A character sheet's global
+// modifiers arrive this way - Bless, Rage, a magic weapon - and a table with
+// more than a handful running at once is not a table, it is a mistake.
+const MAX_EXTRAS = 8;
 
 const router = express.Router({ mergeParams: true });
 
@@ -73,9 +77,62 @@ function appendMessage(req, message) {
 
 const coinFace = (v) => (v === 1 ? 'Heads' : 'Tails');
 
+/**
+ * The named things riding along on a roll, cleaned up.
+ *
+ * Each is some dice, some flat bonus, or both, with a name saying where it came
+ * from. They are rolled here with the roll they belong to and folded into its
+ * total, which is the whole point: an extra d4 sent as a second roll would be a
+ * second line in the chat with a second total, and "add a d4 to the attack" is
+ * one number, not two.
+ *
+ * Anything that adds nothing is dropped rather than rolled: an entry with no
+ * dice and no bonus would print its name beside a contribution of zero, which
+ * is a line about nothing.
+ */
+function pickExtras(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw.slice(0, MAX_EXTRAS)) {
+    if (!item || typeof item !== 'object') continue;
+    const sides = Number(item.sides);
+    // A coin is not something you add to a total, so it is not offered here
+    // even though the main roll may be one.
+    const rolls = DICE.has(sides) && sides !== COIN;
+    const count = rolls ? clamp(Math.round(Number(item.count) || 1), 1, MAX_DICE) : 0;
+    const modifier = clamp(Math.round(Number(item.modifier) || 0), -MAX_MODIFIER, MAX_MODIFIER);
+    if (!count && !modifier) continue;
+    out.push({ label: String(item.label ?? '').trim().slice(0, 40), count, sides: count ? sides : 0, modifier });
+  }
+  return out;
+}
+
+/**
+ * One extra, said in words, connector and all: "plus 1d4 Bless: 3", "minus 2
+ * Curse".
+ *
+ * The connector belongs to the extra rather than to the sentence joining them,
+ * because it is what carries the sign of a flat one. Written the other way
+ * round, a penalty reads "plus -2" and a bonus reads "plus +2", and one of
+ * those is wrong twice over.
+ */
+function describeExtra(extra) {
+  const named = extra.label ? ` ${extra.label}` : '';
+  if (extra.count) {
+    // Dice always add; a modifier riding with them keeps its own sign, since
+    // there is no room for a second connector in the middle of a notation.
+    const sign = extra.modifier > 0 ? `+${extra.modifier}` : `${extra.modifier}`;
+    const dice = `${extra.count}d${extra.sides}${extra.modifier ? sign : ''}`;
+    return `plus ${dice}${named}: ${extra.rolls.join(', ')}`;
+  }
+  return extra.modifier < 0
+    ? `minus ${Math.abs(extra.modifier)}${named}`
+    : `plus ${extra.modifier}${named}`;
+}
+
 // Plain-text form of a roll, so a message still reads sensibly anywhere that
 // doesn't render the structured version - the offline cache included.
-function describeRoll({ count, sides, modifier, rolls, total, advantage, label }) {
+function describeRoll({ count, sides, modifier, rolls, total, advantage, label, extras = [] }) {
   if (sides === COIN) {
     return `flipped ${count} coin${count === 1 ? '' : 's'}: ${rolls.map(coinFace).join(', ')}`;
   }
@@ -83,7 +140,11 @@ function describeRoll({ count, sides, modifier, rolls, total, advantage, label }
   const notation = `${count}d${sides}${modifier ? sign : ''}`;
   const what = label ? `${label} (${notation})` : notation;
   const kept = advantage ? ` → kept ${Math.max(...rolls)}` : '';
-  return `rolled ${what}${advantage ? ' with advantage' : ''}: ${rolls.join(', ')}${kept} = ${total}`;
+  // Each extra named where it lands, between the dice and the total, so the
+  // sum can be followed: a number that grew by four should say what the four
+  // was for.
+  const plus = extras.map((e) => `, ${describeExtra(e)}`).join('');
+  return `rolled ${what}${advantage ? ' with advantage' : ''}: ${rolls.join(', ')}${kept}${plus} = ${total}`;
 }
 
 /**
@@ -176,13 +237,35 @@ router.post('/roll', async (req, res, next) => {
     // the DM can't check.
     const secret = Boolean(req.body?.secret);
 
+    // Rolled here with the roll they belong to, so they land in one total and
+    // one line. Never on a coin flip, which has no total to add to.
+    const extras = sides === COIN ? [] : pickExtras(req.body?.extras).map((extra) => ({
+      ...extra,
+      rolls: Array.from({ length: extra.count }, () => crypto.randomInt(1, extra.sides + 1)),
+    }));
+    const extraTotal = extras.reduce(
+      (sum, e) => sum + e.modifier + e.rolls.reduce((a, b) => a + b, 0),
+      0
+    );
+
     const rolls = Array.from({ length: rolled }, () => crypto.randomInt(1, sides + 1));
     // The modifier lands on the total once, not on each die: 2d20+5 rolling
     // 5 and 15 is 25, not 30.
     const base = advantage ? Math.max(...rolls) : rolls.reduce((sum, r) => sum + r, 0);
-    const total = base + modifier;
+    const total = base + modifier + extraTotal;
 
-    const roll = { count: rolled, sides, modifier, rolls, total, advantage, label };
+    const roll = {
+      count: rolled,
+      sides,
+      modifier,
+      rolls,
+      total,
+      advantage,
+      label,
+      // Carried only when there are any, so an ordinary roll keeps the shape it
+      // has always had - including in a browser holding an older cached log.
+      ...(extras.length ? { extras } : {}),
+    };
     const message = {
       id: crypto.randomUUID(),
       kind: 'roll',

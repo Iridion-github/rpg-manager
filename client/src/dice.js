@@ -25,11 +25,20 @@ export const clampDice = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // quantity. Negatives already have one.
 export const signedMod = (n) => (n < 0 ? String(n) : `+${n}`);
 
-/** "2d10+3", "1d20-1", "3 coins" - how a spec reads once it's chosen. */
-export function notation(spec) {
+/**
+ * "2d10+3", "1d20-1", "3 coins" - how a spec reads once it's chosen.
+ *
+ * `bonus` is an ability modifier the spec asked for, which is worked out from
+ * the character rather than stored on the spec. It is printed as its own term
+ * ahead of the modifier - "1d20+4+3", not "1d20+7" - because the two are
+ * different kinds of thing: one follows the character's Dexterity and the other
+ * was typed into this attack, and a reader checking their sheet wants to see
+ * both. Zero prints nothing, so every other caller reads exactly as before.
+ */
+export function notation(spec, bonus = 0) {
   if (!spec || !spec.sides) return '';
   const count = spec.count || 1;
   if (spec.sides === 2) return `${count} coin${count === 1 ? '' : 's'}`;
   const mod = spec.modifier || 0;
-  return `${count}d${spec.sides}${mod ? signedMod(mod) : ''}`;
+  return `${count}d${spec.sides}${bonus ? signedMod(bonus) : ''}${mod ? signedMod(mod) : ''}`;
 }

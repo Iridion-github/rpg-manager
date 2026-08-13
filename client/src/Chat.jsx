@@ -167,8 +167,20 @@ const coinFace = (v) => (v === 1 ? 'Heads' : 'Tails');
 
 // Shows the working, not just the answer - at a table people want to see the
 // individual dice, and the per-die modifier only makes sense spelled out.
+const signOf = (n) => (n > 0 ? `+${n}` : `${n}`);
+
+// "+1d4 Bless", "+2 Rage" - a global modifier said the way the sheet says it.
+function extraNote(extra) {
+  const dice = extra.count ? `+${extra.count}d${extra.sides}` : '';
+  const flat = extra.modifier ? signOf(extra.modifier) : '';
+  return [dice, flat, extra.label].filter(Boolean).join(' ');
+}
+
 function RollResult({ roll }) {
   const { count, sides, modifier, rolls, total, advantage, label } = roll;
+  // Named things that rolled with this one and are already in its total. Absent
+  // on every roll made before they existed, and on most made since.
+  const extras = roll.extras || [];
   const sign = modifier > 0 ? `+${modifier}` : `${modifier}`;
   // With advantage only the best die counts; the other is shown struck through
   // so you can see what it beat.
@@ -196,6 +208,7 @@ function RollResult({ roll }) {
         {label ? `${label} · ` : ''}
         {count}d{sides}
         {modifier ? sign : ''}
+        {extras.length ? ` · ${extras.map(extraNote).join(', ')}` : ''}
         {advantage ? ' · advantage' : ''}
       </span>
       <span className="roll-dice">
@@ -215,6 +228,21 @@ function RollResult({ roll }) {
         {/* The modifier is one addition to the total, so it sits apart from
             the dice rather than on each of them. */}
         {modifier ? <em className="roll-mod">{sign}</em> : null}
+
+        {/* Everything a global modifier contributed, tinted apart from the
+            attack's own dice. Without these the working would not add up: the
+            total already counts them, so a row that showed only the weapon's
+            die would be a sum with a piece missing. */}
+        {extras.map((e, i) => (
+          <span className="roll-add" key={i} title={e.label || 'Modifier'}>
+            {e.rolls.map((r, j) => (
+              <b key={j} className="extra">
+                {r}
+              </b>
+            ))}
+            {e.modifier ? <em className="roll-mod">{signOf(e.modifier)}</em> : null}
+          </span>
+        ))}
       </span>
       <span className="roll-total">= {total}</span>
     </div>

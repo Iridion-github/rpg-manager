@@ -61,7 +61,8 @@ function pickSkills(source = {}) {
 const TO_HIT_DICE = new Set([20]);
 const DAMAGE_DICE = new Set([4, 6, 8, 10, 12, 20, 100]);
 
-// A chosen roll: how many dice, which die, and a modifier added once.
+// A chosen roll: how many dice, which die, a modifier added once, and the
+// ability whose modifier is added with it.
 function pickDice(source, allowed) {
   if (!source || typeof source !== 'object') return null;
   const sides = Number(source.sides);
@@ -70,7 +71,54 @@ function pickDice(source, allowed) {
     count: int(source.count, 1, 1, 50),
     sides,
     modifier: int(source.modifier, 0, -99, 99),
+    // The ability's key, never its bonus. Same rule as everything else derived
+    // on this sheet: a stored +4 outlives the 18 Dexterity it was taken from,
+    // and then the sheet says two different things. Empty means none, which is
+    // what every attack written before this field existed says.
+    ability: ABILITIES.includes(source.ability) ? source.ability : '',
   };
+}
+
+/**
+ * Global modifiers: the situational things that ride along on every attack
+ * this character rolls.
+ *
+ * Bless, Rage, a magic weapon, a bard's inspiration. Each is a name plus what
+ * it adds and where it lands, and each carries its own on/off so a fight can be
+ * followed without editing the list every round. `on` is the master switch: off
+ * means the whole set is ignored, and the effects are kept rather than deleted
+ * because a spell that ended will be cast again.
+ *
+ * Dice are optional. An effect can be a flat bonus, some dice, or both, but one
+ * that is neither adds nothing and is not worth storing or printing.
+ */
+const APPLIES_TO = new Set(['toHit', 'damage', 'both']);
+const MAX_MODIFIERS = 12;
+
+function pickGlobalModifiers(source) {
+  const raw = Array.isArray(source?.effects) ? source.effects : [];
+  const effects = [];
+  for (const item of raw.slice(0, MAX_MODIFIERS)) {
+    if (!item || typeof item !== 'object') continue;
+    // Zero sides is a real answer here - "no dice, just the bonus" - so this
+    // cannot lean on pickDice above, which reads an unknown die as no roll.
+    const sides = DAMAGE_DICE.has(Number(item.sides)) ? Number(item.sides) : 0;
+    const count = sides ? int(item.count, 1, 1, 50) : 0;
+    const modifier = int(item.modifier, 0, -99, 99);
+    if (!sides && !modifier) continue;
+    effects.push({
+      id: text(item.id, '', 40) || crypto.randomUUID(),
+      name: text(item.name, '', 40),
+      applies: APPLIES_TO.has(item.applies) ? item.applies : 'toHit',
+      // Absent means on: an effect somebody has just written down is one they
+      // are about to use.
+      active: item.active !== false,
+      count,
+      sides,
+      modifier,
+    });
+  }
+  return { on: Boolean(source?.on), effects };
 }
 
 /**
@@ -189,6 +237,7 @@ function sanitizeSheet(body = {}) {
       failures: int(deathSaves.failures, 0, 0, 3),
     },
     attacks: pickAttacks(body.attacks),
+    globalModifiers: pickGlobalModifiers(body.globalModifiers),
 
     // --- kit ---
     equipment: block(body.equipment),

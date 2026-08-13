@@ -28,6 +28,14 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Attacks can key off an attribute. Setting the To hit or Damage dice now offers an Attribute row between the die and the modifier: pick Dexterity and that attack carries your Dexterity modifier, so it reads 1d20+4+3 rather than a number you worked out yourself and typed in. It follows the score, so levelling up or a belt of giant strength changes every attack that asked for it with nothing to go and edit. None is the default and is what every attack you already have says.',
+      },
+      {
+        kind: 'new',
+        text: 'Global modifiers, in Attacks & spellcasting on a character sheet. Tick the box and you get a list of the situational things helping you: Bless adding 1d4 to hit, Rage adding 2 to damage, a magic weapon adding 1 to both. Give each one a name, say where it lands and what it adds, and it rides along on every attack you roll from that sheet until you untick it. The extra dice are rolled with the attack and land in the same total and the same line in the chat, which says where each number came from. When you roll, the confirm box lists what is riding along and lets you drop one just for that swing.',
+      },
+      {
+        kind: 'new',
         text: 'Tokens have a Status. Pick one from the list in the token form, under Hit points, and hover the token on the map to read it under the hit point bar. The list is the 5e conditions - blinded, charmed, poisoned, prone and the rest - plus Custom at the end, which lets you type whatever the list does not cover. Everybody sees it, not just the DM: a player who cannot see that the ogre is prone is missing the thing that decides their turn. A token you have not set one on reads as Normal.',
       },
       {

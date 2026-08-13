@@ -216,8 +216,12 @@ export const api = {
 
   listChat: () => get(table('/chat')),
   sendChat: (text) => post(table('/chat'), { text }),
-  rollDice: ({ count, sides, modifier, advantage, label, secret }) =>
-    post(table('/chat/roll'), { count, sides, modifier, advantage, label, secret }),
+  // `extras` are named things riding along on this one roll - a sheet's global
+  // modifiers - each some dice, some flat bonus, or both. The server rolls them
+  // with it and folds them into the same total, so an extra d4 is part of the
+  // attack rather than a second line in the chat.
+  rollDice: ({ count, sides, modifier, advantage, label, secret, extras }) =>
+    post(table('/chat/roll'), { count, sides, modifier, advantage, label, secret, extras }),
 
   // The list comes back already filtered by role - a player is never sent an
   // unshared note, so there is nothing here for the UI to have to hide.
