@@ -24,6 +24,19 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-13',
+    entries: [
+      {
+        kind: 'new',
+        text: 'Count as movement, in the measuring box. Tick it and the ruler prices a route the way the table does: take two diagonals in a row and the second one costs 10 ft, and any straight step in between clears that, so a zig-zag stays at 5 ft a square. Turning a corner does not clear it, and the ruler walks each leg the cheapest way round, which is what you would do yourself. Leave it off for ranges and spell radii, where every diagonal counts the same.',
+      },
+      {
+        kind: 'change',
+        text: 'Measurements are drawn as arrows now, so a route reads in the direction you walked it, and the measuring box lets you choose the colour and thickness. It starts in your own player colour, which is what tells the table whose ruler is whose when you share one; pick another and that is what everybody sees.',
+      },
+    ],
+  },
+  {
     date: '2026-08-12',
     entries: [
       {

@@ -12,12 +12,11 @@ import MeasureTools from './MeasureTools.jsx';
 import GridSettings from './GridSettings.jsx';
 import {
   cellCentre,
-  cellsBetween,
   formatDistance,
   labelSpot,
-  legsOf,
+  legsBy,
   pointIndexAt,
-  totalCells,
+  totalBy,
   touches,
   unitNamed,
 } from './measure.js';
@@ -77,10 +76,17 @@ const SHAPE_STYLE_KEY = 'rpg:shape-style';
 // bargain the grid slider makes: one write per adjustment, not per pixel.
 const SHAPE_SAVE_MS = 400;
 
-// How the ruler was last set up. Which unit a table counts in is a fact about
-// the campaign that doesn't change from one evening to the next, so having to
-// say it again every time the box is opened would be a small tax on every use.
+// How the ruler was last set up: the unit, the scale, how it is drawn and
+// whether it counts a move or a distance. Which unit a table counts in is a
+// fact about the campaign that doesn't change from one evening to the next, so
+// having to say it again every time the box is opened would be a small tax on
+// every use - and the same goes for the rest of it.
 const MEASURE_KEY = 'rpg:measure-setup';
+
+// Thick enough to find over a busy map, not so thick that the arrowhead stops
+// being an arrowhead. Screen pixels, so the ruler reads the same at any zoom.
+const MEASURE_THICK_MIN = 1;
+const MEASURE_THICK_MAX = 12;
 
 // How near a right-click has to land, in cells, to be about a measurement
 // rather than about the bare map - and, inside that, to be about one of its
@@ -234,6 +240,53 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
   );
 }
 
+/**
+ * One leg of a measurement: a shaft, and a head on the end of it.
+ *
+ * The head is what makes a ruler readable as a route rather than as a shape
+ * left on the map. It is drawn as a polygon rather than an SVG marker so it can
+ * keep its size on screen: a marker inherits the stroke's units, and at half
+ * zoom a marker-drawn head on a two-pixel line is a smudge. The shaft stops
+ * short of the tip by the head's own length, so the two meet flush instead of
+ * the line running out through the point.
+ *
+ * A leg going nowhere - the pointer still in the cell the last point was
+ * dropped in - is drawn as nothing at all. There is no direction to point a
+ * head in, and one pointing at an arbitrary angle would be the ruler guessing.
+ */
+function ArrowLeg({ from, to, width, head, className }) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.01) return null;
+  const ux = dx / length;
+  const uy = dy / length;
+  // Never longer than the leg itself, so a step into the next cell still shows
+  // a head rather than one drawn back past where the leg began.
+  const size = Math.min(head, length);
+  const baseX = to.x - ux * size;
+  const baseY = to.y - uy * size;
+  // The head's half-width, across the line rather than along it.
+  const nx = -uy * size * 0.42;
+  const ny = ux * size * 0.42;
+  return (
+    <g className={className}>
+      <line
+        className="measure-shaft"
+        x1={from.x}
+        y1={from.y}
+        x2={baseX}
+        y2={baseY}
+        strokeWidth={width}
+      />
+      <polygon
+        className="measure-head"
+        points={`${to.x},${to.y} ${baseX + nx},${baseY + ny} ${baseX - nx},${baseY - ny}`}
+      />
+    </g>
+  );
+}
+
 // Fields that a Delete or a Ctrl+Z belongs to before it belongs to the map.
 /**
  * One measured chain: the line, its points, and what each leg comes to.
@@ -244,54 +297,70 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
  * because the layer it sits in is scaled as a whole and a ruler whose lettering
  * grew with the map would be unreadable at both ends of the range.
  *
- * `pending` is the leg still following the pointer: dashed, and labelled like
- * any other, since the number you are about to commit to is the one you are
- * actually reading.
+ * `pending` is the leg still following the pointer. It simply joins the chain
+ * for as long as it is out there - drawn like the others but faded, and priced
+ * like the others, since the number you are about to commit to is the one you
+ * are actually reading. Under the movement count it could not be priced any
+ * other way: a leg costs what it costs given the diagonals already spent, so it
+ * has no figure of its own until it is on the end of the route.
  */
-function MeasureMark({ chain, cell, origin, zoom, color, unit, perCell, pending }) {
+function MeasureMark({
+  chain,
+  cell,
+  origin,
+  zoom,
+  color,
+  thickness,
+  unit,
+  perCell,
+  movement,
+  pending,
+}) {
   const at = (p) => ({ x: origin.x + p.x * cell, y: origin.y + p.y * cell });
-  const points = chain.points.map(at);
-  const legs = legsOf(chain.points);
   const scale = 1 / zoom;
+  const width = thickness * scale;
+  // Grown with the line rather than fixed, so a heavy ruler doesn't end in a
+  // head the shaft is wider than.
+  const head = (9 + thickness * 2.2) * scale;
 
-  // The leg in flight is measured from the last committed point, and drawn
-  // exactly like the others so that what you see is what you'll get.
-  const tip = pending ? at(pending) : null;
-  const tipCells = pending ? cellsBetween(chain.points[chain.points.length - 1], pending) : 0;
+  const walked = pending ? [...chain.points, pending] : chain.points;
+  const legs = legsBy(walked, movement);
+  const points = walked.map(at);
+  // How many of those are the chain's own. The rest - at most one - is the
+  // pointer, which is drawn but never dotted: it is not a point yet.
+  const settled = chain.points.length;
 
   return (
     <g className="measure-mark" style={{ '--ink': color }}>
-      {points.length > 1 && (
-        <polyline
-          className="measure-line"
-          points={points.map((p) => `${p.x},${p.y}`).join(' ')}
-          strokeWidth={2 * scale}
+      {legs.map((_, i) => (
+        <ArrowLeg
+          key={`leg-${i}`}
+          from={points[i]}
+          to={points[i + 1]}
+          width={width}
+          head={head}
+          className={pending && i === legs.length - 1 ? 'measure-pending' : undefined}
         />
-      )}
-      {tip && (
-        <line
-          className="measure-line measure-pending"
-          x1={points[points.length - 1].x}
-          y1={points[points.length - 1].y}
-          x2={tip.x}
-          y2={tip.y}
-          strokeWidth={2 * scale}
-          strokeDasharray={`${6 * scale} ${5 * scale}`}
-        />
-      )}
+      ))}
 
-      {points.map((p, i) => (
-        <circle key={i} className="measure-dot" cx={p.x} cy={p.y} r={4 * scale} strokeWidth={1.5 * scale} />
+      {points.slice(0, settled).map((p, i) => (
+        <circle
+          key={i}
+          className="measure-dot"
+          cx={p.x}
+          cy={p.y}
+          r={(2 + thickness) * scale}
+          strokeWidth={1.5 * scale}
+        />
       ))}
 
       {/* One label per leg, beside the line rather than along it. A chain that
           doubles back would otherwise stack two numbers in the same place. */}
       {legs.map((leg, i) => {
-        const spot = labelSpot(chain.points[i], chain.points[i + 1]);
-        const px = at(spot);
+        const px = at(labelSpot(walked[i], walked[i + 1]));
         return (
           <text
-            key={`leg-${i}`}
+            key={`label-${i}`}
             className="measure-text"
             x={px.x}
             y={px.y}
@@ -302,30 +371,21 @@ function MeasureMark({ chain, cell, origin, zoom, color, unit, perCell, pending 
           </text>
         );
       })}
-      {tip && (
-        <text
-          className="measure-text"
-          x={at(labelSpot(chain.points[chain.points.length - 1], pending)).x}
-          y={at(labelSpot(chain.points[chain.points.length - 1], pending)).y}
-          fontSize={13 * scale}
-          strokeWidth={3 * scale}
-        >
-          {formatDistance(tipCells, unit, perCell)}
-        </text>
-      )}
 
       {/* The chain's own running total, at its far end - the answer to "how far
           have I come", which for a route with a corner in it is not any of the
-          leg numbers. Only once there is more than one leg to add up. */}
-      {legs.length > 1 && (
+          leg numbers. Of the points settled on, like the panel's own total, so
+          the two never disagree while the pointer is moving. Only once there is
+          more than one leg to add up. */}
+      {settled > 2 && (
         <text
           className="measure-text measure-sum"
-          x={points[points.length - 1].x}
-          y={points[points.length - 1].y - 12 * scale}
+          x={points[settled - 1].x}
+          y={points[settled - 1].y - 12 * scale}
           fontSize={14 * scale}
           strokeWidth={3.5 * scale}
         >
-          {formatDistance(totalCells(chain.points), unit, perCell)}
+          {formatDistance(totalBy(chain.points, movement), unit, perCell)}
         </text>
       )}
     </g>
@@ -548,14 +608,25 @@ export default function Tabletop({ actor, players, offline }) {
   // Where the pointer is, in cells, so the leg being drawn can follow it before
   // its far end has been decided. Null when the pointer is off the map.
   const [measureAt, setMeasureAt] = useState(null);
-  // What the ruler counts in, and whether anybody else can see it. Remembered
-  // per browser - except for Shared, which is deliberately not: showing the
-  // table your working is a decision about *this* measurement, and one that
-  // silently persisted from a fortnight ago is one nobody made.
+  /**
+   * How the ruler is set up: what it counts in, what it counts by, and how it
+   * is drawn. Remembered per browser - except for Shared, which is deliberately
+   * not: showing the table your working is a decision about *this* measurement,
+   * and one that silently persisted from a fortnight ago is one nobody made.
+   *
+   * `color: null` is not an absent colour but a deliberate one: it means "the
+   * colour I am at this table", which is only known once the players have
+   * loaded and is different in a different campaign. Choosing one writes it here
+   * and it stays chosen; leaving it alone keeps your rulers the colour that says
+   * they are yours on everybody else's screen. See rulerColor.
+   */
   const [measureSetup, setMeasureSetup] = useState(() => {
-    const fallback = { unit: 'cells', perCell: 1 };
+    const fallback = { unit: 'cells', perCell: 1, color: null, thickness: 2, movement: false };
     try {
       const saved = JSON.parse(localStorage.getItem(MEASURE_KEY) || 'null');
+      // Spread over the defaults rather than trusted whole, like the drawing
+      // tools': a setup saved by an older version is missing whatever has been
+      // added since, and half a setup is worse than none.
       return saved && typeof saved === 'object' ? { ...fallback, ...saved } : fallback;
     } catch {
       return fallback;
@@ -696,11 +767,11 @@ export default function Tabletop({ actor, players, offline }) {
         const dragging = dragRef.current?.tokenId;
         const incoming = dragging
           ? {
-              ...record,
-              tokens: (record.tokens || []).map((t) =>
-                t.id === dragging ? (prev[i].tokens || []).find((p) => p.id === dragging) || t : t
-              ),
-            }
+            ...record,
+            tokens: (record.tokens || []).map((t) =>
+              t.id === dragging ? (prev[i].tokens || []).find((p) => p.id === dragging) || t : t
+            ),
+          }
           : record;
         const next = prev.slice();
         next[i] = incoming;
@@ -904,8 +975,24 @@ export default function Tabletop({ actor, players, offline }) {
   const measuring = measureWindow;
   const openChain = measurements.find((m) => m.id === openChainId) || null;
   // The legs of every chain added together. Total distance in the panel: it is
-  // asked about a route, and a route is usually more than one leg.
-  const measuredCells = measurements.reduce((sum, m) => sum + totalCells(m.points), 0);
+  // asked about a route, and a route is usually more than one leg. Each chain
+  // is totalled on its own before they are added, because under the movement
+  // count a chain is a route and two routes do not share their diagonals.
+  const measuredCells = measurements.reduce(
+    (sum, m) => sum + totalBy(m.points, measureSetup.movement),
+    0
+  );
+  /**
+   * What your own ruler is drawn in: your choice, or the colour you are at this
+   * table until you make one.
+   *
+   * The default matters more than it looks. A shared ruler in the colour that
+   * already names you in the chat and pips your tokens says whose it is without
+   * anybody reading a label mid-combat, and that is worth keeping for the people
+   * who never open the picker. Anyone who does open it has said something more
+   * specific than the default was saying, so their choice wins from then on.
+   */
+  const rulerColor = measureSetup.color || myColor;
   // Somebody else's ruler, but only the ones about the board on screen - a line
   // measured on another map is a line drawn in another map's coordinates.
   const remoteRulers = Object.values(remoteMeasures).filter(
@@ -1038,18 +1125,35 @@ export default function Tabletop({ actor, players, offline }) {
       measurements: measurements.map((m) => ({ id: m.id, points: m.points })),
       unit: measureSetup.unit,
       perCell: measureSetup.perCell,
-      color: myColor,
+      // All four travel for one reason: a shared ruler should read on every
+      // screen the way it reads on its author's. The scale and the counting
+      // rule because otherwise the same line makes two different claims, and
+      // the colour and thickness because a ruler somebody deliberately drew
+      // thick and red is one they are pointing at.
+      movement: measureSetup.movement,
+      color: rulerColor,
+      thickness: measureSetup.thickness,
     });
     // On the way out too: closing the tab, walking off to the notes tab, or
     // switching scenes all have to take the ruler off other people's boards.
     return () => socket.emit('scene:measure:end');
-  }, [measuring, measureShared, offline, selectedId, measurements, measureSetup, myColor]);
+  }, [measuring, measureShared, offline, selectedId, measurements, measureSetup, rulerColor]);
 
   // Somebody else's ruler arriving. Keyed by whose it is, so a new set from one
   // person replaces theirs and leaves everybody else's alone - and an empty set
   // is how a ruler is taken down, which the same line handles.
   useEffect(() => {
-    const onMeasured = ({ sceneId, userId, by, measurements: theirs, unit, perCell, color }) => {
+    const onMeasured = ({
+      sceneId,
+      userId,
+      by,
+      measurements: theirs,
+      unit,
+      perCell,
+      movement,
+      color,
+      thickness,
+    }) => {
       if (!userId) return;
       setRemoteMeasures((prev) => {
         if (!theirs?.length) {
@@ -1059,7 +1163,7 @@ export default function Tabletop({ actor, players, offline }) {
         }
         return {
           ...prev,
-          [userId]: { sceneId, by, measurements: theirs, unit, perCell, color },
+          [userId]: { sceneId, by, measurements: theirs, unit, perCell, movement, color, thickness },
         };
       });
     };
@@ -2533,7 +2637,6 @@ export default function Tabletop({ actor, players, offline }) {
                 disabled={busy}
                 title="Maps from public/maps"
               >
-                <option value="">Built-in map…</option>
                 {maps.map((m) => (
                   <option key={m.url} value={m.url}>
                     {m.name}
@@ -2578,191 +2681,189 @@ export default function Tabletop({ actor, players, offline }) {
           measure against but the whole column, and the bar above it is a row
           whose height changes as it wraps. */}
       <div className="map-area">
-      <div
-        className={`surface-scroll${gesture === 'pan' ? ' panning' : ''}${
-          gesture === 'grid' ? ' nudging' : ''
-        }`}
-        ref={scrollRef}
-        onPointerDown={onPanStart}
-        onPointerMove={onPanMove}
-        onPointerUp={onPanEnd}
-        onPointerCancel={onPanEnd}
-        onContextMenu={onContextMenu}
-      >
         <div
-          className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}`}
-          ref={surfaceRef}
-          // A pointer that leaves the map has no cell to be in, so the leg in
-          // flight stops following it rather than freezing at the edge.
-          onPointerLeave={() => setMeasureAt(null)}
-          // Focusable on purpose but never in the tab order: it's here so a
-          // press on the map can hand it the keyboard, not so that tabbing
-          // through the page stops on the picture.
-          tabIndex={-1}
-          style={{
-            width,
-            height,
-            backgroundImage: scene.imageUrl ? `url(${scene.imageUrl})` : 'none',
-            '--cell': `${cellPx}px`,
-            // Only the grid reads these. The map's own background is placed by
-            // the stylesheet and stays where it is while they change.
-            '--grid-x': `${offXPx}px`,
-            '--grid-y': `${offYPx}px`,
-            '--grid-ink': grid.gridColor,
-            '--grid-alpha': grid.gridOpacity / 100,
-            // The lines keep their width on screen rather than growing with the
-            // map: a two-pixel grid line is a choice about how the grid reads,
-            // not a distance across the ground.
-            '--grid-line': `${grid.gridThickness}px`,
-          }}
-          onPointerDown={onDrawStart}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          className={`surface-scroll${gesture === 'pan' ? ' panning' : ''}${gesture === 'grid' ? ' nudging' : ''
+            }`}
+          ref={scrollRef}
+          onPointerDown={onPanStart}
+          onPointerMove={onPanMove}
+          onPointerUp={onPanEnd}
+          onPointerCancel={onPanEnd}
+          onContextMenu={onContextMenu}
         >
-          {/* The drawing layer, under the grid and under the tokens: a shape
+          <div
+            className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}`}
+            ref={surfaceRef}
+            // A pointer that leaves the map has no cell to be in, so the leg in
+            // flight stops following it rather than freezing at the edge.
+            onPointerLeave={() => setMeasureAt(null)}
+            // Focusable on purpose but never in the tab order: it's here so a
+            // press on the map can hand it the keyboard, not so that tabbing
+            // through the page stops on the picture.
+            tabIndex={-1}
+            style={{
+              width,
+              height,
+              backgroundImage: scene.imageUrl ? `url(${scene.imageUrl})` : 'none',
+              '--cell': `${cellPx}px`,
+              // Only the grid reads these. The map's own background is placed by
+              // the stylesheet and stays where it is while they change.
+              '--grid-x': `${offXPx}px`,
+              '--grid-y': `${offYPx}px`,
+              '--grid-ink': grid.gridColor,
+              '--grid-alpha': grid.gridOpacity / 100,
+              // The lines keep their width on screen rather than growing with the
+              // map: a two-pixel grid line is a choice about how the grid reads,
+              // not a distance across the ground.
+              '--grid-line': `${grid.gridThickness}px`,
+            }}
+            onPointerDown={onDrawStart}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+          >
+            {/* The drawing layer, under the grid and under the tokens: a shape
               marks out ground, and ground is the thing everything else stands
               on. In map pixels via the viewBox, so one set of numbers is right
               at every zoom - and the strokes are told not to scale with it, or
               zooming out would thin every outline into nothing. */}
-          <svg
-            className="shape-layer"
-            width={width}
-            height={height}
-            viewBox={`0 0 ${mapW} ${mapH}`}
-            aria-hidden="true"
-          >
-            {shapes.map((s) => {
-              // The one under the hand is drawn from the gesture instead, so it
-              // isn't painted twice while it moves.
-              if (sketch?.id === s.id) return null;
-              return (
+            <svg
+              className="shape-layer"
+              width={width}
+              height={height}
+              viewBox={`0 0 ${mapW} ${mapH}`}
+              aria-hidden="true"
+            >
+              {shapes.map((s) => {
+                // The one under the hand is drawn from the gesture instead, so it
+                // isn't painted twice while it moves.
+                if (sketch?.id === s.id) return null;
+                return (
+                  <ShapeMark
+                    key={s.id}
+                    shape={s}
+                    cell={gridSize}
+                    origin={{ x: gridOffX, y: gridOffY }}
+                    zoom={zoom}
+                    selected={s.id === selectedShapeId}
+                  />
+                );
+              })}
+              {sketch && (
                 <ShapeMark
-                  key={s.id}
-                  shape={s}
+                  shape={sketch}
                   cell={gridSize}
                   origin={{ x: gridOffX, y: gridOffY }}
                   zoom={zoom}
-                  selected={s.id === selectedShapeId}
+                  sketching
                 />
-              );
-            })}
-            {sketch && (
-              <ShapeMark
-                shape={sketch}
-                cell={gridSize}
-                origin={{ x: gridOffX, y: gridOffY }}
-                zoom={zoom}
-                sketching
-              />
-            )}
-          </svg>
+              )}
+            </svg>
 
-          {/* Borrowed while a ruler is on the board, whoever's it is - see
+            {/* Borrowed while a ruler is on the board, whoever's it is - see
               gridShown. The scene's own setting is untouched.
 
               Drawn for the DM while Grid settings is open even with Show grid
               off: they are looking at what they are tuning. Everyone else still
               sees nothing until the checkbox is on, which is the promise the
               window makes. */}
-          {(gridShown || gridDraft) && (
-            <div className={`grid-overlay${grid.gridContrast ? ' adaptive-contrast' : ''}`} />
-          )}
+            {(gridShown || gridDraft) && (
+              <div className={`grid-overlay${grid.gridContrast ? ' adaptive-contrast' : ''}`} />
+            )}
 
-          {/* Inside the surface, so a ping sits at its map position and stays
+            {/* Inside the surface, so a ping sits at its map position and stays
               there through panning and zooming rather than at a point on glass. */}
-          {pings.map((p) => (
-            <div
-              key={p.id}
-              className="ping"
-              style={{ left: p.x * zoom, top: p.y * zoom, '--ping': p.color }}
-              title={p.by ? `${p.by} pinged here` : 'ping'}
-            >
-              <span />
-              <span />
-              <span />
-            </div>
-          ))}
-
-          {scene.tokens.map((token) => {
-            const mine = drag?.tokenId === token.id ? drag : null;
-            const ghost = ghosts[token.id];
-            const pos = mine || ghost || token;
-            const movable = canMove(token);
-            // Whose token this is. A token can name somebody who has since left
-            // the table, and an owner nobody can find is drawn as no owner at
-            // all rather than as a blank pip nobody can explain.
-            const owner = token.ownerId ? players.find((p) => p.id === token.ownerId) : null;
-            // Warn while dragging over a square that's already taken, so the
-            // refusal isn't a surprise at the moment of release.
-            const blocked =
-              mine &&
-              Boolean(
-                blockerAt(
-                  gridOn ? Math.round(mine.x) : mine.x,
-                  gridOn ? Math.round(mine.y) : mine.y,
-                  token.size || 1,
-                  token.id
-                )
-              );
-            return (
+            {pings.map((p) => (
               <div
-                key={token.id}
-                // Read back by the right-click handler: the event knows which
-                // element was hit, not which token that element stands for.
-                data-token-id={token.id}
-                // No 'own' class any more: the ring it drew inside your own
-                // tokens read as an unasked-for white border, and as a second
-                // border inside whichever one the DM had chosen. The pip below
-                // says whose a token is, and on yours it is your own colour.
-                className={`token${movable ? ' movable' : ''}${mine ? ' dragging' : ''}${
-                  blocked ? ' blocked' : ''
-                }${ghost && !mine ? ' remote' : ''}${token.id === spotlitId ? ' spotlit' : ''}`}
-                style={{
-                  // Tokens ride the grid rather than the picture: a token in a
-                  // cell stays in that cell when the grid is moved onto the one
-                  // drawn on the map.
-                  left: offXPx + pos.x * cellPx,
-                  top: offYPx + pos.y * cellPx,
-                  width: token.size * cellPx,
-                  height: token.size * cellPx,
-                  // A picture replaces the fill, not just the name - cover so a
-                  // portrait of any shape fills the circle without distorting.
-                  background: token.imageUrl
-                    ? `center / cover no-repeat url(${JSON.stringify(token.imageUrl)})`
-                    : token.color,
-                  // Left off entirely when unset, so the stylesheet's dark ring
-                  // stays the default rather than being overridden with it.
-                  ...(token.borderColor ? { borderColor: token.borderColor } : {}),
-                }}
-                onPointerDown={(e) => onPointerDown(e, token)}
-                // No `title`: the tooltip below says all of this and more, and
-                // the browser's own bubble would surface underneath it.
-                onMouseEnter={(e) => setHovered({ id: token.id, el: e.currentTarget })}
-                onMouseLeave={() => setHovered((h) => (h?.id === token.id ? null : h))}
+                key={p.id}
+                className="ping"
+                style={{ left: p.x * zoom, top: p.y * zoom, '--ping': p.color }}
+                title={p.by ? `${p.by} pinged here` : 'ping'}
               >
-                {/* The picture stands in for the name. Printing both would put
-                    text over a face at the size a token actually is. */}
-                {!token.imageUrl && <span className="token-label">{token.label}</span>}
+                <span />
+                <span />
+                <span />
+              </div>
+            ))}
 
-                {/* Whose it is, in their own colour - the same colour that
+            {scene.tokens.map((token) => {
+              const mine = drag?.tokenId === token.id ? drag : null;
+              const ghost = ghosts[token.id];
+              const pos = mine || ghost || token;
+              const movable = canMove(token);
+              // Whose token this is. A token can name somebody who has since left
+              // the table, and an owner nobody can find is drawn as no owner at
+              // all rather than as a blank pip nobody can explain.
+              const owner = token.ownerId ? players.find((p) => p.id === token.ownerId) : null;
+              // Warn while dragging over a square that's already taken, so the
+              // refusal isn't a surprise at the moment of release.
+              const blocked =
+                mine &&
+                Boolean(
+                  blockerAt(
+                    gridOn ? Math.round(mine.x) : mine.x,
+                    gridOn ? Math.round(mine.y) : mine.y,
+                    token.size || 1,
+                    token.id
+                  )
+                );
+              return (
+                <div
+                  key={token.id}
+                  // Read back by the right-click handler: the event knows which
+                  // element was hit, not which token that element stands for.
+                  data-token-id={token.id}
+                  // No 'own' class any more: the ring it drew inside your own
+                  // tokens read as an unasked-for white border, and as a second
+                  // border inside whichever one the DM had chosen. The pip below
+                  // says whose a token is, and on yours it is your own colour.
+                  className={`token${movable ? ' movable' : ''}${mine ? ' dragging' : ''}${blocked ? ' blocked' : ''
+                    }${ghost && !mine ? ' remote' : ''}${token.id === spotlitId ? ' spotlit' : ''}`}
+                  style={{
+                    // Tokens ride the grid rather than the picture: a token in a
+                    // cell stays in that cell when the grid is moved onto the one
+                    // drawn on the map.
+                    left: offXPx + pos.x * cellPx,
+                    top: offYPx + pos.y * cellPx,
+                    width: token.size * cellPx,
+                    height: token.size * cellPx,
+                    // A picture replaces the fill, not just the name - cover so a
+                    // portrait of any shape fills the circle without distorting.
+                    background: token.imageUrl
+                      ? `center / cover no-repeat url(${JSON.stringify(token.imageUrl)})`
+                      : token.color,
+                    // Left off entirely when unset, so the stylesheet's dark ring
+                    // stays the default rather than being overridden with it.
+                    ...(token.borderColor ? { borderColor: token.borderColor } : {}),
+                  }}
+                  onPointerDown={(e) => onPointerDown(e, token)}
+                  // No `title`: the tooltip below says all of this and more, and
+                  // the browser's own bubble would surface underneath it.
+                  onMouseEnter={(e) => setHovered({ id: token.id, el: e.currentTarget })}
+                  onMouseLeave={() => setHovered((h) => (h?.id === token.id ? null : h))}
+                >
+                  {/* The picture stands in for the name. Printing both would put
+                    text over a face at the size a token actually is. */}
+                  {!token.imageUrl && <span className="token-label">{token.label}</span>}
+
+                  {/* Whose it is, in their own colour - the same colour that
                     names them in the chat and marks them in the roster, so the
                     map can be read against either without learning a third
                     thing. A pip rather than a border: `borderColor` is already
                     the DM's to choose per token, and ownership must not quietly
                     overrule a decision somebody made about how a token looks. */}
-                {owner && (
-                  <span
-                    className="token-owner"
-                    style={{ background: owner.color }}
-                    title={`${owner.name}'s token`}
-                  />
-                )}
-              </div>
-            );
-          })}
+                  {owner && (
+                    <span
+                      className="token-owner"
+                      style={{ background: owner.color }}
+                      title={`${owner.name}'s token`}
+                    />
+                  )}
+                </div>
+              );
+            })}
 
-          {/* The ruler, over everything.
+            {/* The ruler, over everything.
 
               Above the tokens rather than under them, unlike the drawing layer:
               a shape is ground that things stand on, but a measurement is a
@@ -2771,50 +2872,58 @@ export default function Tabletop({ actor, players, offline }) {
               answer. Untouchable by the pointer - the right-click menu works
               out what was hit from the coordinates instead (see onContextMenu),
               which is the only way a line two pixels wide can be aimed at. */}
-          {(measurements.length > 0 || remoteRulers.length > 0) && (
-            <svg
-              className="measure-layer"
-              width={width}
-              height={height}
-              viewBox={`0 0 ${mapW} ${mapH}`}
-              aria-hidden="true"
-            >
-              {/* Other people's first, so yours is the one on top: it is the one
+            {(measurements.length > 0 || remoteRulers.length > 0) && (
+              <svg
+                className="measure-layer"
+                width={width}
+                height={height}
+                viewBox={`0 0 ${mapW} ${mapH}`}
+                aria-hidden="true"
+              >
+                {/* Other people's first, so yours is the one on top: it is the one
                   you are working on, and the one your own right-click will
                   find. */}
-              {remoteRulers.map((ruler) =>
-                ruler.measurements.map((chain) => (
+                {remoteRulers.map((ruler) =>
+                  ruler.measurements.map((chain) => (
+                    <MeasureMark
+                      key={`${ruler.by}-${chain.id}`}
+                      chain={chain}
+                      cell={gridSize}
+                      origin={{ x: gridOffX, y: gridOffY }}
+                      zoom={zoom}
+                      // All four as the measurer set them, so their ruler reads
+                      // here the way it reads for them. Thickness has a fallback
+                      // because a client on the old version sends none, and a
+                      // ruler with no width at all is an invisible one.
+                      color={ruler.color}
+                      thickness={ruler.thickness || 2}
+                      unit={ruler.unit}
+                      perCell={ruler.perCell}
+                      movement={ruler.movement}
+                    />
+                  ))
+                )}
+                {measurements.map((chain) => (
                   <MeasureMark
-                    key={`${ruler.by}-${chain.id}`}
+                    key={chain.id}
                     chain={chain}
                     cell={gridSize}
                     origin={{ x: gridOffX, y: gridOffY }}
                     zoom={zoom}
-                    color={ruler.color}
-                    unit={ruler.unit}
-                    perCell={ruler.perCell}
+                    color={rulerColor}
+                    thickness={measureSetup.thickness}
+                    unit={measureSetup.unit}
+                    perCell={measureSetup.perCell}
+                    movement={measureSetup.movement}
+                    // Only the chain still open follows the pointer, and only
+                    // while the pointer is over the map.
+                    pending={chain.id === openChainId ? measureAt : null}
                   />
-                ))
-              )}
-              {measurements.map((chain) => (
-                <MeasureMark
-                  key={chain.id}
-                  chain={chain}
-                  cell={gridSize}
-                  origin={{ x: gridOffX, y: gridOffY }}
-                  zoom={zoom}
-                  color={myColor}
-                  unit={measureSetup.unit}
-                  perCell={measureSetup.perCell}
-                  // Only the chain still open follows the pointer, and only
-                  // while the pointer is over the map.
-                  pending={chain.id === openChainId ? measureAt : null}
-                />
-              ))}
-            </svg>
-          )}
+                ))}
+              </svg>
+            )}
+          </div>
         </div>
-      </div>
 
         {/* Floats over the map rather than taking a strip of it. Everyone gets
             the panel; what's inside it is another question, and for now the
@@ -2943,10 +3052,34 @@ export default function Tabletop({ actor, players, offline }) {
           // A change of unit brings that unit's own default with it - see the
           // note in the panel. Keeping the old number would quietly reinterpret
           // it, and the field that would say so is the one being changed.
-          onUnit={(unit) => setMeasureSetup({ unit, perCell: unitNamed(unit).perCell })}
+          onUnit={(unit) =>
+            // Spread, not replaced: the colour, the thickness and the counting
+            // rule are nothing to do with which unit the numbers are said in,
+            // and a change of unit that quietly reset them would be three
+            // settings undone by touching a fourth.
+            setMeasureSetup((s) => ({ ...s, unit, perCell: unitNamed(unit).perCell }))
+          }
           onPerCell={(perCell) =>
             setMeasureSetup((s) => ({ ...s, perCell: Number.isFinite(perCell) ? perCell : 1 }))
           }
+          color={rulerColor}
+          onColor={(color) => setMeasureSetup((s) => ({ ...s, color }))}
+          thickness={measureSetup.thickness}
+          onThickness={(thickness) =>
+            setMeasureSetup((s) => ({
+              ...s,
+              // Clamped rather than refused: a field somebody has typed 40 into
+              // wants a line as thick as this map can sensibly draw, not the
+              // last valid number silently put back.
+              thickness: Number.isFinite(thickness)
+                ? clamp(thickness, MEASURE_THICK_MIN, MEASURE_THICK_MAX)
+                : 2,
+            }))
+          }
+          thicknessMin={MEASURE_THICK_MIN}
+          thicknessMax={MEASURE_THICK_MAX}
+          movement={measureSetup.movement}
+          onMovement={(movement) => setMeasureSetup((s) => ({ ...s, movement }))}
           shared={measureShared}
           onShared={setMeasureShared}
           total={measuredCells}
@@ -2989,57 +3122,57 @@ export default function Tabletop({ actor, players, offline }) {
                   const total = t.maxHp ?? 0;
                   const hp = Math.max(0, Math.min(t.hp ?? 0, total));
                   return (
-                  // A menu of its own rather than an action on the click: the
-                  // list is a thing you read during a fight, and every camera
-                  // at the table swinging across the map is too much to hang on
-                  // brushing against it. Anyone may ask for it, DM or not - it
-                  // is the same Focus the map's own menu offers, and that has
-                  // never been the DM's alone.
-                  <li
-                    key={t.id}
-                    className={t.id === scene.turnTokenId ? 'active' : ''}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setMenu({ clientX: e.clientX, clientY: e.clientY, turnTokenId: t.id });
-                    }}
-                    title={`Right-click for ${t.label}`}
-                    onMouseEnter={() => setSpotlight(t.id)}
-                    onMouseLeave={() => setSpotlight((id) => (id === t.id ? null : id))}
-                  >
-                    {/* The token as it looks on the board, so the list is read
-                        by glancing between the two rather than by name. */}
-                    <span
-                      className="turn-face"
-                      style={{
-                        background: t.imageUrl
-                          ? `center / cover no-repeat url(${JSON.stringify(t.imageUrl)})`
-                          : t.color,
-                        ...(t.borderColor ? { borderColor: t.borderColor } : {}),
+                    // A menu of its own rather than an action on the click: the
+                    // list is a thing you read during a fight, and every camera
+                    // at the table swinging across the map is too much to hang on
+                    // brushing against it. Anyone may ask for it, DM or not - it
+                    // is the same Focus the map's own menu offers, and that has
+                    // never been the DM's alone.
+                    <li
+                      key={t.id}
+                      className={t.id === scene.turnTokenId ? 'active' : ''}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setMenu({ clientX: e.clientX, clientY: e.clientY, turnTokenId: t.id });
                       }}
-                    />
-                    <span className="turn-who">
-                      <strong>{t.label}</strong>
-                      {/* Hit points stay the DM's to know, exactly as they do in
+                      title={`Right-click for ${t.label}`}
+                      onMouseEnter={() => setSpotlight(t.id)}
+                      onMouseLeave={() => setSpotlight((id) => (id === t.id ? null : id))}
+                    >
+                      {/* The token as it looks on the board, so the list is read
+                        by glancing between the two rather than by name. */}
+                      <span
+                        className="turn-face"
+                        style={{
+                          background: t.imageUrl
+                            ? `center / cover no-repeat url(${JSON.stringify(t.imageUrl)})`
+                            : t.color,
+                          ...(t.borderColor ? { borderColor: t.borderColor } : {}),
+                        }}
+                      />
+                      <span className="turn-who">
+                        <strong>{t.label}</strong>
+                        {/* Hit points stay the DM's to know, exactly as they do in
                           the hover tooltip - a tracker every player can see is
                           the last place to print the ogre's remaining health. */}
-                      {isDm && total > 0 && (
-                        <span className="turn-hp">
-                          <span className="hp-bar">
-                            <span className="hp-fill" style={{ width: `${(hp / total) * 100}%` }} />
+                        {isDm && total > 0 && (
+                          <span className="turn-hp">
+                            <span className="hp-bar">
+                              <span className="hp-fill" style={{ width: `${(hp / total) * 100}%` }} />
+                            </span>
+                            <small>
+                              {hp}/{total}
+                            </small>
                           </span>
-                          <small>
-                            {hp}/{total}
-                          </small>
-                        </span>
-                      )}
-                    </span>
-                    <span className="turn-init">
-                      {initiativeText(t).total}
-                      {initiativeText(t).breakdown && (
-                        <small>({initiativeText(t).breakdown})</small>
-                      )}
-                    </span>
-                  </li>
+                        )}
+                      </span>
+                      <span className="turn-init">
+                        {initiativeText(t).total}
+                        {initiativeText(t).breakdown && (
+                          <small>({initiativeText(t).breakdown})</small>
+                        )}
+                      </span>
+                    </li>
                   );
                 })}
               </ol>
@@ -3067,9 +3200,7 @@ export default function Tabletop({ actor, players, offline }) {
           status={
             ghosts[hoveredToken.id]
               ? `Being moved by ${ghosts[hoveredToken.id].by}`
-              : canMove(hoveredToken)
-                ? 'Drag to move'
-                : ''
+              : ''
           }
         />
       )}

@@ -936,6 +936,11 @@ button.linky:hover {
   top: 0;
   pointer-events: none;
   overflow: visible;
+  /* Lifted over the tokens by number rather than by DOM order alone, because a
+     token being dragged or spotlit lifts itself (5 and 4) and would otherwise
+     come up through the line. Still under the tools panel's 6, which is not
+     part of the map. */
+  z-index: 5;
 }
 
 /* While the ruler is out the map is read, not handled. The cursor says so
@@ -949,20 +954,32 @@ button.linky:hover {
   pointer-events: none;
 }
 
-/* Each chain carries its owner's colour in --ink, so two people measuring at
-   once are telling each other apart without a label. */
-.measure-line {
+/* Each chain carries its colour in --ink: the measurer's own choice, or the
+   colour they are at this table until they make one - so two people measuring
+   at once are telling each other apart without a label.
+
+   Shaft and head are separate elements sharing that one variable, since a
+   stroked line and a filled triangle take their colour from different
+   properties and neither can be talked into the other. */
+.measure-shaft {
   fill: none;
   stroke: var(--ink, #ffd479);
   stroke-linecap: round;
-  stroke-linejoin: round;
   /* A dark seam under the bright line, so it survives a pale map. Cheaper than
      drawing every line twice and does the same job. */
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
 
+.measure-head {
+  fill: var(--ink, #ffd479);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+/* The leg still following the pointer. Faded rather than dashed: the head is
+   what carries the direction now, and a dashed shaft under a solid head reads
+   as two different lines rather than one unfinished one. */
 .measure-pending {
-  opacity: 0.75;
+  opacity: 0.7;
 }
 
 .measure-dot {

@@ -24,6 +24,14 @@ export default function MeasureTools({
   perCell,
   onUnit,
   onPerCell,
+  color,
+  onColor,
+  thickness,
+  onThickness,
+  thicknessMin,
+  thicknessMax,
+  movement,
+  onMovement,
   shared,
   onShared,
   total,
@@ -49,7 +57,7 @@ export default function MeasureTools({
     <FloatingWindow
       title="Measuring mode"
       storageKey="rpg:measure-window"
-      defaultSize={{ w: 320, h: 340 }}
+      defaultSize={{ w: 320, h: 500 }}
       minSize={{ w: 250, h: 200 }}
       onClose={onClose}
       opacity={opacity / 100}
@@ -97,6 +105,45 @@ export default function MeasureTools({
           />
           <small>{unitNamed(unit).suffix}</small>
         </label>
+
+        {/* How the line is drawn. Two controls rather than a whole panel of
+            them: a ruler is read at a glance over a map somebody else chose the
+            colours of, and being able to make it stand out against that map is
+            the whole of what anyone needs here. */}
+        <label className="shape-field">
+          <span>Colour</span>
+          <input type="color" value={color} onChange={(e) => onColor(e.target.value)} />
+        </label>
+
+        <label className="shape-field">
+          <span>Thickness</span>
+          <input
+            type="number"
+            min={thicknessMin}
+            max={thicknessMax}
+            step={1}
+            value={thickness}
+            onChange={(e) => onThickness(Number(e.target.value))}
+          />
+          <small>px</small>
+        </label>
+
+        {/* The two ways 5e counts, which are not the same and are not
+            interchangeable: a range is flat, a move is not. The checkbox is
+            what says which question you are asking. */}
+        <label className="shape-field shape-check">
+          <input
+            type="checkbox"
+            checked={movement}
+            onChange={(e) => onMovement(e.target.checked)}
+          />
+          <span>Count as movement</span>
+        </label>
+        <p className="hint measure-shared-note">
+          {movement
+            ? 'Two diagonals in a row: the second costs 10 ft. Any straight step clears it, so a zig-zag is 5 ft a square.'
+            : 'Every diagonal costs the same as a straight step, which is how a range is measured.'}
+        </p>
 
         <label className="shape-field shape-check">
           <input

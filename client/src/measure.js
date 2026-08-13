@@ -52,6 +52,100 @@ export const legsOf = (points = []) =>
 export const totalCells = (points = []) => legsOf(points).reduce((sum, leg) => sum + leg, 0);
 
 /**
+ * What a route *costs to walk*, which is not the same as how long it is.
+ *
+ * `cellsBetween` above is the rule for a distance: how far apart two things are,
+ * which is what a spell's range or a bow shot is measured against. This is the
+ * rule for a move, and 5e prices the two differently. It is the fix for the flat
+ * rule's oddity, where a creature that walks in a zig-zag covers half again as
+ * much ground as one that walks straight for the same money.
+ *
+ * The rule is about diagonals taken *in a row*, and it is the "in a row" that
+ * does all the work here:
+ *
+ *   the first diagonal costs one cell;
+ *   a second one immediately after it costs two;
+ *   and that pays the debt off, so the next diagonal is back to one.
+ *
+ * Any straight step clears the slate. Diagonal, straight, diagonal, straight is
+ * four steps and four cells, because no diagonal ever followed another.
+ *
+ * Which is why this walks the route one step at a time instead of counting
+ * diagonals and multiplying. A leg is a straight line across the board, so it is
+ * some number of diagonal steps and some number of straight ones, and *the order
+ * they are taken in changes the price*. Five across and two down can be walked
+ * as two diagonals then three straights, which pays the surcharge once, or by
+ * spacing the two diagonals apart, which pays nothing. Both end on the same
+ * square. Nobody at a table walks the expensive one on purpose, so this takes a
+ * straight step whenever there is a diagonal waiting to be doubled and a
+ * straight left to spend, and runs the diagonals together only when it has run
+ * out of straights to separate them with.
+ *
+ * The debt carries across corners, because a corner is not a rest: two diagonal
+ * legs meeting at a point are still two diagonal steps in a row.
+ *
+ * The answer is in cells, and a cell is five feet or a metre and a half like
+ * everywhere else here - so a first diagonal reads 5 ft and a doubled one 10 ft.
+ *
+ * Returns the legs and their sum together, because the legs have to be walked in
+ * order to be priced at all and doing it twice would be doing it twice.
+ */
+export function movementWalk(points = []) {
+  const legs = [];
+  let total = 0;
+  // Whether a diagonal is standing unpaired, so the next one taken straight
+  // after it is the one that costs double.
+  let pending = false;
+
+  for (let i = 1; i < points.length; i += 1) {
+    // Points sit on cell centres, so both spans are whole numbers of cells and
+    // these two counts are whole numbers of steps.
+    const dx = Math.abs(points[i].x - points[i - 1].x);
+    const dy = Math.abs(points[i].y - points[i - 1].y);
+    // As many diagonals as the leg allows, with the overshoot walked straight.
+    // Maximising diagonals is always right: a diagonal costs one cell, or two
+    // at worst, and the two straight steps it replaces always cost two.
+    let diagonals = Math.min(dx, dy);
+    let straights = Math.abs(dx - dy);
+    let cost = 0;
+
+    while (diagonals > 0 || straights > 0) {
+      // Spend a straight step when it buys something - either it breaks up a
+      // pair that would otherwise cost double, or there are no diagonals left
+      // to take anyway.
+      if (straights > 0 && (pending || diagonals === 0)) {
+        straights -= 1;
+        cost += 1;
+        pending = false;
+      } else {
+        diagonals -= 1;
+        cost += pending ? 2 : 1;
+        pending = !pending;
+      }
+    }
+
+    legs.push(cost);
+    total += cost;
+  }
+
+  return { legs, total };
+}
+
+/**
+ * The two rules, behind one pair of names.
+ *
+ * Which one is in force is a checkbox in the measuring panel, and past this
+ * point nothing else in the app has to know that: the map draws legs and totals
+ * without asking what they were counted by. `movement` false is the flat 5e
+ * count, which is what a range is measured in; true is the walking count above.
+ */
+export const legsBy = (points, movement) =>
+  movement ? movementWalk(points).legs : legsOf(points);
+
+export const totalBy = (points, movement) =>
+  movement ? movementWalk(points).total : totalCells(points);
+
+/**
  * Say a distance the way the panel is set to say it.
  *
  * Rounded to one decimal and then trimmed, so whole numbers read as "15 ft"

@@ -146,46 +146,59 @@ function registerSceneSignals(io) {
      * state instead of the change makes a lost message a frame of staleness
      * rather than a lasting disagreement.
      *
-     * `unit` and `perCell` travel with it so every viewer's labels read the way
-     * the *measurer's* do. Two people at one table can have the panel set
-     * differently, and a shared ruler that said 15 ft to one of them and 4.5 m
-     * to the other would be two different claims about the same line.
+     * How it is read and how it is drawn travel with it, so a shared ruler says
+     * the same thing on every screen it appears on. `unit` and `perCell`
+     * because two people at one table can have the panel set differently, and a
+     * ruler that said 15 ft to one of them and 4.5 m to the other would be two
+     * different claims about one line. `movement` for the same reason and a
+     * sharper one: it decides whether diagonals are counted flat or 5, 10, 5,
+     * and those are different numbers for the same line rather than the same
+     * number in different words. `color` and `thickness` because a line
+     * somebody deliberately drew thick and red is one they are pointing at.
      */
-    socket.on('scene:measure', async ({ sceneId, measurements, unit, perCell, color } = {}) => {
-      const campaignId = socket.data.campaignId;
-      if (!campaignId) return;
-      if (typeof sceneId !== 'string' || !sceneId) return;
+    socket.on(
+      'scene:measure',
+      async ({ sceneId, measurements, unit, perCell, movement, color, thickness } = {}) => {
+        const campaignId = socket.data.campaignId;
+        if (!campaignId) return;
+        if (typeof sceneId !== 'string' || !sceneId) return;
 
-      // Not run through `cleared()`. That gate exists to stop a loop flashing
-      // pings faster than a hand could, and it drops what it refuses - which
-      // for a stream of states would mean silently keeping an old ruler on
-      // screen after the newer one that replaced it was thrown away. Dragging a
-      // pointer across the map legitimately produces changes faster than four a
-      // second, so this is capped by shape instead: a short list of short
-      // lists, and no disk touched whatever arrives.
-      const campaign = await store.get(CAMPAIGNS, campaignId);
-      if (!roleIn(campaign, socket.data.actor)) return;
+        // Not run through `cleared()`. That gate exists to stop a loop flashing
+        // pings faster than a hand could, and it drops what it refuses - which
+        // for a stream of states would mean silently keeping an old ruler on
+        // screen after the newer one that replaced it was thrown away. Dragging
+        // a pointer across the map legitimately produces changes faster than
+        // four a second, so this is capped by shape instead: a short list of
+        // short lists, and no disk touched whatever arrives.
+        const campaign = await store.get(CAMPAIGNS, campaignId);
+        if (!roleIn(campaign, socket.data.actor)) return;
 
-      const clean = sanitizeMeasurements(measurements);
-      if (clean === null) return;
+        const clean = sanitizeMeasurements(measurements);
+        if (clean === null) return;
 
-      // Remembered so a dropped connection can take the ruler down with it.
-      socket.data.measuring = clean.length ? { campaignId, sceneId } : null;
+        // Remembered so a dropped connection can take the ruler down with it.
+        socket.data.measuring = clean.length ? { campaignId, sceneId } : null;
 
-      socket.to(roomFor(campaignId)).emit('scene:measured', {
-        sceneId,
-        // The sender's own id, so a viewer can key one ruler per person and
-        // replace it rather than accumulating every state ever sent. From the
-        // socket's identity, never the payload - a measurement that could name
-        // its own author would be a way to wipe somebody else's off the board.
-        userId: socket.data.actor?.userId || '',
-        by: socket.data.actor?.name || '',
-        measurements: clean,
-        unit: typeof unit === 'string' ? unit.slice(0, 12) : 'cells',
-        perCell: Number.isFinite(Number(perCell)) ? Number(perCell) : 1,
-        color: isHexColor(color) ? color : '#ffd479',
-      });
-    });
+        socket.to(roomFor(campaignId)).emit('scene:measured', {
+          sceneId,
+          // The sender's own id, so a viewer can key one ruler per person and
+          // replace it rather than accumulating every state ever sent. From the
+          // socket's identity, never the payload - a measurement that could name
+          // its own author would be a way to wipe somebody else's off the board.
+          userId: socket.data.actor?.userId || '',
+          by: socket.data.actor?.name || '',
+          measurements: clean,
+          unit: typeof unit === 'string' ? unit.slice(0, 12) : 'cells',
+          perCell: Number.isFinite(Number(perCell)) ? Number(perCell) : 1,
+          movement: movement === true,
+          color: isHexColor(color) ? color : '#ffd479',
+          // Clamped to the range the panel offers rather than trusted: this
+          // number becomes a stroke width on somebody else's screen, and a
+          // ruler drawn ten thousand pixels wide is a ruler over their map.
+          thickness: Math.min(12, Math.max(1, Number(thickness) || 2)),
+        });
+      }
+    );
 
     /**
      * Take it down: on unsharing, on leaving the mode, and on dropping off.
