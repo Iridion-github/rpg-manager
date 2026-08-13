@@ -2913,12 +2913,12 @@ export default function Tabletop({ actor, players, offline }) {
               const mine = drag?.tokenId === token.id ? drag : null;
               const ghost = ghosts[token.id];
               const pos = mine || ghost || token;
-              // Which side its nameplate goes on, worked out against where the
-              // other tokens are *now* rather than where they are stored. Only
-              // asked when there is a plate to place.
-              const plate = token.showNameplate
-                ? plateSide(token, pos, tokensNow, minRow, maxRow)
-                : null;
+              // What the plate says, and which side of the token it goes on.
+              // Two independent offers that share one plate: the name, and the
+              // condition in brackets after it. Asking for neither is the usual
+              // case and costs nothing beyond this line.
+              const plated = token.showNameplate || token.showStatus;
+              const plate = plated ? plateSide(token, pos, tokensNow, minRow, maxRow) : null;
               const movable = canMove(token);
               // Whose token this is. A token can name somebody who has since left
               // the table, and an owner nobody can find is drawn as no owner at
@@ -2975,13 +2975,27 @@ export default function Tabletop({ actor, players, offline }) {
                     text over a face at the size a token actually is. */}
                   {!token.imageUrl && <span className="token-label">{token.label}</span>}
 
-                  {/* The nameplate: the same name, outside the token and always
-                      on, for the figures a table needs to keep track of by name
-                      rather than by face. Sized in pixels rather than as a
-                      fraction of the token, so it stays readable when the map
-                      is zoomed out - which is exactly when a board full of
-                      similar-looking figures needs its labels most. */}
-                  {plate && <span className={`token-plate ${plate}`}>{token.label}</span>}
+                  {/* The plate: what this token says about itself without being
+                      pointed at. The name, the condition in brackets, or both,
+                      in that order - a reader who has both is reading a name
+                      first and a note about it second.
+
+                      Sized in pixels rather than as a fraction of the token, so
+                      it stays readable when the map is zoomed out, which is
+                      exactly when a board full of similar-looking figures needs
+                      its labels most. */}
+                  {plate && (
+                    <span className={`token-plate ${plate}`}>
+                      {token.showNameplate && token.label}
+                      {token.showStatus && (
+                        <span className="token-plate-status">
+                          {/* Spaced off the name only when there is a name in
+                              front of it. Alone, it is the whole plate. */}
+                          {token.showNameplate ? ' ' : ''}[{token.status || 'Normal'}]
+                        </span>
+                      )}
+                    </span>
+                  )}
 
                   {/* Whose it is, in their own colour - the same colour that
                     names them in the chat and marks them in the roster, so the
@@ -3334,7 +3348,10 @@ export default function Tabletop({ actor, players, offline }) {
             hoveredToken.ownerId ? players.find((p) => p.id === hoveredToken.ownerId) : null
           }
           showHp={isDm}
-          status={
+          // Renamed from `status`, which now means the condition the token is
+          // under. This one is a live note about the token rather than a fact
+          // about it.
+          note={
             ghosts[hoveredToken.id]
               ? `Being moved by ${ghosts[hoveredToken.id].by}`
               : ''

@@ -1418,8 +1418,9 @@ button.linky:hover {
      tracker is pointing at (4), which are the two that should come through. */
   z-index: 3;
   /* Wider than its token whenever the name is longer, which is most of the
-     time, so it centres on the figure rather than being boxed inside it. */
-  max-width: 12rem;
+     time, so it centres on the figure rather than being boxed inside it. Room
+     for a name and a condition after it, past which it ellipsises. */
+  max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1432,6 +1433,13 @@ button.linky:hover {
   line-height: 1.4;
   pointer-events: none;
   user-select: none;
+}
+
+/* The condition, when it rides along after the name. Dimmed a step so the two
+   read as a name and a note about it rather than as one long label - the
+   brackets do that work in the text, and this does it at a glance. */
+.token-plate-status {
+  color: #c3b2f0;
 }
 
 .token-plate.above {
@@ -1965,6 +1973,11 @@ button.token-tile:hover {
 
 .token-tip-row b {
   color: #e7e9ee;
+  /* A custom status can be a short phrase rather than one word, so let it wrap
+     against the bubble's own width instead of running out past the edge. */
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .token-tip small {
@@ -4206,6 +4219,23 @@ button.token-tile:hover {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+/* The condition list, and the box that joins it when Custom is chosen. Wraps,
+   so the two share the row while it is wide enough and stack when it is not
+   rather than squeezing the list down to nothing. */
+.token-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.token-status select,
+.token-status input {
+  flex: 1;
+  min-width: 6rem;
 }
 
 .token-colour,

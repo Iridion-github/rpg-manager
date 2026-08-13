@@ -83,6 +83,12 @@ function sanitizeLook(body = {}, existing = {}) {
     // this shorter list too: a token prepared in the Tokens tab arrives on the
     // map already captioned, or already not.
     showNameplate: pick('showNameplate', existing.showNameplate) === true,
+    // Kept here too, even though a condition is closer to what a token is doing
+    // than to what it is: the form offers it in both places, and a token
+    // prepared as already poisoned should arrive on the map that way rather
+    // than have the answer quietly dropped between the two.
+    status: String(pick('status', existing.status) ?? '').slice(0, 40),
+    showStatus: pick('showStatus', existing.showStatus) === true,
     color: hexOr(pick('color', existing.color), '#58a6ff'),
     // No null branch needed: hexOr already answers null for anything that isn't
     // a colour, which includes the null meaning "no border".

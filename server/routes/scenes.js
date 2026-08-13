@@ -172,6 +172,15 @@ function sanitizeToken(body = {}, existing = {}) {
     borderColor = existing.borderColor ?? null,
     // A token's face. Empty means it shows its name instead.
     imageUrl = existing.imageUrl ?? '',
+    // What it is suffering from, as a plain string: one of the 5e conditions,
+    // or whatever somebody typed for one this list doesn't name. Not checked
+    // against that list, because half of it would refuse the custom ones - the
+    // length cap below is the only thing worth enforcing on a free label.
+    // Empty is Normal, which is why "never asked" and "fine" are one state.
+    status = existing.status ?? '',
+    // Whether that condition is written on the board, which is asked and
+    // answered separately from the name beside it - see showNameplate.
+    showStatus = existing.showStatus ?? false,
     // What the tooltip reads out. Everyone sees initiative; the hit points are
     // the DM's business, and the client only shows them to them.
     initiative = existing.initiative ?? null,
@@ -203,6 +212,8 @@ function sanitizeToken(body = {}, existing = {}) {
   return {
     label: String(label).slice(0, 60),
     showNameplate: showNameplate === true,
+    status: String(status).slice(0, 40),
+    showStatus: showStatus === true,
     color: hexOr(color, '#58a6ff'),
     borderColor: borderColor === null ? null : hexOr(borderColor, null),
     imageUrl: String(imageUrl).slice(0, 500),

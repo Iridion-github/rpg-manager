@@ -20,7 +20,7 @@ const GAP = 10;
 // Closest the bubble may come to the window's edge before it is pushed back in.
 const MARGIN = 4;
 
-export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
+export default function TokenTooltip({ anchor, token, owner, showHp, note }) {
   const ref = useRef(null);
 
   /**
@@ -108,7 +108,22 @@ export default function TokenTooltip({ anchor, token, owner, showHp, status }) {
         </span>
       )}
 
-      {status && <small>{status}</small>}
+      {/* Under the bar, and shown to everybody rather than only to the DM: what
+          a creature is suffering from is what the table is playing around, and
+          a player who cannot see that the ogre is prone is missing the thing
+          that decides their turn. Always drawn, because "nothing is wrong with
+          it" is an answer somebody is looking for - a row that vanished when
+          the token was healthy would leave you unsure whether you had checked.
+
+          A token with no status stored is a Normal one: see statusValue in
+          TokenModal, where the two are deliberately made the same thing. */}
+      <span className="token-tip-row">
+        Status <b>{token.status || 'Normal'}</b>
+      </span>
+
+      {/* Last, and not part of the token at all: this is what is happening to
+          it this second, which outranks nothing and belongs after the facts. */}
+      {note && <small>{note}</small>}
     </div>,
     document.body
   );

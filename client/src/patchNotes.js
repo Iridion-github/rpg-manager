@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-13',
     entries: [
       {
+        kind: 'new',
+        text: 'Tokens have a Status. Pick one from the list in the token form, under Hit points, and hover the token on the map to read it under the hit point bar. The list is the 5e conditions - blinded, charmed, poisoned, prone and the rest - plus Custom at the end, which lets you type whatever the list does not cover. Everybody sees it, not just the DM: a player who cannot see that the ogre is prone is missing the thing that decides their turn. A token you have not set one on reads as Normal.',
+      },
+      {
         kind: 'fix',
         text: 'The top row and the left column of the grid can be used. On a map whose grid had been nudged, the row along the top edge was drawn like any other but no token could be put in it, by dragging or otherwise: the squares of the board started one row further down than the squares you could see. Every square that is drawn is now one you can use, and the far edges no longer offer a row that has slid off the map.',
       },
@@ -36,7 +40,7 @@ export const PATCH_NOTES = [
       },
       {
         kind: 'new',
-        text: 'Show nameplate, a tickbox under the Name in the token form. Tick it and that token wears its name on the map all the time instead of only when somebody hovers it, which is what you want for the four guards who all look alike. The plate sits above the token, and moves below it when there is another token in the way or when the token is against the top edge. Off unless you ask for it, so nothing on your maps has changed.',
+        text: 'Show on map, a tickbox under the Name in the token form and another under Status. Tick either and the token wears that on the map all the time instead of only when somebody hovers it, which is what you want for the four guards who all look alike. Tick both and it reads Grunt [Poisoned]; tick only the status and it reads [Poisoned] on its own, so a monster whose name would give the game away can still show what it is suffering from. The plate sits above the token and moves below it when there is another token in the way or when the token is against the top edge. Both are off unless you ask for them, so nothing on your maps has changed.',
       },
       {
         kind: 'new',
