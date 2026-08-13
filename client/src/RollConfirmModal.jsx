@@ -173,7 +173,7 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
 
         <label className="check">
           <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
-          DM only (the rest of the table won't see this roll)
+          DM only
         </label>
 
         {error && <p className="error">{error}</p>}

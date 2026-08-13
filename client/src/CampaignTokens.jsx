@@ -161,12 +161,6 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
         )}
       </div>
 
-      <p className="hint">
-        {isDm
-          ? "Every token at this table, yours and your players'. Make them before the session and place them when you need them - right-click the map and choose Place Token."
-          : 'Your token, made once and kept. Place it from the map with a right-click, take it off again when you are done, and it will be here next time.'}
-      </p>
-
       {error && <p className="error">{error}</p>}
 
       {loading ? (

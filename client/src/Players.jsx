@@ -122,7 +122,7 @@ export default function Players({ campaignId, actor, isDm, offline }) {
   return (
     <div className="players-view">
       <p className="hint">
-        Everyone at this table. {isDm && 'Right-click someone to change their role or send them home.'}
+        The campaign's players. {isDm && 'Right-click someone to change their role or kick them out of the campaign.'}
       </p>
 
       {error && <p className="error">{error}</p>}

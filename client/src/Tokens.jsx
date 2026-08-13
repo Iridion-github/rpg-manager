@@ -23,9 +23,7 @@ export default function Tokens({ actor, players, isDm, offline }) {
         <h2 className="notes-title">Token artwork</h2>
       </div>
       <p className="hint">
-        Every picture that can be put on a token, as it sits in{' '}
-        <code>public/tokens</code>. Open a folder to look through it, or search
-        by name across all of them at once.
+        Open a folder to look through it, or search by name across all of them at once.
       </p>
       <TokenLibrary />
 

@@ -111,16 +111,16 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
   async function create({ name: wantedName, subtitle: wantedSubtitle, imported }) {
     const created = imported
       ? (
-          await api.importCampaign({
-            name: wantedName,
-            subtitle: wantedSubtitle,
-            data: imported,
-          })
-        ).campaign
+        await api.importCampaign({
+          name: wantedName,
+          subtitle: wantedSubtitle,
+          data: imported,
+        })
+      ).campaign
       : await api.createCampaign({
-          name: wantedName || 'New Campaign',
-          description: wantedSubtitle,
-        });
+        name: wantedName || 'New Campaign',
+        description: wantedSubtitle,
+      });
     setCampaigns((prev) => [...prev, created]);
     setCreating(false);
 
@@ -185,11 +185,6 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
 
   return (
     <div className="campaigns">
-      <p className="hint">
-        Every campaign on this server. The ones you're part of come first -
-        everything else you can see the shape of, but not the contents.
-      </p>
-
       {error && <p className="error">{error}</p>}
 
       <div className="new-campaign">

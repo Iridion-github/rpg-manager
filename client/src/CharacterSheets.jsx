@@ -594,7 +594,7 @@ export default function CharacterSheets({
                       ? sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
                       : '',
                 }))}
-                hint="Linked, the two share hit points - damage on the map lands on this sheet and healing here shows on the map - and the token takes its initiative modifier from these abilities. Its name, picture and size stay its own."
+                hint=""
                 onChange={(tokenId) => linkSheet(sheet, tokenId)}
               />
             )}

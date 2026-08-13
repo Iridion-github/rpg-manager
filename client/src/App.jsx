@@ -146,7 +146,7 @@ export default function App() {
   // it runs. A failure leaves the empty object, and the account screen then
   // offers the safest reading of it - no code, no mail.
   useEffect(() => {
-    api.authConfig().then(setAuthConfig).catch(() => {});
+    api.authConfig().then(setAuthConfig).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -214,7 +214,7 @@ export default function App() {
   async function signOut() {
     // Server-side first, so the token stops working rather than merely being
     // forgotten here. Failing that (offline), still clear this browser.
-    await api.logout().catch(() => {});
+    await api.logout().catch(() => { });
     setSession('');
     // The admin password goes too, or a browser holding it would quietly sign
     // you straight back in as the admin.
@@ -328,9 +328,8 @@ export default function App() {
   // page, which a fixed-height column would break.
   return (
     <div
-      className={`app${insideCampaign ? '' : ' solo'}${
-        insideCampaign && activeTab === 'tabletop' ? ' map' : ''
-      }`}
+      className={`app${insideCampaign ? '' : ' solo'}${insideCampaign && activeTab === 'tabletop' ? ' map' : ''
+        }`}
     >
       <div className="main">
         {/* Identity and navigation on one line. They were stacked, which cost
@@ -339,158 +338,158 @@ export default function App() {
             the window is too narrow to hold both, which is no worse than what
             it always did. */}
         <div className="topbar">
-        <header>
-          <h1>⚔️ RPG Manager</h1>
-          {/* A dot rather than a word. This is a green "fine" almost always,
+          <header>
+            <h1>⚔️ RPG Manager</h1>
+            {/* A dot rather than a word. This is a green "fine" almost always,
               and the state that actually matters - not connected - already
               gets a full-width banner under the bar. The colour carries it;
               the tooltip spells it out for anyone who wants it. */}
-          <span
-            className={`live-dot${connected ? ' on' : ''}`}
-            role="status"
-            aria-label={connected ? 'Connected to the table' : 'Not connected to the table'}
-            title={
-              connected
-                ? 'Connected - changes reach the table as you make them'
-                : 'Not connected - the table is not seeing your changes'
-            }
-          />
-          <span className={`badge role ${role || actor.globalRole}`}>{roleLabel}</span>
-          {actor.globalRole === 'admin' && <span className="badge role gm">admin</span>}
-          {campaign && <span className="campaign-name">{campaign.name}</span>}
-        </header>
+            <span
+              className={`live-dot${connected ? ' on' : ''}`}
+              role="status"
+              aria-label={connected ? 'Connected to the table' : 'Not connected to the table'}
+              title={
+                connected
+                  ? 'Connected'
+                  : 'Not connected'
+              }
+            />
+            <span className={`badge role ${role || actor.globalRole}`}>{roleLabel}</span>
+            {actor.globalRole === 'admin' && <span className="badge role gm">admin</span>}
+            {campaign && <span className="campaign-name"><b>{campaign.name}</b></span>}
+          </header>
 
-        {/* With no identity there are no tabs at all, and an empty tab bar is
+          {/* With no identity there are no tabs at all, and an empty tab bar is
             just a stray rule across the page. */}
-        {authed && (
-        <nav className="tabs">
-          {/* These three exist only while a campaign is open - they are views
+          {authed && (
+            <nav className="tabs">
+              {/* These three exist only while a campaign is open - they are views
               onto its data, and there is nothing for them to show without it. */}
-          {insideCampaign && (
-            <>
-              <button
-                className={activeTab === 'tabletop' ? 'active' : ''}
-                onClick={() => setTab('tabletop')}
-              >
-                Tabletop
-              </button>
-              <button
-                className={activeTab === 'sheets' ? 'active' : ''}
-                onClick={() => setTab('sheets')}
-              >
-                Characters
-              </button>
-              <button
-                className={activeTab === 'notes' ? 'active' : ''}
-                onClick={() => setTab('notes')}
-              >
-                {isDm ? 'Notes' : 'Handouts'}
-              </button>
-              {isDm && (
-                <button
-                  className={activeTab === 'music' ? 'active' : ''}
-                  onClick={() => setTab('music')}
-                >
-                  Music
-                </button>
-              )}
-              {/* Everyone: knowing what artwork exists is not the DM's secret,
+              {insideCampaign && (
+                <>
+                  <button
+                    className={activeTab === 'tabletop' ? 'active' : ''}
+                    onClick={() => setTab('tabletop')}
+                  >
+                    Tabletop
+                  </button>
+                  <button
+                    className={activeTab === 'sheets' ? 'active' : ''}
+                    onClick={() => setTab('sheets')}
+                  >
+                    Characters
+                  </button>
+                  <button
+                    className={activeTab === 'notes' ? 'active' : ''}
+                    onClick={() => setTab('notes')}
+                  >
+                    {isDm ? 'Notes' : 'Handouts'}
+                  </button>
+                  {isDm && (
+                    <button
+                      className={activeTab === 'music' ? 'active' : ''}
+                      onClick={() => setTab('music')}
+                    >
+                      Music
+                    </button>
+                  )}
+                  {/* Everyone: knowing what artwork exists is not the DM's secret,
                   and a player who has browsed it can ask for the right goblin
                   by name. */}
-              <button
-                className={activeTab === 'tokens' ? 'active' : ''}
-                onClick={() => setTab('tokens')}
-              >
-                Tokens
-              </button>
-              {/* Last, and for everyone: who is at this table is not the DM's
+                  <button
+                    className={activeTab === 'tokens' ? 'active' : ''}
+                    onClick={() => setTab('tokens')}
+                  >
+                    Tokens
+                  </button>
+                  {/* Last, and for everyone: who is at this table is not the DM's
                   private information - the members endpoint has always been
                   readable by any member. */}
-              <button
-                className={activeTab === 'players' ? 'active' : ''}
-                onClick={() => setTab('players')}
-              >
-                Players
-              </button>
-              <button className="linky leave" onClick={() => openCampaign(null)}>
-                Close campaign
-              </button>
-            </>
-          )}
-          <div className="spacer" />
-          {/* The mirror image of the three above: these belong to the shell, not
+                  <button
+                    className={activeTab === 'players' ? 'active' : ''}
+                    onClick={() => setTab('players')}
+                  >
+                    Players
+                  </button>
+                  <button className="linky leave" onClick={() => openCampaign(null)}>
+                    Close campaign
+                  </button>
+                </>
+              )}
+              <div className="spacer" />
+              {/* The mirror image of the three above: these belong to the shell, not
               to a table, and while you're at one the way back is Close
               campaign - not a tab that would sit alongside its own contents. */}
-          {!insideCampaign && authed && (
-            <button
-              className={activeTab === 'campaigns' ? 'active' : ''}
-              onClick={() => setTab('campaigns')}
-            >
-              Campaigns
-            </button>
-          )}
-          {/* Everyone signed in can see who else is here - a DM picking members
+              {!insideCampaign && authed && (
+                <button
+                  className={activeTab === 'campaigns' ? 'active' : ''}
+                  onClick={() => setTab('campaigns')}
+                >
+                  Campaigns
+                </button>
+              )}
+              {/* Everyone signed in can see who else is here - a DM picking members
               is reading this same list from inside their campaign. What you can
               *do* to it is another matter, and the tab itself decides that. */}
-          {!insideCampaign && authed && (
-            <button
-              className={activeTab === 'users' ? 'active' : ''}
-              onClick={() => setTab('users')}
-            >
-              Users
-            </button>
-          )}
-          {/* Before My account, which is where a list of "what's new here"
+              {!insideCampaign && authed && (
+                <button
+                  className={activeTab === 'users' ? 'active' : ''}
+                  onClick={() => setTab('users')}
+                >
+                  Users
+                </button>
+              )}
+              {/* Before My account, which is where a list of "what's new here"
               belongs: the tabs to its left are places to go and do something,
               and this is the one that says what has changed since you last
               did. Shown to anyone signed in - it describes the app, and every
               signed-in person is using the same one. */}
-          {!insideCampaign && authed && (
-            <button
-              className={activeTab === 'patch' ? 'active' : ''}
-              onClick={() => setTab('patch')}
-            >
-              Patch notes
-            </button>
-          )}
-          {/* Last, and unlike the rest, for everybody: this one is about the
+              {!insideCampaign && authed && (
+                <button
+                  className={activeTab === 'patch' ? 'active' : ''}
+                  onClick={() => setTab('patch')}
+                >
+                  Patch notes
+                </button>
+              )}
+              {/* Last, and unlike the rest, for everybody: this one is about the
               person signed in rather than about the server. */}
-          {!insideCampaign && authed && (
-            <button
-              className={activeTab === 'account' ? 'active' : ''}
-              onClick={() => setTab('account')}
-            >
-              My account
-            </button>
+              {!insideCampaign && authed && (
+                <button
+                  className={activeTab === 'account' ? 'active' : ''}
+                  onClick={() => setTab('account')}
+                >
+                  My account
+                </button>
+              )}
+            </nav>
           )}
-        </nav>
-        )}
 
-        {/* End of the bar: the spacer pushes these right, past the tabs. They
+          {/* End of the bar: the spacer pushes these right, past the tabs. They
             were inside the header when the header owned its own row; on a
             shared row they belong to the row. */}
-        <div className="spacer" />
-        {insideCampaign && myCampaigns.length > 1 && (
-          <select
-            className="campaign-switch"
-            value={campaignId}
-            onChange={(e) => openCampaign(e.target.value)}
-          >
-            {myCampaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-        {/* Only outside a campaign. At a table, leaving is a two-step move -
+          <div className="spacer" />
+          {insideCampaign && myCampaigns.length > 1 && (
+            <select
+              className="campaign-switch"
+              value={campaignId}
+              onChange={(e) => openCampaign(e.target.value)}
+            >
+              {myCampaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {/* Only outside a campaign. At a table, leaving is a two-step move -
             close the campaign, then log out - rather than one click sitting
             next to the scene controls. */}
-        {!insideCampaign && (
-          <button className="linky" onClick={signOut}>
-            Log out
-          </button>
-        )}
+          {!insideCampaign && (
+            <button className="linky" onClick={signOut}>
+              Log out
+            </button>
+          )}
         </div>
 
         {/* Its own block under the bar rather than a item in it: it is a
