@@ -14,9 +14,15 @@
  * taken off the table comes back wounded.
  *
  * Who sees what: the DM sees the whole cast, everyone else sees the tokens that
- * belong to them. Who may *make* one: the DM as many as they like, a player
- * one - their own character - which is why a token remembers the hand that
- * created it as well as the one it belongs to.
+ * belong to them. Who may *make* one: anybody, as many as they like. A player's
+ * are theirs from the moment they exist, and the DM says who everyone else's
+ * belong to - as many as they like to whoever they like, though a token belongs
+ * to one person at a time, because `ownerId` is a single field and "whose is
+ * this?" is a question that wants one answer.
+ *
+ * A token still remembers the hand that created it as well as the one it
+ * belongs to. Nothing is gated on it now, but they are different facts and the
+ * one that is not ownership is the one you cannot reconstruct later.
  */
 
 const express = require('express');
@@ -152,26 +158,20 @@ router.get('/', requireUser, async (req, res, next) => {
  * Make one in advance. It arrives on the bench, because a token made before the
  * session hasn't been put anywhere yet.
  *
- * A player gets one, and only one, and it is theirs from the moment it exists.
- * The limit is counted on who *created* a token rather than who owns one: a DM
- * handing somebody a second character shouldn't cost that person the right to
- * have made their own, and being given three tokens shouldn't mean you were
- * never allowed one.
+ * No limit on how many. A player with a familiar, a summoned swarm and a horse
+ * has three things to move, and a table where the fourth one has to be asked
+ * for is a table where somebody plays a spell wrong rather than interrupt.
+ * Every one a player makes is theirs from the moment it exists.
  */
 router.post('/', requireUser, async (req, res, next) => {
   try {
     const dm = isDm(req.campaign, req.actor);
-    if (!dm) {
-      const all = await everyToken(req);
-      if (all.some((t) => t.createdBy === req.actor.userId)) {
-        throw new HttpError(409, 'You have already made your token. Edit that one instead.');
-      }
-    }
     const token = {
       id: crypto.randomUUID(),
       ...sanitizeLook(req.body),
-      // Read off the session, never the request. Who made a token decides
-      // whether they may make another; who owns it decides who may move it.
+      // Read off the session, never the request. A different fact from
+      // ownership: who owns a token decides who may move it, and who made it is
+      // the part that cannot be worked out afterwards.
       createdBy: req.actor.userId,
       // A player's own token is theirs. The DM says who anybody else's belongs
       // to, and may say nobody - the monsters and the scenery.
@@ -279,10 +279,17 @@ router.put('/:tokenId/sheet', requireUser, async (req, res, next) => {
       throw new HttpError(403, 'You can only link a character you can edit.');
     }
 
-    const patch = await sheetLink.link(req.campaignId, found, sheet);
+    const { patch, scenes } = await sheetLink.link(req.campaignId, found, sheet);
     // A roster nudge rather than a scene update: the token may be on the bench,
     // and the tab that cares is listening for this either way.
     broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: found.token.id } });
+    // Taking a character off another figure changes that figure too, and it may
+    // be standing on a map somebody is looking at. The whole scene goes, because
+    // that is what the board redraws from.
+    for (const sceneId of scenes) {
+      const other = await store.get(scoped(req.campaignId, 'scenes'), sceneId);
+      if (other) broadcast(req, 'scenes:changed', { action: 'token:update', record: other });
+    }
     res.json({ ...found.token, ...patch });
   } catch (err) {
     next(err);

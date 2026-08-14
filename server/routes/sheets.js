@@ -133,16 +133,20 @@ router.put('/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'This sheet is read-only for you.' });
     }
 
-    // Carry the shared numbers to the token holding this character, if one is.
-    // After the write rather than inside it: the sheet is the record being
-    // saved, and a token that could not be updated must not cost somebody the
-    // edit they were making to their own character.
-    await sheetLink.pushSheetToToken(req.campaignId, record);
+    // Carry the shared numbers to every token holding this character. After the
+    // write rather than inside it: the sheet is the record being saved, and a
+    // token that could not be updated must not cost somebody the edit they were
+    // making to their own character.
+    const touched = await sheetLink.pushSheetToTokens(req.campaignId, record);
 
     announce(req, record);
-    // The token is on a scene, and the tabletop is watching a different event.
-    if (await sheetLink.tokenForSheet(req.campaignId, record.id)) {
-      broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: record.id } });
+    // Those tokens are on maps, and the tabletop is watching a different event.
+    // The whole scene is sent rather than a nudge, because that is what the
+    // board redraws from - and a character can now be standing on more than one
+    // of them at once.
+    for (const sceneId of touched) {
+      const scene = await store.get(scoped(req.campaignId, 'scenes'), sceneId);
+      if (scene) broadcast(req, 'scenes:changed', { action: 'token:update', record: scene });
     }
     res.json(record);
   } catch (err) {

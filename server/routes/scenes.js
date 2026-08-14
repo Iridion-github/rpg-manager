@@ -16,7 +16,15 @@ const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
 const { broadcast, broadcastPerActor } = require('../realtime');
-const { scoped, requireDm, canMoveToken, canViewSheet } = require('../campaigns');
+const { requireUser } = require('../auth');
+const {
+  scoped,
+  requireDm,
+  isDm,
+  canMoveToken,
+  canViewSheet,
+  canEditSheet,
+} = require('../campaigns');
 const sheetLink = require('../sheetLink');
 
 const COLLECTION = 'scenes';
@@ -234,6 +242,29 @@ function announce(req, action, record, extra = {}) {
 }
 
 /**
+ * Would this edit write hit points onto a character the caller may not edit?
+ *
+ * A token's hit points are carried to the sheet it is coupled to, so setting
+ * them on the map is setting them on that sheet. Owning the figure says nothing
+ * about being trusted with the character - a DM can hand somebody a token and
+ * link it to a sheet they were never given - so the two permissions are asked
+ * separately, exactly as the coupling route asks them.
+ *
+ * False when nothing is linked, when the numbers are not being changed, or when
+ * the sheet is one they could have edited from the Characters tab anyway. Those
+ * are all of the ordinary cases, and none of them costs a read.
+ */
+async function touchesForeignSheet(req, token) {
+  if (!token?.sheetId) return false;
+  const asked = sanitizeToken(req.body, token);
+  if (asked.hp === token.hp && asked.maxHp === token.maxHp) return false;
+  const sheet = await store.get(scoped(req.campaignId, 'sheets'), token.sheetId);
+  // A link pointing at nothing grants nothing and blocks nothing.
+  if (!sheet) return false;
+  return !canEditSheet(req.actor, req.campaignRole, sheet);
+}
+
+/**
  * One token per cell.
  *
  * Tokens can be bigger than one cell (a size-2 ogre covers 2×2), so this is a
@@ -408,12 +439,45 @@ router.post('/:id/tokens', requireDm, async (req, res, next) => {
   }
 });
 
-// Full token edit (label, colour, owner, size) - DM only.
-router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
+/**
+ * Full token edit - the DM on any token, an owner on their own.
+ *
+ * The same reach the Tokens tab already gives an owner, offered where they are
+ * actually playing: a player who may rename their figure from a list two tabs
+ * away had no reason to be sent there to do it.
+ *
+ * Two things stay the DM's inside that edit, and both are checked here rather
+ * than trusted to the form that draws them:
+ *
+ *   who it belongs to  giving a token away is the act that takes something
+ *                      from somebody else. An owner sending an `ownerId` gets
+ *                      the one already stored.
+ *   somebody else's    hit points travel to the linked character sheet, so
+ *   character's wounds writing them is writing that sheet. Where the caller
+ *                      could not edit that sheet directly, this refuses rather
+ *                      than quietly dropping the numbers.
+ */
+router.put('/:id/tokens/:tokenId', requireUser, async (req, res, next) => {
   try {
+    const before = tokenIn(await store.get(scenesOf(req), req.params.id) || {}, req.params.tokenId);
+    if (!before) return res.status(404).json({ error: 'Not found' });
+    const dm = isDm(req.campaign, req.actor);
+    if (!canMoveToken(req.actor, req.campaignRole, before)) {
+      throw new HttpError(403, 'You can only edit your own token.');
+    }
+    if (!dm && (await touchesForeignSheet(req, before))) {
+      throw new HttpError(
+        403,
+        "Those hit points belong to a character you can't edit. Ask your DM."
+      );
+    }
+
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
-      const updated = { ...existing, ...sanitizeToken(req.body, existing) };
+      const asked = sanitizeToken(req.body, existing);
+      // Handing a token to somebody is the DM's alone, so an owner's edit
+      // cannot carry an owner even if the request does.
+      const updated = { ...existing, ...asked, ...(dm ? {} : { ownerId: existing.ownerId ?? null }) };
       // Growing a token can push it into a neighbour just as moving it can.
       refuseOverlap(current, updated, updated.id);
       return {
@@ -427,19 +491,37 @@ router.put('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
     // the one thing here that means the same at both ends, so they travel back
     // to the sheet - the modifier does not, since on the sheet it is derived
     // from dexterity and has no single number to write to.
-    const movedSheet = await sheetLink.pushTokenToSheet(req.campaignId, updated);
+    const moved = await sheetLink.pushTokenToSheet(req.campaignId, updated);
     // And the table is told, per person: an open sheet window should show the
     // wound as it lands rather than whenever its reader next reloads. Per actor
     // because who may see a sheet varies, and this is the same record the
     // sheets router would be broadcasting.
-    if (movedSheet) {
+    if (moved) {
       broadcastPerActor(req, 'sheets:changed', (actor, role) =>
-        canViewSheet(actor, role, movedSheet)
-          ? { action: 'update', record: movedSheet }
-          : { action: 'delete', record: { id: movedSheet.id } }
+        canViewSheet(actor, role, moved.sheet)
+          ? { action: 'update', record: moved.sheet }
+          : { action: 'delete', record: { id: moved.sheet.id } }
       );
     }
-    announce(req, 'token:update', scene);
+
+    /**
+     * The character's other figures moved with it.
+     *
+     * A character can stand on more than one map, or twice on one, and a wound
+     * lands on all of them. Announcing this scene from the copy above would be
+     * announcing it as it was *before* a sibling on the same map was updated -
+     * so where that happened, it is read again.
+     */
+    const alsoMoved = moved?.scenes || [];
+    const here = alsoMoved.includes(req.params.id)
+      ? (await store.get(scenesOf(req), req.params.id)) || scene
+      : scene;
+    announce(req, 'token:update', here);
+    for (const sceneId of alsoMoved) {
+      if (sceneId === req.params.id) continue;
+      const other = await store.get(scenesOf(req), sceneId);
+      if (other) announce(req, 'token:update', other);
+    }
     res.json(updated);
   } catch (err) {
     next(err);

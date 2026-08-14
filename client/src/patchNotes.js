@@ -28,6 +28,22 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Edit is on the right-click menu of your own tokens now, not just the DM\'s. Right-click a figure that belongs to you on the map and you get the same form the Tokens tab gives you: its name, picture, colour, size, nameplate, status and hit points, without leaving the board. Who a token belongs to is still the DM\'s to set, so that one field is missing from your copy of the form. If your figure is linked to a character sheet you have not been given, the hit points stay the DM\'s too and the app tells you rather than pretending to save them.',
+      },
+      {
+        kind: 'change',
+        text: 'The token list has column headings and a line explaining them: Token, Linked to which Char Sheet, Assigned Player, and the buttons. The player a token belongs to is now shown in the list itself instead of tucked under its name, so you can read down the column and see who has what without opening anything. The old single "Character" caption read like a way of giving a token to a player, which it never was: that is Assigned Player, set under Edit, and it has no limit on how many you can hand out.',
+      },
+      {
+        kind: 'change',
+        text: 'The Characters tab says "Figure on the map" now, rather than "Token", so it reads as the same question the Tokens tab asks from the other side. A character is on one figure and a figure is one character, as before: putting a character on a new figure takes it off the old one, and the dropdown tells you which character a figure is already carrying before you choose it.',
+      },
+      {
+        kind: 'change',
+        text: 'Make as many tokens as you want. The Tokens tab used to give you one and then take the button away; now anybody can make as many as they need, so a familiar, a summoned swarm and a horse are three figures on the table rather than a conversation about it. Your DM can hand out as many as they like too. A token still belongs to one person at a time, so giving one to somebody takes it off whoever had it.',
+      },
+      {
+        kind: 'new',
         text: 'Equipped Armor, a new section on the character sheet. Write down each piece you own - a name, whether it is clothes, light, medium, heavy or a shield, its AC, how much Dexterity it lets through, and whether it clanks - and tick the one you are wearing. You can have one suit on plus one shield, and ticking a second suit takes the first one off. Picking a type fills in what that kind of armour usually does, and every field stays yours to change for the pieces that break the rules.',
       },
       {

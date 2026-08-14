@@ -398,7 +398,7 @@ whole of what a player can do to the board:
 | Set its initiative | ✅ | any token |
 | Take it off the table | ✅ | any token |
 | Place it from the cast list | ✅ | any token |
-| Rename, recolour, resize | their own, from the Tokens tab | any token |
+| Rename, recolour, resize, set hit points | their own, from the map or the Tokens tab | any token |
 | Assign it to somebody | - | ✅ |
 | Delete it for good | their own, from the Tokens tab | ✅ |
 
@@ -491,12 +491,25 @@ Right-clicking the **map** offers:
 
 Right-clicking a **token** offers:
 
-- **Edit** (DM only) - the same form, prefilled.
+- **Edit** - the same form, prefilled. Open to the token's owner, and offered
+  where they are actually playing: somebody who could already rename their
+  figure from the Tokens tab had no reason to be sent two tabs away to do it.
+  **Belongs to** is left out of their copy of the form, and the server takes the
+  owner from the stored token rather than the request, so an owner cannot hand
+  their token on however the form was drawn.
+
+  One more thing is checked there, and it is not about the figure. Hit points
+  travel to the character sheet a token is coupled to, so setting them on the
+  map is writing that sheet. Where the caller could not have edited that sheet
+  from the Characters tab - a DM can hand you a token linked to somebody else's
+  character - the edit is **refused** and says so, rather than quietly dropping
+  the numbers. Everything else about that same figure still edits fine, because
+  no wound travels.
 - **Set initiative** - what this creature rolled, as a total or as a die plus a
   modifier. Open to the token's owner, because what you rolled is yours to say.
-  It's a route of its own rather than a hole in the DM's edit: a form that can
-  only reach three numbers can't grow a fourth by accident, and a player using
-  it cannot rename their token through it.
+  It keeps its own route even now that the owner has Edit: it is the one write a
+  player makes on a token in the middle of somebody else's turn, and a form that
+  can only reach three numbers can't grow a fourth by accident.
 - **Remove from table** - takes the token off this map and keeps it. Open to the
   owner. See below.
 - **Delete** (DM only) - gone for good, at once, with no confirmation.
@@ -771,15 +784,22 @@ waiting to be placed on one - the row says which, naming the scene.
 | | Player | DM |
 | --- | --- | --- |
 | Sees | their own tokens | every token in the campaign |
-| Creates | **one** - after that the button is gone | as many as they like |
+| Creates | as many as they like | as many as they like |
 | Edits, deletes | their own | anybody's |
-| Assigns an owner | - | any token |
+| Assigns an owner | - | any token, to anyone, as many as they like |
 
-The one-token limit counts who **created** a token, not who owns one. A DM
-handing you a second character shouldn't cost you the right to have made your
-own, and being given three tokens shouldn't mean you were never allowed one - so
-a token remembers both `createdBy` and `ownerId`, and they answer different
-questions.
+**Nobody is counted.** A player with a familiar, a summoned swarm and a horse has
+several things to move, and a table where the next one has to be asked for is a
+table where somebody plays a spell wrong rather than interrupt.
+
+The one count that remains is on the other side of the relation: a token belongs
+to **one person at a time**. `ownerId` is a single field, because "whose is
+this?" is a question that wants one answer - handing a token to somebody takes it
+off whoever had it.
+
+A token still remembers both `createdBy` and `ownerId`. Nothing is gated on the
+first any more, but they answer different questions, and who made a thing is the
+part that cannot be reconstructed later.
 
 **No hit points and no initiative here.** Those are decided in the moment, on
 the tabletop, by whoever is looking at the fight - this form is about what a
@@ -865,7 +885,31 @@ map.
 is held by at most one token. Pointing a character at a second figure *releases*
 the first rather than refusing - moving a character across is what you meant -
 and the dropdown says which character is already spoken for, and by what, before
-you choose it.
+you choose it (*"Gerald - currently Gerald on deck"*). It reads the same from
+either end: *Linked to which Char Sheet* in the Tokens tab, *Figure on the map*
+in the Characters tab.
+
+The server's queries are written in the plural even so. Not to permit a second
+holder, but because nothing guarantees one has never existed, and a stray one
+kept in step is better than a figure quietly drifting away from its own
+character. The next link clears it.
+
+**The token list is four columns**, with a line above them saying what the
+middle two are for:
+
+| Token | Linked to which Char Sheet | Assigned Player | |
+| --- | --- | --- | --- |
+| the face it wears, its name, and where it is standing | which character it *is*, as a select | who may move it, read-only | Edit, and delete |
+
+The two middle columns are easily confused, because people name their character
+sheet after themselves and the two then read as the same list of people. Naming
+them apart is most of what the headings are for. They also count differently: a
+character is on exactly one figure, while a player may be given as many tokens
+as the DM likes.
+
+**Assigned Player is shown here and changed under Edit.** It is the one field on
+a token that hands something to somebody, so it keeps the form around it rather
+than becoming a dropdown you can brush past on the way down a list.
 
 **Who may.** The DM may couple anything to anything. Anyone else needs both
 halves to be theirs: a token they could move, and a sheet they could **edit**.
@@ -875,8 +919,10 @@ you may weld your figure to.
 
 The link is stored in exactly one place, `sheetId` on the token; the sheet holds
 no pointer back. With an id at both ends there is a state where they disagree,
-and then something has to decide which end is lying. It survives a token being
-benched and placed again, and deleting a character sets its token loose with
+and then something has to decide which end is lying. Reading "what is this
+character on?" costs a scan of the campaign's tokens, which is a list of a few
+dozen at a table that has been going for years. It survives a token being
+benched and placed again, and deleting a character sets its figure loose with
 whatever hit points it had - a figure healing to full because its sheet was
 deleted mid-fight would be a strange thing to happen.
 

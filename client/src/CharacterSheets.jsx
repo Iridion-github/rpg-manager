@@ -260,27 +260,24 @@ export default function CharacterSheets({
   }, [loadTokens, offline]);
 
   /**
-   * Point this character at a token, or at none.
+   * Put this character on a figure, or take it off one.
    *
-   * Not optimistic. The server may release another token in the process, and
-   * guessing at which one would mean drawing a board that is briefly wrong in
-   * two places rather than one - so both lists are re-read from the answer
-   * instead. It is one small request against a list of a few dozen.
+   * Always names the token, because the link is a field on the token. Moving a
+   * character from one figure to another is a single call: the route releases
+   * whatever else held the sheet as part of taking it, so there is no moment in
+   * between where two tokens claim the same character.
+   *
+   * Not optimistic. The call can move hit points at both ends and can release a
+   * second token, and guessing at the result would mean drawing a board that is
+   * briefly wrong in two places rather than one - so both lists are re-read from
+   * the answer instead. It is one small request against a list of a few dozen.
    */
-  async function linkSheet(sheet, tokenId) {
-    const previous = tokens.find((t) => t.sheetId === sheet.id) || null;
-    // Unlinking is aimed at whichever token currently holds it; linking is
-    // aimed at the token being chosen. Either way the call names a token,
-    // because the link is a field on the token.
-    const target = tokenId || previous?.id;
-    if (!target) return;
+  async function setLink(sheet, tokenId, attach) {
+    if (!tokenId) return;
     setLinkingId(sheet.id);
     setError('');
     try {
-      // Moving a character from one figure to another is a single call: the
-      // route releases whatever else held the sheet as part of taking it, so
-      // there is no window where two tokens claim the same character.
-      await api.linkTokenSheet(target, tokenId ? sheet.id : null);
+      await api.linkTokenSheet(tokenId, attach ? sheet.id : null);
       await loadTokens();
       // The sheet's own hit points may have moved to match the token's, so it
       // is worth re-reading rather than assuming this changed nothing here.
@@ -575,27 +572,37 @@ export default function CharacterSheets({
               </details>
             )}
 
-            {/* Which figure on the map is this character. Not the DM's alone,
-                unlike the access panel above it: a player coupling their own
-                character to their own token is arranging their own things, and
-                the server checks both halves regardless of what this offers. */}
+            {/* Which figure on the map is this character. One, and one only:
+                choosing another takes the character off the first.
+
+                Not the DM's alone, unlike the access panel above it: a player
+                coupling their own character to their own token is arranging
+                their own things, and the server checks both halves regardless
+                of what this offers. */}
             {!readOnly && (
               <SheetTokenLink
-                label="Token"
-                value={tokens.find((t) => t.sheetId === sheet.id)?.id || ''}
+                label="Figure on the map"
+                value={figureOf(tokens, sheet)?.id || ''}
+                emptyLabel="Not on the map"
                 busy={linkingId === sheet.id}
                 options={tokens.map((t) => ({
                   id: t.id,
                   name: t.label,
                   // Named so the choice is informed: picking this one takes it
                   // off the character it currently is.
-                  takenBy:
+                  note:
                     t.sheetId && t.sheetId !== sheet.id
-                      ? sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
+                      ? `currently ${
+                        sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
+                      }`
                       : '',
                 }))}
                 hint=""
-                onChange={(tokenId) => linkSheet(sheet, tokenId)}
+                onChange={(tokenId) =>
+                  tokenId
+                    ? setLink(sheet, tokenId, true)
+                    : setLink(sheet, figureOf(tokens, sheet)?.id, false)
+                }
               />
             )}
 
@@ -618,6 +625,15 @@ export default function CharacterSheets({
     </>
   );
 }
+
+/**
+ * The figure on the board that is this character, if there is one.
+ *
+ * `find`, and at most one to find: linking a character to a figure releases
+ * whatever else was holding it, so a second is a state the server does not
+ * leave behind.
+ */
+const figureOf = (tokens, sheet) => tokens.find((t) => t.sheetId === sheet.id) || null;
 
 // "GM only" / "Kira can edit · Tom can view" - the GM's answer to "who's got
 // this one?" without opening it.

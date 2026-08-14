@@ -3999,14 +3999,77 @@ button.token-tile:hover {
   gap: 0.4rem;
 }
 
+/* Four columns: the figure, the character it is, the person who may move it,
+   and what you can do to it. The captions above share this template rather
+   than living in a table of their own, which is what keeps them over the
+   columns they name however wide the window is. The last column is a fixed
+   width rather than sized to its buttons: `auto` measures its own row, so the
+   caption row - which has no buttons in it - would give its three `fr` columns
+   more room than the rows below and print every heading to the right of what it
+   names. The rest share what is left, weighted so the select has room for a
+   character name and a note about where else that character is. */
 .cast-list li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.9fr) 5.2rem;
   align-items: center;
   gap: 0.6rem;
   background: #1a1e27;
   border: 1px solid #262b38;
   border-radius: 8px;
   padding: 0.45rem 0.6rem;
+}
+
+/* Captions, not a row: no card around them, and nothing to click. */
+.cast-list li.cast-head {
+  background: none;
+  border-color: transparent;
+  padding-top: 0;
+  padding-bottom: 0.1rem;
+}
+
+.cast-head span {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b90a0;
+}
+
+.cast-token {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Every cell keeps its own overflow: a long character name must ellipsis
+   inside its column rather than push the columns out of line. */
+.cast-cell {
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.cast-owner {
+  color: #c9cddb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cast-owner em {
+  color: #8b90a0;
+  font-style: normal;
+}
+
+.cast-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* In a row it is a cell, not a stacked field: no caption to sit under and no
+   margin below it to push the row taller than its neighbours. */
+.cast-list .link-pair {
+  margin-bottom: 0;
 }
 
 /* --- coupling a token to a character ---
@@ -4028,9 +4091,13 @@ button.token-tile:hover {
   color: #8b90a0;
 }
 
+/* Wide enough for "Character sheet" and "Figures on the map", which are the
+   captions that stop the column reading as a list of people. Fixed rather than
+   sized to the text, so the selects on a stack of rows line up. */
 .link-pair label > span {
   flex: none;
-  width: 4.2rem;
+  width: 6.6rem;
+  line-height: 1.15;
 }
 
 .link-pair select {
@@ -4042,6 +4109,7 @@ button.token-tile:hover {
   margin: 0;
   font-size: 0.78rem;
 }
+
 
 /* In a token row the picker is one item among several on a single line, so it
    loses the stacked layout and the label column and is simply given a width it
@@ -4078,6 +4146,12 @@ button.token-tile:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.cast-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cast-who small {

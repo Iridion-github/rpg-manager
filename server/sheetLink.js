@@ -18,6 +18,13 @@
  * it is a single field. A sheet is held by at most one token because linking
  * releases whatever else was holding it; see `link`.
  *
+ * The queries below are written in the plural anyway. Not to permit a second
+ * holder, but because nothing guarantees one has never existed: a campaign
+ * carried over from a version that allowed it, or two writes that raced. Asking
+ * "which tokens hold this?" and writing to all of them keeps a stray one in
+ * step until the next link clears it, where taking the first and ignoring the
+ * rest would leave a figure quietly drifting away from its own character.
+ *
  * **Which way the numbers flow** is decided per field, by where the field is
  * actually authored:
  *
@@ -100,11 +107,22 @@ async function allTokens(campaignId) {
   return found;
 }
 
-/** The token holding this sheet, or null. */
-async function tokenForSheet(campaignId, sheetId) {
-  if (!sheetId) return null;
-  return (await allTokens(campaignId)).find((t) => t.token.sheetId === sheetId) || null;
+/** Every token holding this sheet. Empty when nothing does. */
+async function tokensForSheet(campaignId, sheetId) {
+  if (!sheetId) return [];
+  return (await allTokens(campaignId)).filter((t) => t.token.sheetId === sheetId);
 }
+
+/**
+ * The scenes a set of found tokens stand on, once each and never null.
+ *
+ * What a caller needs in order to tell the table: a token patched here may be
+ * on a map somebody is looking at, and the scene it belongs to is the record
+ * the tabletop redraws from.
+ */
+const scenesTouched = (found) => [
+  ...new Set(found.filter((f) => f.where === 'scene').map((f) => f.sceneId)),
+];
 
 /** Write a patch onto one token, wherever it happens to live. */
 async function patchToken(campaignId, found, patch) {
@@ -127,17 +145,21 @@ async function patchToken(campaignId, found, patch) {
  * exists to prevent. Released rather than refused, because the DM dragging a
  * character onto a different figure means to move it, not to be told no.
  *
+ * Every other holder is released, not merely the first: this is the moment the
+ * rule is enforced, so it is the moment to make it true rather than half true.
+ *
  * Returns the fields written onto the token, so the caller can answer with a
- * token that matches what was stored.
+ * token that matches what was stored, and the scenes the released figures stand
+ * on, so the caller can tell the table their link has gone.
  */
 async function link(campaignId, found, sheet) {
-  const holder = await tokenForSheet(campaignId, sheet.id);
-  if (holder && holder.token.id !== found.token.id) {
-    await patchToken(campaignId, holder, { sheetId: null });
-  }
+  const released = (await tokensForSheet(campaignId, sheet.id)).filter(
+    (t) => t.token.id !== found.token.id
+  );
+  for (const holder of released) await patchToken(campaignId, holder, { sheetId: null });
   const patch = { sheetId: sheet.id, ...tokenFieldsFromSheet(sheet, found.token) };
   await patchToken(campaignId, found, patch);
-  return patch;
+  return { patch, scenes: scenesTouched(released) };
 }
 
 /** Uncouple one token. The sheet is untouched - it never knew. */
@@ -150,22 +172,33 @@ async function unlink(campaignId, found) {
 }
 
 /**
- * A sheet has changed - carry it to the token holding it, if any.
+ * A sheet has changed - carry it to the token holding it.
  *
  * Cheap when nothing is linked, which is the common case: one scan of the
- * campaign's tokens and no writes.
+ * campaign's tokens and no writes. Plural for the reason at the top of this
+ * file: there should be one holder, and if there is somehow a second it is
+ * better kept in step than left to drift.
+ *
+ * `except` is a token whose numbers are already right - the one whose own edit
+ * started this - so it is not written over with what it just said. Returns the
+ * scenes that actually changed, for the caller to announce; a token that
+ * already agreed with the sheet is not one of them.
  */
-async function pushSheetToToken(campaignId, sheet) {
-  if (!sheet?.id) return;
-  const found = await tokenForSheet(campaignId, sheet.id);
-  if (!found) return;
-  const patch = tokenFieldsFromSheet(sheet, found.token);
-  // Nothing to write is the usual answer - most sheet edits are about spells
-  // and inventory, and a write here would broadcast a scene change to the whole
-  // table for a note nobody can see on the map.
-  const same = Object.entries(patch).every(([key, value]) => found.token[key] === value);
-  if (same) return;
-  await patchToken(campaignId, found, patch);
+async function pushSheetToTokens(campaignId, sheet, except = null) {
+  if (!sheet?.id) return [];
+  const written = [];
+  for (const found of await tokensForSheet(campaignId, sheet.id)) {
+    if (except && found.token.id === except) continue;
+    const patch = tokenFieldsFromSheet(sheet, found.token);
+    // Nothing to write is the usual answer - most sheet edits are about spells
+    // and inventory, and a write here would broadcast a scene change to the
+    // whole table for a note nobody can see on the map.
+    const same = Object.entries(patch).every(([key, value]) => found.token[key] === value);
+    if (same) continue;
+    await patchToken(campaignId, found, patch);
+    written.push(found);
+  }
+  return scenesTouched(written);
 }
 
 /**
@@ -174,6 +207,15 @@ async function pushSheetToToken(campaignId, sheet) {
  * Only the hit points. The modifier is the sheet's to decide and the rest of
  * the token was never the sheet's business, so this writes exactly the two
  * numbers that mean the same thing at both ends.
+ *
+ * It then carries them on to anything else holding that sheet, which should be
+ * nothing at all and usually is. That step costs one scan and no writes in the
+ * ordinary case, and in the case it exists for - a stray second holder left by
+ * older data - it is the difference between two figures of one character
+ * agreeing about their wounds and one of them being wrong.
+ *
+ * Returns the sheet that moved and the scenes that moved with it, or null when
+ * nothing did.
  */
 async function pushTokenToSheet(campaignId, token) {
   if (!token?.sheetId) return null;
@@ -185,22 +227,25 @@ async function pushTokenToSheet(campaignId, token) {
   // Returned so the caller can tell the table. Writing this to disk without
   // saying so left an open sheet window showing the hit points the character
   // had before it was hit, until whoever was reading it happened to reload.
-  return store.mutate(sheetsOf(campaignId), sheet.id, (currentSheet) => ({
+  const moved = await store.mutate(sheetsOf(campaignId), sheet.id, (currentSheet) => ({
     ...currentSheet,
     hp: { ...currentSheet.hp, max, current },
   }));
+  const scenes = await pushSheetToTokens(campaignId, moved, token.id);
+  return { sheet: moved, scenes };
 }
 
 /**
- * A sheet is being deleted - release the token that held it.
+ * A sheet is being deleted - release every token that held it.
  *
- * Without this the token keeps an id that resolves to nothing, which is not
- * dangerous but is a link the interface would have to explain. The token keeps
- * the numbers it had.
+ * Without this a token keeps an id that resolves to nothing, which is not
+ * dangerous but is a link the interface would have to explain. The tokens keep
+ * the numbers they had.
  */
 async function releaseSheet(campaignId, sheetId) {
-  const found = await tokenForSheet(campaignId, sheetId);
-  if (found) await patchToken(campaignId, found, { sheetId: null });
+  const found = await tokensForSheet(campaignId, sheetId);
+  for (const one of found) await patchToken(campaignId, one, { sheetId: null });
+  return scenesTouched(found);
 }
 
 module.exports = {
@@ -208,11 +253,12 @@ module.exports = {
   initiativeModOf,
   tokenFieldsFromSheet,
   allTokens,
-  tokenForSheet,
+  tokensForSheet,
+  scenesTouched,
   patchToken,
   link,
   unlink,
-  pushSheetToToken,
+  pushSheetToTokens,
   pushTokenToSheet,
   releaseSheet,
 };

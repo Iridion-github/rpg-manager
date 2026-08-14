@@ -13,15 +13,10 @@ import SheetTokenLink from './SheetTokenLink.jsx';
  * belonging to somebody, each one either standing on a map or waiting to be
  * placed on one.
  *
- * Two rules shape what this screen offers, and both come from the same idea -
- * a player has a character, a DM runs a cast:
- *
- *   - the DM sees every token here and may make as many as they like;
- *   - everybody else sees the tokens that belong to them, and may make one.
- *
- * The second is counted on who *created* a token, not who owns one, so a DM
- * handing somebody a second character doesn't cost that person the right to
- * have made their own.
+ * One rule shapes what this screen offers: the DM sees every token here, and
+ * everybody else sees the tokens that belong to them. Anybody may make as many
+ * as they like, and the DM may hand out as many as they like - a token belongs
+ * to one person at a time, which is the only count still kept.
  *
  * What isn't in the *edit form*: hit points and initiative. Those are decided
  * in the moment on the tabletop, by whoever is looking at the fight, and a
@@ -91,9 +86,9 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
     return () => socket.off('scenes:changed', load);
   }, [load]);
 
-  // A player gets one token of their own making. The DM's list is unbounded.
-  const madeOne = rows.some((t) => t.createdBy === actor?.userId);
-  const canCreate = !offline && (isDm || !madeOne);
+  // Nobody is counted. The only thing that stops you making a token here is
+  // having no server to make it on.
+  const canCreate = !offline;
 
   const ownerName = (id) => players.find((p) => p.id === id)?.name || null;
   const ownerColour = (id) => players.find((p) => p.id === id)?.color || '#4a5163';
@@ -163,6 +158,14 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
 
       {error && <p className="error">{error}</p>}
 
+      {/* Above the rows rather than in them, because it is about the two columns
+          rather than about any one token - and because the two were being read
+          as one thing. Naming them apart is most of the fix; the captions below
+          are the rest. */}
+      <p className="hint">
+        If linked to a <strong>Character</strong>, they share hit points.{" "}<strong>Assigned Player</strong> is who can move and update the token.
+      </p>
+
       {loading ? (
         <p className="hint">Loading…</p>
       ) : rows.length === 0 ? (
@@ -173,37 +176,33 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
         </p>
       ) : (
         <ul className="cast-list">
+          {/* Captions over the columns, sharing the rows' own grid template so
+              the two line up. A list item rather than a heading row of its own,
+              so it cannot drift out of the list it describes. */}
+          <li className="cast-head" aria-hidden="true">
+            <span>Token</span>
+            <span>{offline ? '' : 'Linked to which Char Sheet'}</span>
+            <span>Assigned Player</span>
+            <span />
+          </li>
           {rows.map((t) => (
             <li key={t.id}>
-              <span
-                className="cast-face"
-                style={{
-                  background: t.imageUrl
-                    ? `center / cover no-repeat url(${JSON.stringify(t.imageUrl)})`
-                    : t.color,
-                  ...(t.borderColor ? { borderColor: t.borderColor } : {}),
-                }}
-              />
-              <span className="cast-who">
-                <strong>{t.label}</strong>
-                <small>
-                  {/* Whose it is, and where it is. Both are facts this screen
-                      exists to answer, and neither is visible on the map from
-                      the Tokens tab. */}
-                  {t.ownerId ? (
-                    <>
-                      <span
-                        className="cast-owner-dot"
-                        style={{ background: ownerColour(t.ownerId) }}
-                      />
-                      {ownerName(t.ownerId) || 'someone who has left'}
-                    </>
-                  ) : (
-                    'unassigned'
-                  )}
-                  {' · '}
-                  {t.sceneId ? `on ${t.sceneName}` : 'not placed'}
-                </small>
+              <span className="cast-token">
+                <span
+                  className="cast-face"
+                  style={{
+                    background: t.imageUrl
+                      ? `center / cover no-repeat url(${JSON.stringify(t.imageUrl)})`
+                      : t.color,
+                    ...(t.borderColor ? { borderColor: t.borderColor } : {}),
+                  }}
+                />
+                <span className="cast-who">
+                  <strong>{t.label}</strong>
+                  {/* Where it is. Not visible on the map from this tab, and the
+                      one fact about a figure that this screen alone answers. */}
+                  <small>{t.sceneId ? `on ${t.sceneName}` : 'not placed'}</small>
+                </span>
               </span>
 
               {/* The same coupling the Characters tab offers, asked from this
@@ -211,31 +210,66 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
                   than inside the Edit form, because it is not part of what a
                   token *looks like* - and because acting on change keeps it the
                   same gesture it is over there. */}
-              {!offline && (
-                <SheetTokenLink
-                  label="Character"
-                  value={t.sheetId || ''}
-                  busy={linkingId === t.id}
-                  options={linkable.map((s) => ({
-                    id: s.id,
-                    name: s.name || 'Unnamed',
-                    takenBy:
-                      s.id !== t.sheetId && rows.some((other) => other.sheetId === s.id)
-                        ? rows.find((other) => other.sheetId === s.id)?.label || 'another token'
-                        : '',
-                  }))}
-                  onChange={(sheetId) => linkToken(t, sheetId)}
-                />
-              )}
+              <span className="cast-cell">
+                {!offline && (
+                  <SheetTokenLink
+                    // No caption of its own: the column has one, and repeating
+                    // it on every row would be the same words a dozen times
+                    // down a screen that is already dense.
+                    label=""
+                    ariaLabel="Linked to which character sheet"
+                    value={t.sheetId || ''}
+                    busy={linkingId === t.id}
+                    options={linkable.map((s) => {
+                      // Said before the choice rather than after it: a character
+                      // is on one figure, so picking one that is already
+                      // somewhere takes it off there.
+                      const holder = rows.find(
+                        (other) => other.sheetId === s.id && other.id !== t.id
+                      );
+                      return {
+                        id: s.id,
+                        name: s.name || 'Unnamed',
+                        note: holder ? `currently ${holder.label}` : '',
+                      };
+                    })}
+                    onChange={(sheetId) => linkToken(t, sheetId)}
+                  />
+                )}
+              </span>
 
-              {!offline && (
-                <>
-                  <button onClick={() => setForm({ token: t })}>Edit</button>
-                  <button className="del" onClick={() => setConfirmId(t.id)} title={`Delete ${t.label}`}>
-                    ✕
-                  </button>
-                </>
-              )}
+              {/* Read here, changed under Edit. It is the one field on a token
+                  that hands something to somebody, so it stays in the form with
+                  the confirmation around it rather than becoming a dropdown you
+                  can brush past on your way down the list. */}
+              <span className="cast-cell cast-owner">
+                {t.ownerId ? (
+                  <>
+                    <span
+                      className="cast-owner-dot"
+                      style={{ background: ownerColour(t.ownerId) }}
+                    />
+                    {ownerName(t.ownerId) || 'someone who has left'}
+                  </>
+                ) : (
+                  <em title="Only the DM can move this one">Nobody</em>
+                )}
+              </span>
+
+              <span className="cast-actions">
+                {!offline && (
+                  <>
+                    <button onClick={() => setForm({ token: t })}>Edit</button>
+                    <button
+                      className="del"
+                      onClick={() => setConfirmId(t.id)}
+                      title={`Delete ${t.label}`}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </span>
             </li>
           ))}
         </ul>

@@ -812,6 +812,11 @@ export default function Tabletop({ actor, players, offline }) {
   useEffect(() => {
     const onSceneChange = ({ action, record, origin }) => {
       if (origin === clientId) return; // our own echo, already applied
+      // Not every message on this channel carries a scene. A roster nudge names
+      // a token or a sheet, and taking its id for a scene id put a nameless
+      // entry in the scene list that nothing could open. `loadRoster` below is
+      // what those are for.
+      if (!record?.id || (action !== 'delete' && !Array.isArray(record.tokens))) return;
       setScenes((prev) => {
         if (action === 'delete') return prev.filter((s) => s.id !== record.id);
         const i = prev.findIndex((s) => s.id === record.id);
@@ -1969,8 +1974,8 @@ export default function Tabletop({ actor, players, offline }) {
 
     // A token gets a menu about *that token* rather than about the map under
     // it. The DM gets one on any token; a player gets one on their own, where
-    // there is now something on it for them - their initiative, and taking the
-    // token off the table. On anybody else's they keep the browser's own menu,
+    // there is plenty on it for them - editing it, its initiative, and taking
+    // it off the table. On anybody else's they keep the browser's own menu,
     // because a menu of things you may not do is worse than no menu.
     const el = e.target.closest?.('.token');
     if (el) {
@@ -3390,10 +3395,11 @@ export default function Tabletop({ actor, players, offline }) {
             </>
           ) : menu.tokenId ? (
             <>
-              {/* Editing everything about a token stays the DM's. What a player
-                  gets on their own token is what is theirs to say: what it
-                  rolled, and whether it's on the table at all. */}
-              {isDm && <button onClick={editToken}>Edit</button>}
+              {/* Editing your own figure, offered where you are playing rather
+                  than only in the Tokens tab two clicks away. The form drops
+                  Belongs to for anyone but the DM: giving a token away is the
+                  one thing on it that takes something from somebody else. */}
+              <button onClick={editToken}>Edit</button>
               <button
                 onClick={() => {
                   setInitiativeFor(menuToken);
@@ -3500,6 +3506,9 @@ export default function Tabletop({ actor, players, offline }) {
           // Who there is to hand a token to: this table's members, which is the
           // same list the Players tab reads.
           players={players}
+          // The DM's alone, and the server says so again on the way in - an
+          // owner's edit cannot carry an owner however the form was drawn.
+          canAssign={isDm}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />
