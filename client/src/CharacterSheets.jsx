@@ -6,7 +6,7 @@ import CharacterSheet from './sheet/CharacterSheet.jsx';
 import SheetTokenLink from './SheetTokenLink.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
-import { abilityMod, blankSheet, signed } from './sheet/rules.js';
+import { abilityMod, armorClass, blankSheet, signed } from './sheet/rules.js';
 
 // How long we let edits settle before writing them to the server. Typing a
 // sentence in a notes field is one save, not one save per keystroke.
@@ -462,7 +462,7 @@ export default function CharacterSheets({
                     <span>
                       HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
                     </span>
-                    <span>AC {s.armorClass ?? 10}</span>
+                    <span>AC {armorClass(s)}</span>
                     <span>
                       {/* A quick read on the character without opening them up. */}
                       STR {signed(abilityMod(s.abilities?.str))} DEX{' '}

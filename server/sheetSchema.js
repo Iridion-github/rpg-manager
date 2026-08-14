@@ -122,6 +122,112 @@ function pickGlobalModifiers(source) {
 }
 
 /**
+ * The armour a character owns, and which of it is on.
+ *
+ * A list rather than a slot, so the plate you are not wearing this week is
+ * still written down. Two things can be worn at once and no more: one suit and
+ * one shield, since that is how many of each a person has room for - and that
+ * is checked here as well as in the browser, because a third would quietly make
+ * an Armor Class nobody could account for.
+ *
+ * Type carries no rules of its own. It fills in what that kind of armour
+ * usually does when it is picked, in the client, and every field stays
+ * editable: the armour worth writing down is the piece that breaks the rule.
+ */
+const ARMOR_TYPES = new Set(['Clothes', 'Light', 'Medium', 'Heavy', 'Shield']);
+const DEX_CAPS = new Set(['limitless', '2', '0']);
+const MAX_ARMOR = 24;
+
+function pickArmor(source) {
+  if (!Array.isArray(source)) return [];
+  const rows = source.slice(0, MAX_ARMOR).map((a = {}) => {
+    const type = ARMOR_TYPES.has(a.type) ? a.type : 'Clothes';
+    const shield = type === 'Shield';
+    return {
+      id: text(a.id, '', 64) || crypto.randomUUID(),
+      name: text(a.name, '', 80),
+      type,
+      // A shield's number adds to whatever is worn under it, so it starts at
+      // zero. Everything else replaces the bare 10 a body starts from, and a
+      // baseline below that would be armour that makes you easier to hit.
+      ac: shield ? int(a.ac, 2, 0, 99) : int(a.ac, 10, 10, 99),
+      dexCap: DEX_CAPS.has(String(a.dexCap)) ? String(a.dexCap) : 'limitless',
+      stealthDisadvantage: Boolean(a.stealthDisadvantage),
+      equipped: Boolean(a.equipped),
+    };
+  });
+
+  // Whichever came first keeps the slot. Anything after it is written down but
+  // taken off, rather than dropped: it is armour somebody owns either way.
+  let worn = false;
+  let shielded = false;
+  for (const row of rows) {
+    if (!row.equipped) continue;
+    const shield = row.type === 'Shield';
+    if (shield ? shielded : worn) row.equipped = false;
+    else if (shield) shielded = true;
+    else worn = true;
+  }
+  return rows;
+}
+
+/**
+ * What changes the Armor Class and isn't the armour: a ring, a cloak, a shield
+ * of faith, half cover, a ruling.
+ *
+ * The same shape as the global modifiers on the attacks, and for the same
+ * reason: several run at once and they end at different times, so each is a
+ * name and a bonus carrying its own tick. `on` is the master switch, and the
+ * lines are kept rather than deleted when it goes off, because a spell that
+ * ended will be cast again.
+ */
+const MAX_AC_MODIFIERS = 12;
+
+function pickAcModifiers(body, abilities) {
+  const stored = body.acModifiers;
+  if (stored && Array.isArray(stored.effects)) {
+    const effects = [];
+    for (const item of stored.effects.slice(0, MAX_AC_MODIFIERS)) {
+      if (!item || typeof item !== 'object') continue;
+      const modifier = int(item.modifier, 0, -99, 99);
+      // One that adds nothing is a name beside a contribution of zero, which is
+      // a line that costs a reader something and tells them nothing.
+      if (!modifier) continue;
+      effects.push({
+        id: text(item.id, '', 40) || crypto.randomUUID(),
+        name: text(item.name, '', 40),
+        active: item.active !== false,
+        modifier,
+      });
+    }
+    return { on: Boolean(stored.on), effects };
+  }
+
+  // Nothing stored: this is a sheet from before the list. Whatever it was
+  // holding as a single number becomes one line, switched on, so an old
+  // character keeps exactly the AC they had rather than dropping to whatever
+  // they happen to be wearing on the day the list arrived. Two generations of
+  // it to read: an `acBonus` box, and before that the Armor Class itself as a
+  // number somebody typed. The client reads it the same way for the same
+  // reason, so neither of us shows a figure the other would disagree with.
+  const legacy = legacyAcBonus(body, abilities);
+  if (!legacy) return { on: false, effects: [] };
+  return {
+    on: true,
+    effects: [{ id: crypto.randomUUID(), name: 'Other', active: true, modifier: legacy }],
+  };
+}
+
+function legacyAcBonus(body, abilities) {
+  if (body.acBonus !== undefined && body.acBonus !== null) {
+    return int(body.acBonus, 0, -99, 99);
+  }
+  if (body.armorClass === undefined && body.ac === undefined) return 0;
+  const dexMod = Math.floor((abilities.dex - 10) / 2);
+  return int(int(body.armorClass ?? body.ac, 10, 0, 99) - 10 - dexMod, 0, -99, 99);
+}
+
+/**
  * Attacks used to hold free text ("+5", "1d8 + 3 slashing"). Rather than drop
  * what people already typed, read a dice spec out of it where the shape is
  * obvious - anything unparseable simply comes back empty, which is what an
@@ -198,6 +304,7 @@ function sanitizeSheet(body = {}) {
   const currency = body.currency || {};
   const appearance = body.appearance || {};
   const spellcasting = body.spellcasting || {};
+  const abilities = pickAbilities(body.abilities);
 
   return {
     // --- identity ---
@@ -212,14 +319,17 @@ function sanitizeSheet(body = {}) {
     xp: int(body.xp, 0, 0, 9999999),
 
     // --- abilities and proficiency ---
-    abilities: pickAbilities(body.abilities),
+    abilities,
     inspiration: Boolean(body.inspiration),
     saves: pickSaves(body.saves),
     skills: pickSkills(body.skills),
     otherProficiencies: block(body.otherProficiencies),
 
     // --- combat ---
-    armorClass: int(body.armorClass ?? body.ac, 10, 0, 99),
+    // No armorClass: it is the armour plus Dexterity plus the list below, and
+    // a stored total is a total that can disagree with all three.
+    armor: pickArmor(body.armor),
+    acModifiers: pickAcModifiers(body, abilities),
     speed: text(body.speed, '30 ft.', 40),
     initiativeBonus: int(body.initiativeBonus, 0, -20, 20),
     hp: {

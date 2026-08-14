@@ -35,11 +35,25 @@ const SWINGS = [
  * one-off exception - swinging without the bard's Bless this round - costs a
  * click here rather than a trip back to the sheet to turn something off and on
  * again.
+ *
+ * `disadvantageNote` is a reason the character starts this one at a
+ * disadvantage - armour that clanks, so far. It picks Disadvantage and says
+ * where that came from, and then leaves it alone: whether *this* attempt is
+ * hampered is a ruling somebody makes at the table, not something a sheet gets
+ * to decide, so all three answers stay one click away.
  */
-export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfirm, onClose }) {
-  // Which of the three is chosen. Normal is where every roll starts: the sheet
-  // says what you can do, and the circumstances of one attack are yours to say.
-  const [swing, setSwing] = useState('normal');
+export default function RollConfirmModal({
+  title,
+  rolls,
+  allowAdvantage,
+  disadvantageNote = '',
+  onConfirm,
+  onClose,
+}) {
+  // Which of the three is chosen. Normal is where every roll starts unless
+  // something on the sheet says otherwise: it says what you can do, and the
+  // circumstances of one attack are yours to say.
+  const [swing, setSwing] = useState(disadvantageNote ? 'disadvantage' : 'normal');
   const [secret, setSecret] = useState(false);
   const [skipped, setSkipped] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -166,6 +180,11 @@ export default function RollConfirmModal({ title, rolls, allowAdvantage, onConfi
                   onChange={() => setSwing(s.key)}
                 />
                 {s.label}
+                {/* Beside the option it chose, so the answer and the reason for
+                    it are read together. */}
+                {s.key === 'disadvantage' && disadvantageNote && (
+                  <span className="swing-note">{disadvantageNote}</span>
+                )}
               </label>
             ))}
           </div>

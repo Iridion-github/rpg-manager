@@ -24,6 +24,31 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-14',
+    entries: [
+      {
+        kind: 'new',
+        text: 'Equipped Armor, a new section on the character sheet. Write down each piece you own - a name, whether it is clothes, light, medium, heavy or a shield, its AC, how much Dexterity it lets through, and whether it clanks - and tick the one you are wearing. You can have one suit on plus one shield, and ticking a second suit takes the first one off. Picking a type fills in what that kind of armour usually does, and every field stays yours to change for the pieces that break the rules.',
+      },
+      {
+        kind: 'change',
+        text: 'Armor Class is worked out for you now, from the armour you have equipped: its AC, plus your Dexterity up to whatever the armour allows, plus a shield. Hover the number to see where it came from. Your current AC is untouched, so it stays exactly what it was until you equip something.',
+      },
+      {
+        kind: 'new',
+        text: 'AC modifiers, on the line under Armor Class. It works the way the global modifiers on your attacks do: tick the box and you get a list of the other things holding you together - a ring of protection, a cloak, a shield of faith, half cover - each with a name, what it adds, and its own tick so you can drop one the moment the spell ends without losing the line. Whatever is running is named on the sheet and added to your AC. Anything you had typed as your Armor Class before is waiting in there as a line called Other.',
+      },
+      {
+        kind: 'new',
+        text: 'Armour that clanks knows it. Tick Stealth disadvantage on the armour you are wearing and every Stealth check rolled from that sheet opens on Disadvantage, with a red "(Equipped armor)" beside it saying why. It is only a starting point: pick Normal or Advantage instead and it rolls that way, because whether you were really hampered is the table\'s call.',
+      },
+      {
+        kind: 'change',
+        text: 'The Equipment section is now called Inventory, and your coins have moved out of it into a Currency section of their own. Nothing you had written down has changed.',
+      },
+    ],
+  },
+  {
     date: '2026-08-13',
     entries: [
       {

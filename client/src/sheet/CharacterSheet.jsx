@@ -7,13 +7,20 @@ import { api } from '../api.js';
 import { TO_HIT_DICE, DAMAGE_DICE, notation } from '../dice.js';
 import { attackRollLabels, characterRollLabel } from './rollLabels.js';
 import GlobalModifiers from './GlobalModifiers.jsx';
+import AcModifiers from './AcModifiers.jsx';
+import EquippedArmor from './EquippedArmor.jsx';
 import {
   ABILITIES,
   SKILLS,
   ALIGNMENTS,
   SPELL_LEVELS,
   abilityMod,
+  acModifiers,
+  acOther,
+  activeAcModifiers,
   activeModifiers,
+  armorClass,
+  armorClassBreakdown,
   extrasNotation,
   modifierExtras,
   specAbilityBonus,
@@ -21,6 +28,7 @@ import {
   signed,
   saveBonus,
   skillBonus,
+  stealthDisadvantage,
   passivePerception,
   initiative,
   spellSaveDc,
@@ -49,11 +57,20 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   const set = (path) => (value) => onChange(setIn(sheet, path, value));
   const pb = proficiencyBonus(sheet.level);
 
-  // A d20 check against some bonus - abilities, saves and skills all share it.
-  const askCheck = (what, modifier) =>
+  /**
+   * A d20 check against some bonus - abilities, saves and skills all share it.
+   *
+   * `note` is a reason the dialog should open on Disadvantage rather than
+   * Normal: armour that drags Stealth down, so far. It is a default and not a
+   * rule, because whether this particular attempt is hampered is the table's
+   * call and not the sheet's - so the dialog says where it came from and lets
+   * it be changed.
+   */
+  const askCheck = (what, modifier, note = '') =>
     setConfirming({
       title: what,
       allowAdvantage: true,
+      disadvantageNote: note,
       rolls: [
         {
           key: 'check',
@@ -199,6 +216,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
           title={confirming.title}
           rolls={confirming.rolls}
           allowAdvantage={confirming.allowAdvantage}
+          disadvantageNote={confirming.disadvantageNote}
           onConfirm={runRolls}
           onClose={() => setConfirming(null)}
         />
@@ -213,6 +231,26 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
   const [picking, setPicking] = useState(null);
   // Whether the global modifiers list is open over the sheet.
   const [editingModifiers, setEditingModifiers] = useState(false);
+  // The same, for the ones that land on Armor Class.
+  const [editingAc, setEditingAc] = useState(false);
+
+  /**
+   * The Armor Class modifiers, normalised.
+   *
+   * Read through the rules rather than off the sheet, so a character whose
+   * bonus is still the single number the sheet used to hold arrives here as a
+   * list like any other. Writing the whole object back rather than a path into
+   * it is what turns that reading into what is stored, the first time anybody
+   * touches the switch: half of it written into a sheet that has none would be
+   * a switch with no list under it.
+   */
+  const acMods = acModifiers(sheet);
+  const acTotal = acOther(sheet);
+  const acNames = activeAcModifiers(sheet)
+    .map((e) => e.name)
+    .filter(Boolean)
+    .join(', ');
+  const setAcMods = (patch) => onChange({ ...sheet, acModifiers: { ...acMods, ...patch } });
 
   // What the attacks are carrying, said two ways: the names, for the row beside
   // the switch, and the arithmetic, for the line under it.
@@ -335,6 +373,8 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           <h4>Skills</h4>
           {SKILLS.map((s) => {
             const rank = Number(sheet.skills?.[s.key]) || 0;
+            // The one skill the armour has an opinion about.
+            const hampered = s.key === 'stealth' && stealthDisadvantage(sheet);
             return (
               <div key={s.key} className="prof-row">
                 {/* One control cycling none → proficient → expertise, which is
@@ -353,7 +393,13 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                   type="button"
                   className="rollable"
                   title={`Roll a ${s.label} check`}
-                  onClick={() => askCheck(`${s.label} check`, skillBonus(sheet, s))}
+                  onClick={() =>
+                    askCheck(
+                      `${s.label} check`,
+                      skillBonus(sheet, s),
+                      hampered ? '(Equipped armor)' : ''
+                    )
+                  }
                 >
                   {s.label} <i>({s.ability})</i>
                 </button>
@@ -375,7 +421,15 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
       {/* ---- column two: combat ---- */}
       <div className="sheet-col">
         <div className="combat-row">
-          <Num label="Armor Class" value={sheet.armorClass} onChange={set('armorClass')} readOnly={readOnly} />
+          {/* Worked out rather than typed, like every other derived number on
+              this sheet: it is the armour below, plus Dexterity, plus the list
+              under it, and a number somebody typed here would be free to
+              disagree with all three. */}
+          <Stat
+            label="Armor Class"
+            value={armorClass(sheet)}
+            hint={armorClassBreakdown(sheet)}
+          />
           <Stat
             label="Initiative"
             value={signed(initiative(sheet))}
@@ -384,6 +438,44 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           />
           <Text label="Speed" value={sheet.speed} onChange={set('speed')} readOnly={readOnly} />
         </div>
+
+        {/* Directly under the number it changes, and worked the same way as the
+            global modifiers under the attacks: ticking the box is what opens
+            the list the first time, Edit is what reopens it afterwards, and the
+            names of what is running are printed where they can be read without
+            opening anything. */}
+        <div className="gm-row-inline ac-mods-row">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={Boolean(acMods.on)}
+              disabled={readOnly}
+              onChange={(e) => {
+                setAcMods({ on: e.target.checked });
+                if (e.target.checked) setEditingAc(true);
+              }}
+            />
+            AC modifiers
+          </label>
+          {acNames && <small className="gm-names">{acNames}</small>}
+          {acTotal !== 0 && <small className="gm-live">{signed(acTotal)}</small>}
+          {!readOnly && acMods.on && (
+            <button type="button" className="linky" onClick={() => setEditingAc(true)}>
+              Edit
+            </button>
+          )}
+        </div>
+
+        {editingAc && (
+          <AcModifiers
+            effects={acMods.effects}
+            onClose={() => setEditingAc(false)}
+            onSave={(effects) => {
+              setAcMods({ effects });
+              setEditingAc(false);
+            }}
+          />
+        )}
 
         <div className="box hp-box">
           <h4>Hit points</h4>
@@ -582,7 +674,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
         </div>
 
         <div className="box">
-          <h4>Equipment</h4>
+          <h4>Currency</h4>
           <div className="currency">
             {['cp', 'sp', 'ep', 'gp', 'pp'].map((c) => (
               <Num
@@ -594,6 +686,20 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
               />
             ))}
           </div>
+        </div>
+
+        <EquippedArmor
+          armor={sheet.armor || []}
+          onChange={(armor) => onChange({ ...sheet, armor })}
+          readOnly={readOnly}
+          total={armorClass(sheet)}
+          breakdown={armorClassBreakdown(sheet)}
+        />
+
+        <div className="box">
+          <h4>Inventory</h4>
+          {/* Still stored as `equipment`: the heading changed, and nobody's kit
+              should go missing over a word. */}
           <Area label="" value={sheet.equipment} onChange={set('equipment')} readOnly={readOnly} rows={6} />
         </div>
       </div>

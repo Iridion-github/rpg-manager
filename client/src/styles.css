@@ -2475,6 +2475,14 @@ button.token-tile:hover {
   border-radius: 8px;
 }
 
+/* Why one of the three was picked for you. Red because it is a penalty, and
+   beside the option rather than under the group, because it belongs to that
+   one answer and not to the question. */
+.swing-note {
+  color: #e5534b;
+  font-size: 0.75rem;
+}
+
 .prof-row {
   display: flex;
   align-items: center;
@@ -2613,14 +2621,30 @@ button.token-tile:hover {
   color: #8b90a0;
 }
 
-/* --- global modifiers ---
-   The switch under the attacks table, and the list it opens. */
+/* --- named modifier lists ---
+   Two of these: the switch under the attacks table, and the one under Armor
+   Class. Same controls and the same dialog, because they are the same question
+   asked about different numbers. */
 .gm-row-inline {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
   margin-top: 0.5rem;
+}
+
+/* Sitting right under the combat row rather than a box of its own: it belongs
+   to the Armor Class above it, and a border round it would make it a fourth
+   thing in a row of three. */
+.ac-mods-row {
+  margin: -0.2rem 0 0;
+}
+
+.ac-mods-row .gm-live {
+  display: inline;
+  margin: 0;
+  color: #c3b2f0;
+  font-variant-numeric: tabular-nums;
 }
 
 .gm-names {
@@ -2959,12 +2983,96 @@ button.token-tile:hover {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.35rem;
-  margin-bottom: 0.5rem;
 }
 
 .currency .fld input {
   padding: 0.2rem 0.3rem;
   text-align: center;
+}
+
+/* --- equipped armour ---
+   One card per piece, so the four things a suit of armour has to say fit in a
+   column a third of a sheet wide. What is worn is lit up, because that is the
+   one question the section exists to answer. */
+.armor-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.armor-row {
+  background: #10131a;
+  border: 1px solid #262b38;
+  border-left: 3px solid #262b38;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.armor-row.worn {
+  border-left-color: #6ee787;
+  background: #131a19;
+}
+
+.armor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.armor-head .check {
+  white-space: nowrap;
+}
+
+.armor-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+}
+
+.armor-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr);
+  gap: 0.35rem;
+}
+
+.armor-fields input,
+.armor-fields select {
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+}
+
+.armor-list .empty {
+  color: #8b90a0;
+  font-size: 0.8rem;
+}
+
+/* What the armour list comes to, under the armour list. */
+.ac-sum {
+  margin: 0.5rem 0 0;
+  min-width: 0;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b90a0;
+}
+
+.ac-sum b {
+  color: #e7e9ee;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.2rem;
+}
+
+.ac-sum small {
+  display: block;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.7rem;
 }
 
 .appearance {

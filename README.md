@@ -894,17 +894,54 @@ A full **D&D 5e** sheet, across three pages matching the printed one:
 
 - **Character** - abilities, saving throws, all 18 skills, proficiency and
   expertise, AC / initiative / speed, HP, hit dice, death saves, attacks,
-  equipment and coin, personality / ideals / bonds / flaws, features.
+  currency, equipped armour, inventory, personality / ideals / bonds / flaws,
+  features.
 - **Details** - age, height, weight, eyes, skin, hair, appearance, backstory,
   allies & organizations, additional features, treasure.
 - **Spellcasting** - spellcasting class and ability, save DC and attack bonus,
   slots per level, and the spell list from cantrips to 9th with prepared marks.
 
 **Only raw values are stored.** Ability modifiers, proficiency bonus, save and
-skill bonuses, passive Perception, initiative, spell save DC and spell attack
-are all worked out on the fly. A stored modifier is one that can disagree with
-the score it came from - then there are two answers and no way to tell which is
-right.
+skill bonuses, passive Perception, initiative, **Armor Class**, spell save DC
+and spell attack are all worked out on the fly. A stored modifier is one that
+can disagree with the score it came from - then there are two answers and no way
+to tell which is right.
+
+### Armour and Armor Class
+**Equipped Armor** is a list of the pieces a character owns, each with a name, a
+type (Clothes, Light, Medium, Heavy, Shield), an AC, a Dexterity cap (Limitless,
++2, +0) and a Stealth disadvantage flag. A tick says what is worn, and **two
+things can be worn at once**: one suit and one shield. Ticking a second suit
+takes the first one off, and the server enforces the same rule, since a third
+would produce an AC nobody could account for.
+
+Type carries **no rules of its own**. Picking one fills in what that kind of
+armour usually does and then gets out of the way, because the armour worth
+writing down in a campaign is the piece that breaks the rule.
+
+Armor Class is then `base + Dexterity + shield + Other`, where the base is the
+worn suit's AC or a bare 10, Dexterity is capped by the tightest cap among
+everything worn, a shield's AC *adds* rather than replaces, and **Other** is the
+sum of the AC modifiers. The cap is a ceiling and not an eraser - a Dexterity of
+8 is still a penalty in plate.
+
+**AC modifiers** sit on the line directly under the Armor Class box, and are the
+same control as the global modifiers under the attacks table: a master tick, the
+running names printed beside it, and a dialog holding a list of name-and-bonus
+lines each with its own tick. Same reasoning, too - a character has a ring, a
+cloak and a shield of faith at once, and they end at different times, so the
+line is unticked rather than deleted.
+
+Sheets from before the list stored the AC as a number somebody typed. That
+number arrives as a single modifier called **Other**, less the 10 and the
+Dexterity every character already gets, so an old character opens showing
+exactly the AC they had. Both halves read it the same way, so neither shows a
+figure the other would disagree with.
+
+Armour with **Stealth disadvantage** ticked makes every Stealth check rolled
+from that sheet open on Disadvantage, labelled *(Equipped armor)* in red. A
+default, not a rule: all three answers stay one click away, because whether a
+particular attempt was hampered is the table's call.
 
 ### Rolling from the sheet
 Ability names, saving throw names and skill names are **clickable**. Clicking

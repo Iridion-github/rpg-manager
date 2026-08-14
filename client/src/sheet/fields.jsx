@@ -15,9 +15,9 @@ export function Text({ label, value, onChange, readOnly, placeholder, className 
   );
 }
 
-export function Num({ label, value, onChange, readOnly, min, max, className = '' }) {
+export function Num({ label, value, onChange, readOnly, min, max, title, className = '' }) {
   return (
-    <label className={`fld num ${className}`}>
+    <label className={`fld num ${className}`} title={title}>
       <input
         type="number"
         value={value ?? 0}
@@ -45,11 +45,13 @@ export function Area({ label, value, onChange, readOnly, rows = 4, className = '
   );
 }
 
+// `blank={false}` for a choice that always has an answer - offering an empty
+// option there is offering a state the field cannot actually be in.
 export function Select({ label, value, onChange, readOnly, options, blank = '-' }) {
   return (
     <label className="fld">
       <select value={value ?? ''} disabled={readOnly} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{blank}</option>
+        {blank !== false && <option value="">{blank}</option>}
         {options.map((o) => (
           <option key={o.value ?? o} value={o.value ?? o}>
             {o.label ?? o}
