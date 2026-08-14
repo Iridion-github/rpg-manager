@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
+import PicturePicker from './PicturePicker.jsx';
 
 /**
  * Your own account: what the server knows about you, and the three things you
@@ -51,6 +52,10 @@ export default function Account({ actor, config, onChanged, offline }) {
   const [mailCode, setMailCode] = useState('');
   const [mailNote, setMailNote] = useState(null);
   const [mailBusy, setMailBusy] = useState(false);
+
+  // The picture has no form of its own to submit: it is saved the moment one is
+  // chosen, so all it keeps is what happened last time.
+  const [picNote, setPicNote] = useState(null);
 
   /**
    * Read the account this screen is about.
@@ -114,6 +119,26 @@ export default function Account({ actor, config, onChanged, offline }) {
       setNameNote(settled('bad', err.message));
     } finally {
       setNameBusy(false);
+    }
+  }
+
+  /**
+   * Keep the picture that was just uploaded, or take the one on file off.
+   *
+   * Saved on the spot rather than behind a button of its own: choosing a picture
+   * is the whole of the decision, and a second press to confirm it would be a
+   * step that asks nothing. The bytes are already on the server by the time this
+   * runs - what is being written here is only where they went.
+   */
+  async function savePicture(avatarUrl) {
+    setPicNote(null);
+    try {
+      const { user } = await api.setAvatar(avatarUrl);
+      setMe(user);
+      setPicNote(settled('ok', avatarUrl ? 'Saved. The table sees it straight away.' : 'Picture removed.'));
+      onChanged?.();
+    } catch (err) {
+      setPicNote(settled('bad', err.message));
     }
   }
 
@@ -242,6 +267,25 @@ export default function Account({ actor, config, onChanged, offline }) {
           <dd>{isAdmin ? 'Server admin' : 'Player'}</dd>
         </div>
       </dl>
+
+      {/* A section rather than a form: there is nothing here to submit. See
+          savePicture - choosing one is the decision, so it is written then. */}
+      <section className="account-form">
+        <h3>Profile picture</h3>
+        <p className="hint">
+          How the table sees you, beside your name. Paste one you have copied, or choose a file, and
+          say which part of it you want.
+        </p>
+        <PicturePicker
+          url={me?.avatarUrl || ''}
+          onChange={savePicture}
+          disabled={offline}
+          cropTitle="Frame your profile picture"
+          alt={me?.name || 'Your profile picture'}
+          placeholder="No picture"
+        />
+        <Note note={picNote} />
+      </section>
 
       <form className="account-form" onSubmit={saveName}>
         <h3>Shown name</h3>

@@ -714,6 +714,170 @@ button.linky:hover {
   font-size: 0.72rem;
 }
 
+/* --- faces: profile pictures and character portraits --- */
+
+/* Somebody's face beside their name, in a list or in the bar at the top.
+   Fixed at both ends and never absent: a row whose picture is missing draws
+   the same tile with an initial in it, so a list of people keeps one shape
+   whether or not anybody has uploaded anything.
+
+   Square, like the frame the picture was cropped in. A circle here would take
+   the corners off a picture somebody had just framed square, which makes the
+   cropping dialog a liar about what it was showing them. */
+.avatar {
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 6px;
+  border: 2px solid #262b38;
+  background: #3a4152;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0d1117;
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar.big {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.2rem;
+}
+
+/* Cover, not contain: a face cropped to a circle beats a face letterboxed
+   inside one, and every picture here is looked at at this size. */
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* The picker: the picture itself, with the ways of changing it under it. */
+.picture-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+/* Sized here rather than by the image, so an empty frame and a filled one are
+   the same shape and nothing moves when a picture arrives. Only the width is
+   set: the height comes from the aspect ratio the picker was given, which is
+   the same one its cropping dialog was cut to. */
+.picture-frame {
+  width: 7.5rem;
+  border-radius: 10px;
+  border: 1px solid #262b38;
+  background: #12151d;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.picture-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.picture-empty {
+  color: #6b7180;
+  font-size: 0.75rem;
+  text-align: center;
+  padding: 0 0.5rem;
+}
+
+/* Wraps, because this row sits in a sheet header alongside eight other fields
+   and in an account form that is half as wide again. */
+.picture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 20rem;
+  font-size: 0.8rem;
+}
+
+/* The file input claims whatever width it is given, which would push the
+   clipboard button onto a line of its own on every screen. */
+.picture-actions input[type='file'] {
+  max-width: 11rem;
+  font-size: 0.75rem;
+}
+
+/* The one rule worth stating before somebody picks a 40 MB photograph rather
+   than after. Its own line, under the buttons. */
+.picture-limit {
+  flex-basis: 100%;
+  color: #6b7180;
+  font-size: 0.7rem;
+}
+
+/* --- framing a picture before it is saved --- */
+
+/* Sized in the markup, because the same numbers are the arithmetic that turns
+   what you can see here into a rectangle of the original's pixels. `flex: none`
+   is part of that: as a flex item this would otherwise be shrunk to fit the
+   dialog, and a frame that is not the size the maths thinks it is saves a
+   different picture from the one it showed. */
+.crop-stage {
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #35406a;
+  background: #0d1117;
+  margin: 0 auto;
+  touch-action: none;
+  cursor: grab;
+  /* The picture underneath is dragged, and a browser's own drag-an-image
+     gesture would fight it for the pointer. */
+  user-select: none;
+}
+
+.crop-stage:active {
+  cursor: grabbing;
+}
+
+.crop-stage img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  /* Placed and sized entirely by the transform this carries. */
+  width: auto;
+  height: auto;
+  pointer-events: none;
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+
+.crop-zoom input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Wide enough for the stage plus the dialog's own padding, and no wider - this
+   is a picture with two controls under it, not a page. */
+.crop-modal {
+  width: min(24rem, 92vw);
+}
+
 /* On the tabletop tab the map runs to the bottom of the window instead of
    stopping at a fraction of it. Sized to match the chat column beside it, so
    the two bottom-align rather than one trailing off below the other.
@@ -2037,6 +2201,7 @@ button.token-tile:hover {
   display: grid;
   grid-template-columns:
     [dot] 0.65rem
+    [face] 1.7rem
     [name] minmax(0, 1fr)
     [tag] 3.9rem
     [seen] 9rem
@@ -2082,6 +2247,12 @@ button.token-tile:hover {
 
 .roster-head .roster-seen {
   grid-column: seen;
+}
+
+/* Its own track, like every other optional thing in this row: placed by name so
+   it cannot slide into the one beside it. */
+.player-list .avatar {
+  grid-column: face;
 }
 
 .roster-who {
@@ -2271,11 +2442,46 @@ button.token-tile:hover {
   font-size: 0.95rem;
 }
 
+/* What a card says, as one box. It is the card's only child where there is no
+   portrait, and the picture's neighbour where there is. */
+.card-body {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  min-width: 0;
+}
+
+/* The character's portrait down the left of their card, beside everything the
+   card says.
+
+   A tall thumbnail rather than the banner this was: the portrait is cropped
+   three-by-four now, and a wide strip of one is a band across somebody's eyes.
+   Anchored to the top, so a card with more lines on it grows downwards past
+   the picture rather than stretching it. */
+.sheet-card.has-portrait {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  column-gap: 0.65rem;
+  align-items: start;
+}
+
+.card-portrait {
+  width: 4.5rem;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #12151d;
+}
+
 .sheet-card strong {
   font-size: 1.05rem;
 }
 
-.sheet-card>span {
+/* The line under the name, and the caption on the create tile. Named on both
+   sides rather than as "every span in a card": the card's own child is now the
+   box holding all of this, and greying that would take the character's name
+   down with it. */
+.sheet-card.new>span,
+.card-body>span {
   color: #9aa0b2;
   font-size: 0.85rem;
 }
@@ -2307,23 +2513,75 @@ button.token-tile:hover {
   border-color: #58a6ff;
 }
 
+/* Portrait, and everything about who this is.
+
+   Two columns, not three. The portrait's own is stated rather than left to size
+   itself, and it is the widest single thing in this header on purpose: a
+   character's face is what the top of a sheet is for, and at thumbnail size it
+   was a detail beside eight text fields instead of the first thing you see.
+   Everything else shares the rest as one block, which is what lets it fill the
+   height the portrait sets - `stretch` rather than `start` is the whole of that.
+   The portrait keeps to its own top, so a sheet whose fields have wrapped onto
+   another row grows downwards instead of stretching the picture. */
 .sheet-top {
   display: grid;
-  grid-template-columns: minmax(12rem, 1.2fr) 3fr;
-  gap: 0.6rem;
-  align-items: start;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: stretch;
   margin-bottom: 0.9rem;
 }
 
-.sheet-meta {
+.sheet-top .picture-picker {
+  align-self: start;
+}
+
+.sheet-top .picture-frame {
+  width: 13rem;
+}
+
+.sheet-top .picture-actions {
+  max-width: 13rem;
+}
+
+/**
+ * The name and the eight facts under it.
+ *
+ * Three columns, and rows that share out whatever height the portrait beside
+ * them has set: `1fr` as the row maximum is what spreads them, and it is why
+ * this had to become one grid rather than a name sitting in one column with the
+ * fields in another. The floor keeps a field from being squeezed thinner than a
+ * field on a shorter sheet, where there is no portrait height to fill.
+ *
+ * Three rather than as many as fit: with the name across the top, eight fields
+ * in threes come to four rows, which is about the depth of the picture. Four
+ * columns would be two short rows and a gap under them again - the very thing
+ * this is here to close.
+ */
+.sheet-identity {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(2.9rem, 1fr);
   gap: 0.5rem;
+  min-width: 0;
+}
+
+/* The name is the heading of this block, so it takes the whole first row. */
+.char-name {
+  grid-column: 1 / -1;
 }
 
 .char-name input {
   font-size: 1.3rem;
   font-weight: 700;
+}
+
+/* Each box grows into its row rather than sitting at the top of it with air
+   underneath. A single-line input centres its own text, so a tall one reads as
+   a box with a value in it - which is exactly what the printed sheet does. */
+.sheet-identity .fld input,
+.sheet-identity .fld select {
+  flex: 1;
+  min-height: 2.1rem;
 }
 
 /* A field is an input with its label *below*, as on the printed sheet. */
@@ -3155,6 +3413,13 @@ button.token-tile:hover {
   .sheet-grid.two,
   .sheet-top {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The portrait is above the fields rather than beside them by this point, so
+     there is no height for them to fill and no reason to keep three of them
+     across a narrow window. */
+  .sheet-identity {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

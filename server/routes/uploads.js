@@ -28,7 +28,25 @@ const { requireUser } = require('../auth');
 const router = express.Router();
 
 const UPLOAD_DIR = path.join(store.DATA_DIR, 'uploads');
-const MAX_BYTES = 20 * 1024 * 1024; // 20 MB - a big battle map, not a video
+
+/**
+ * How big an upload may be, by what it is for.
+ *
+ * A map is the whole board and is looked at on its own, so it gets the room it
+ * needs. A profile picture and a character portrait are drawn an inch across
+ * beside a name, and every person at the table downloads every one of them - so
+ * a 20 MB photograph straight off a phone would be twenty megabytes spent to
+ * fill a thumbnail, over and over, on somebody's home connection. 5 MB is far
+ * more than a picture that size can use and still leaves an unedited photo
+ * through, which is the file people actually have to hand.
+ *
+ * The caller says which it is (?kind=portrait); the cap is applied here rather
+ * than believed from the browser, so an oversized file is refused as it arrives
+ * instead of after it has been carried.
+ */
+const MAX_BYTES = { map: 20 * 1024 * 1024, portrait: 5 * 1024 * 1024 };
+
+const megabytes = (bytes) => bytes / 1024 / 1024;
 
 // Extension is chosen by us from the detected mime type, not from the upload.
 const ALLOWED = new Map([
@@ -38,18 +56,26 @@ const ALLOWED = new Map([
   ['image/gif', '.gif'],
 ]);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_BYTES, files: 1 },
-  fileFilter: (req, file, cb) => {
-    // A first pass only. `file.mimetype` is the browser's claim about its own
-    // upload, not a fact - sniffBytes below is what actually decides.
-    if (!ALLOWED.has(file.mimetype)) {
-      return cb(new Error(`Unsupported image type: ${file.mimetype}`));
-    }
-    cb(null, true);
-  },
-});
+const uploaderFor = (fileSize) =>
+  multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize, files: 1 },
+    fileFilter: (req, file, cb) => {
+      // A first pass only. `file.mimetype` is the browser's claim about its own
+      // upload, not a fact - sniffBytes below is what actually decides.
+      if (!ALLOWED.has(file.mimetype)) {
+        return cb(new Error(`Unsupported image type: ${file.mimetype}`));
+      }
+      cb(null, true);
+    },
+  });
+
+// One per size, built once: a multer instance carries its limits, so the choice
+// between them is made by picking the uploader rather than by reconfiguring one.
+const uploaders = {
+  map: uploaderFor(MAX_BYTES.map),
+  portrait: uploaderFor(MAX_BYTES.portrait),
+};
 
 /**
  * What this file actually is, read from its first bytes.
@@ -85,11 +111,15 @@ router.post('/', requireUser, (req, res, next) => {
   const wait = limits.uploads.take(limits.bucketOf(req));
   if (wait) return limits.refuse(res, wait);
 
-  upload.single('image')(req, res, async (err) => {
+  // Anything this route doesn't recognise is a map, which is what every caller
+  // written before the portraits sends.
+  const kind = req.query.kind === 'portrait' ? 'portrait' : 'map';
+
+  uploaders[kind].single('image')(req, res, async (err) => {
     if (err) {
       const tooBig = err.code === 'LIMIT_FILE_SIZE';
       return res.status(tooBig ? 413 : 400).json({
-        error: tooBig ? `Image too large (max ${MAX_BYTES / 1024 / 1024} MB)` : err.message,
+        error: tooBig ? `Image too large (max ${megabytes(MAX_BYTES[kind])} MB)` : err.message,
       });
     }
     if (!req.file) return res.status(400).json({ error: 'No image uploaded (field name: "image")' });

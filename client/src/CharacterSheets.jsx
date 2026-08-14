@@ -446,30 +446,46 @@ export default function CharacterSheets({
                     rather than doing nothing - the card is how you find a sheet
                     you've lost behind another. */}
                 <button
-                  className={`sheet-card${openIds.includes(s.id) ? ' open' : ''}`}
+                  className={`sheet-card${openIds.includes(s.id) ? ' open' : ''}${s.portraitUrl ? ' has-portrait' : ''
+                    }`}
                   onClick={() => openSheet(s.id)}
                 >
-                  <strong>{s.name || 'Unnamed'}</strong>
-                  <span>
-                    {[s.race, s.class && `${s.class} ${s.level ?? 1}`]
-                      .filter(Boolean)
-                      .join(' · ') || 'No class yet'}
+                  {/* Only where there is one, and the card is laid out in two
+                      columns only where there is one: an empty frame on every
+                      character nobody has drawn yet would cost the whole roster
+                      a column to say nothing. */}
+                  {s.portraitUrl && (
+                    <img className="card-portrait" src={s.portraitUrl} alt="" />
+                  )}
+                  {/* Everything the card says, in one box beside the picture.
+                      A wrapper rather than letting these sit in the card's own
+                      grid: the portrait has to stand alongside all of them at
+                      once, and a cell can only span rows the grid actually
+                      declares - which these, arriving one per character, are
+                      not. */}
+                  <span className="card-body">
+                    <strong>{s.name || 'Unnamed'}</strong>
+                    <span>
+                      {[s.race, s.class && `${s.class} ${s.level ?? 1}`]
+                        .filter(Boolean)
+                        .join(' · ') || 'No class yet'}
+                    </span>
+                    <div className="card-stats">
+                      <span>
+                        HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
+                      </span>
+                      <span>AC {armorClass(s)}</span>
+                      <span>
+                        {/* A quick read on the character without opening them up. */}
+                        STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
+                        {signed(abilityMod(s.abilities?.dex))} CON{' '}
+                        {signed(abilityMod(s.abilities?.con))}
+                      </span>
+                    </div>
+                    {/* Only the GM learns anything from this line: a player is
+                        looking at a list of sheets they can already open. */}
+                    {isDm && <span className="card-access">{accessSummary(s, players)}</span>}
                   </span>
-                  <div className="card-stats">
-                    <span>
-                      HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
-                    </span>
-                    <span>AC {armorClass(s)}</span>
-                    <span>
-                      {/* A quick read on the character without opening them up. */}
-                      STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
-                      {signed(abilityMod(s.abilities?.dex))} CON{' '}
-                      {signed(abilityMod(s.abilities?.con))}
-                    </span>
-                  </div>
-                  {/* Only the GM learns anything from this line: a player is
-                      looking at a list of sheets they can already open. */}
-                  {isDm && <span className="card-access">{accessSummary(s, players)}</span>}
                 </button>
               </li>
             ))}

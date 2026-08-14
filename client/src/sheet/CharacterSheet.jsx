@@ -3,6 +3,7 @@ import { Text, Num, Area, Select, Stat } from './fields.jsx';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
 import DiceModal from '../DiceModal.jsx';
 import RollConfirmModal from '../RollConfirmModal.jsx';
+import PicturePicker from '../PicturePicker.jsx';
 import { api } from '../api.js';
 import { TO_HIT_DICE, DAMAGE_DICE, notation } from '../dice.js';
 import { attackRollLabels, characterRollLabel } from './rollLabels.js';
@@ -167,17 +168,37 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
       </nav>
 
       <header className="sheet-top">
-        <label className="fld char-name">
-          <input
-            type="text"
-            value={sheet.name ?? ''}
-            placeholder="Character name"
-            disabled={readOnly}
-            onChange={(e) => set('name')(e.target.value)}
-          />
-          <span>Character name</span>
-        </label>
-        <div className="sheet-meta">
+        {/* The character's own face, first thing on the sheet. Read-only for
+            somebody who may look at this sheet but not change it, which leaves
+            the portrait and takes the controls under it away. */}
+        <PicturePicker
+          url={sheet.portraitUrl || ''}
+          onChange={set('portraitUrl')}
+          disabled={readOnly}
+          // Taller than it is wide, which is the shape a person is. The cropper
+          // is cut to the same three-by-four, so what is saved fills the frame
+          // here and the thumbnail on the card without either one guessing.
+          aspect={3 / 4}
+          cropTitle="Frame the portrait"
+          alt={sheet.name || 'Character portrait'}
+          placeholder="No portrait"
+        />
+        {/* The name and the eight facts under it, in one grid rather than a
+            column each. Beside a portrait this tall they were a short block of
+            fields with a hand's depth of nothing under them; as one grid they
+            share the portrait's height between them, which is what the boxes on
+            a printed sheet do. */}
+        <div className="sheet-identity">
+          <label className="fld char-name">
+            <input
+              type="text"
+              value={sheet.name ?? ''}
+              placeholder="Character name"
+              disabled={readOnly}
+              onChange={(e) => set('name')(e.target.value)}
+            />
+            <span>Character name</span>
+          </label>
           <Text label="Class" value={sheet.class} onChange={set('class')} readOnly={readOnly} />
           <Num label="Level" value={sheet.level} onChange={set('level')} readOnly={readOnly} min={1} max={20} />
           <Text label="Subclass" value={sheet.subclass} onChange={set('subclass')} readOnly={readOnly} />

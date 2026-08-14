@@ -281,6 +281,7 @@ export function extrasNotation(extras = []) {
 export function blankSheet() {
   return {
     name: '',
+    portraitUrl: '',
     class: '',
     subclass: '',
     level: 1,

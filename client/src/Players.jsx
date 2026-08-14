@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { socket } from './socket.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import Avatar from './Avatar.jsx';
 
 /**
  * Who is at this table - everyone's view, not just the DM's.
@@ -143,7 +144,11 @@ export default function Players({ campaignId, actor, isDm, offline }) {
                 setMenu({ userId: u.id, clientX: e.clientX, clientY: e.clientY });
               }}
             >
-              <span className="swatch" style={{ background: u.color }} />
+              {/* Their face where the plain colour swatch used to be. It keeps
+                  what the swatch said - their token colour rings the picture,
+                  and fills in behind their initial when there is none - and
+                  says who they are as well. */}
+              <Avatar url={u.avatarUrl} name={u.name} color={u.color} />
               <strong className="player-name">
                 {u.name}
                 {isMe && <span className="you"> (you)</span>}

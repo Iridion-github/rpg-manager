@@ -11,6 +11,7 @@
  */
 
 const crypto = require('node:crypto');
+const { pictureUrl } = require('./pictures');
 
 const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 
@@ -309,6 +310,10 @@ function sanitizeSheet(body = {}) {
   return {
     // --- identity ---
     name: text(body.name, 'New Character', 120),
+    // What the character looks like: an uploaded picture, kept as the address it
+    // was stored at. Empty for every sheet written before this existed, which is
+    // a sheet with no portrait rather than a sheet missing one.
+    portraitUrl: pictureUrl(body.portraitUrl),
     class: text(body.class, '', 80),
     subclass: text(body.subclass, '', 80),
     level: int(body.level, 1, 1, 20),

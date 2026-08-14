@@ -145,6 +145,9 @@ export const api = {
   // either take the signup code or wait for a link to be opened - the server
   // decides which, and says so in its answer.
   updateAccount: (name) => put('/api/auth/account', { name }),
+  // Your profile picture, saved the moment one is chosen. An empty string takes
+  // it off again - the picture is a label, not something to be confirmed.
+  setAvatar: (avatarUrl) => put('/api/auth/avatar', { avatarUrl }),
   changePassword: (current, password, code) =>
     post('/api/auth/password', { current, password, code }),
   changeEmail: (email, code) => post('/api/auth/email', { email, code }),
@@ -314,10 +317,19 @@ export const api = {
   // maps are: a picture of a goblin is the same picture at any table.
   listTokens: () => get('/api/tokens'),
 
-  uploadImage: (file) => {
+  /**
+   * Put an image on the server and get back the address it landed at.
+   *
+   * `kind` is what the picture is for, and all the server does with it is choose
+   * how big it may be: a battle map gets far more room than a face drawn an inch
+   * across beside a name. Left out, it is a map - which is what every caller
+   * that predates the portraits means.
+   */
+  uploadImage: (file, kind) => {
     const form = new FormData();
     form.append('image', file);
+    const where = kind ? `/api/uploads?kind=${encodeURIComponent(kind)}` : '/api/uploads';
     // No Content-Type header: the browser must set the multipart boundary.
-    return fetch('/api/uploads', { method: 'POST', headers: authHeaders(), body: form }).then(json);
+    return fetch(where, { method: 'POST', headers: authHeaders(), body: form }).then(json);
   },
 };

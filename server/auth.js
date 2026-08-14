@@ -194,6 +194,10 @@ const actorFor = (user) => ({
   userId: user.id,
   name: user.name,
   username: user.username || '',
+  // Your own face, carried with your name for the same reason the name is here:
+  // the bar at the top of the app draws both, and it has nothing but the actor
+  // to draw them from.
+  avatarUrl: user.avatarUrl || '',
 });
 
 // --- sessions ---

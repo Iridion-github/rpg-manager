@@ -4,6 +4,7 @@ import { socket, reauthenticate, enterCampaign } from './socket.js';
 import { clear as clearHistory } from './history.js';
 import Tabletop from './Tabletop.jsx';
 import Account from './Account.jsx';
+import Avatar from './Avatar.jsx';
 import ConfirmChange from './ConfirmChange.jsx';
 import CharacterSheets from './CharacterSheets.jsx';
 import Roster from './Roster.jsx';
@@ -354,6 +355,10 @@ export default function App() {
                   : 'Not connected'
               }
             />
+            {/* Your own picture, beside the name it belongs to. Only once there
+                is somebody to have one: a spectator has no account and so no
+                face to draw. */}
+            {authed && <Avatar url={actor.avatarUrl} name={actor.name} />}
             <span className={`badge role ${role || actor.globalRole}`}>{roleLabel}</span>
             {actor.globalRole === 'admin' && <span className="badge role gm">admin</span>}
             {campaign && <span className="campaign-name"><b>{campaign.name}</b></span>}

@@ -18,6 +18,8 @@
 const express = require('express');
 const store = require('../store');
 const limits = require('../rateLimit');
+const { notifyUser } = require('../realtime');
+const { pictureUrl } = require('../pictures');
 const { sendMail, mailConfigured } = require('../mailer');
 const { confirmLink, resetLink } = require('../links');
 const { holdChange, claimChange, forgetChangesFor, TTL_MS } = require('../accountChanges');
@@ -72,6 +74,7 @@ const sessionPayload = (user, session) => ({
     userId: user.id,
     name: user.name,
     username: user.username || '',
+    avatarUrl: user.avatarUrl || '',
   },
 });
 
@@ -414,6 +417,44 @@ router.put('/account', requireUser, async (req, res, next) => {
     const problem = validateProfile(name, '', { emailRequired: false });
     if (problem) return res.status(400).json({ error: problem });
     const updated = await store.update(USERS, user.id, { name });
+    res.json({ user: { ...publicUser(updated), email: updated.email || '' } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Change your own profile picture, or take it off.
+ *
+ * Signed in is the whole of the permission, like the shown name above and for
+ * the same reason: a picture is a label rather than a credential, and getting it
+ * wrong costs one more press of the button. It is a route of its own rather than
+ * a field on the name form because it is saved the moment a picture is chosen -
+ * there is nothing else on that form to submit it with.
+ *
+ * The bytes went to /api/uploads and are already on disk; what arrives here is
+ * only the address they landed at. An empty string is a removal, and the file
+ * itself stays where it is - a few kilobytes on the host's own disk, which is
+ * the same bargain every other upload in this app makes.
+ */
+router.put('/avatar', requireUser, async (req, res, next) => {
+  try {
+    const user = await store.get(USERS, req.actor.userId);
+    if (!user) return res.status(404).json({ error: 'Not found' });
+
+    const wanted = String(req.body?.avatarUrl ?? '');
+    const avatarUrl = pictureUrl(wanted);
+    // Emptied by the check rather than by the person asking: they sent an
+    // address this server will not serve, and quietly storing nothing would look
+    // like a picture that failed to save for no reason.
+    if (wanted.trim() && !avatarUrl) {
+      return res.status(400).json({ error: 'A picture has to be one this server holds.' });
+    }
+
+    const updated = await store.update(USERS, user.id, { avatarUrl });
+    // Everywhere else this person is signed in is drawing the old picture beside
+    // their name. The nudge carries nothing: it means "ask who you are again".
+    notifyUser(req, user.id, 'identity:changed', {});
     res.json({ user: { ...publicUser(updated), email: updated.email || '' } });
   } catch (err) {
     next(err);

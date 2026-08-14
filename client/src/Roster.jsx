@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { socket } from './socket.js';
 import { exactTime, timeAgo } from './timeAgo.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import Avatar from './Avatar.jsx';
 
 /**
  * The people this server knows about.
@@ -114,6 +115,7 @@ export default function Roster({ isAdmin, onUsersChanged }) {
               aria-label={u.online ? 'Online' : 'Offline'}
               role="img"
             />
+            <Avatar url={u.avatarUrl} name={u.name} color={u.color} />
             <strong className="roster-who">{u.name}</strong>
             {u.globalRole === 'admin' && <span className="badge role gm">admin</span>}
             {/* Someone connected right now has no "last time" worth printing -

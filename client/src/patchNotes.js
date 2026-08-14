@@ -28,6 +28,22 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Your account has a profile picture. Open My account, choose a file or paste one you have copied, and it saves as soon as you have framed it - no button to press afterwards. It is square, and it appears beside your name in the bar at the top, in the server\'s list of people, and in the players at your table. Anybody without one gets their initial on their own token colour, so a list still reads as a column of faces. Remove takes it off again.',
+      },
+      {
+        kind: 'new',
+        text: 'Characters have a portrait, and it has proper room on the sheet: it stands at the top left beside the name, taller than it is wide, at the size a picture of somebody is actually worth looking at. The name, class, level, subclass, background, race, alignment, player and XP now spread out beside it to fill that height, in boxes like the ones on a printed sheet, rather than huddling in a line at the top. You set the portrait the same two ways as a profile picture - choose a file, or paste one you have copied. It also shows down the side of that character\'s card in the Characters tab, so you can find somebody by their face rather than by reading down the names. Anyone who can see a sheet but not change it sees the portrait without the buttons.',
+      },
+      {
+        kind: 'new',
+        text: 'Choosing any picture of a person now opens a framing box first. Drag the picture to slide it about, zoom in or out with the slider or your mouse wheel, and what you can see in the frame is exactly what gets saved - so a face is where you put it rather than wherever the middle of the photograph happened to be. The frame is square for a profile picture and upright for a character portrait, which is the shape each of them is shown in everywhere else.',
+      },
+      {
+        kind: 'change',
+        text: 'Pictures of people have a size limit: 5 MB for the file you pick. A photograph straight off a phone fits comfortably; anything larger is turned away the moment you pick it, before anything is uploaded, and the screen says how big it was. What actually gets saved is the part you framed, which is a good deal smaller again. Maps are unaffected and still take up to 20 MB.',
+      },
+      {
+        kind: 'new',
         text: 'Edit is on the right-click menu of your own tokens now, not just the DM\'s. Right-click a figure that belongs to you on the map and you get the same form the Tokens tab gives you: its name, picture, colour, size, nameplate, status and hit points, without leaving the board. Who a token belongs to is still the DM\'s to set, so that one field is missing from your copy of the form. If your figure is linked to a character sheet you have not been given, the hit points stay the DM\'s too and the app tells you rather than pretending to save them.',
       },
       {
