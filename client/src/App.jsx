@@ -580,6 +580,9 @@ export default function App() {
         {insideCampaign && (
           <Notes
             key={`notes-${campaignId}`}
+            actor={{ ...actor, role }}
+            // Who a note can be handed to, and the names to hand it to them by.
+            players={members}
             canEdit={isDm}
             offline={offline}
             campaignId={campaignId}

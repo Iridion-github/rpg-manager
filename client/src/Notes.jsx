@@ -24,8 +24,12 @@ const WIN_Z_CEILING = 440;
 
 /**
  * Notes (DM) and handouts (everyone else) - the same records, seen from two
- * sides. The server sends a player only the notes marked shared, so this
+ * sides. The server sends each person only the notes they may read, so this
  * component never has to decide what to hide: it renders what it was given.
+ *
+ * What it does decide is what may be *changed*, and that is per note rather
+ * than per person: a note belongs to whoever wrote it, so a second DM reads
+ * another's shared prep exactly the way a player reads a handout. See mayEdit.
  *
  * Mounted for as long as the campaign is, not for as long as its tab is shown:
  * a note popped out into a window has to survive a trip to the map. `showList`
@@ -33,6 +37,8 @@ const WIN_Z_CEILING = 440;
  * windows, and keeps saving and syncing in the background.
  */
 export default function Notes({
+  actor,
+  players = [],
   canEdit,
   offline,
   campaignId,
@@ -56,8 +62,28 @@ export default function Notes({
   const timers = useRef(new Map());
   const picked = useRef(false);
 
+  // Whether new notes can be written at all: the DM's drawer, and not while the
+  // server is unreachable. Whether an *existing* note can be changed is a
+  // different question - see mayEdit.
   const readOnly = !canEdit || offline;
   const open = notes.find((n) => n.id === openId) || null;
+
+  /**
+   * May this person change this note?
+   *
+   * The author, and nobody else, however widely it is shared - being given a
+   * note is being given something to read. A note with no author predates the
+   * field and belongs to the DM's chair rather than to a person, which is what
+   * it always did; the server draws the same line, and this only decides what
+   * to put on screen.
+   */
+  const mayEdit = useCallback(
+    (note) =>
+      Boolean(note) &&
+      !offline &&
+      (note.createdBy ? note.createdBy === actor?.userId : Boolean(canEdit)),
+    [offline, actor?.userId, canEdit]
+  );
 
   // Skipping any id whose note has gone - deleted here, or unshared by the DM
   // and withdrawn from a player over the socket.
@@ -169,7 +195,12 @@ export default function Notes({
     try {
       // Not optimistic: only the server can mint the record's id. New notes
       // start private - sharing is a decision, not a default.
-      const record = await api.createNote({ title: 'New note', body: '', shared: false });
+      const record = await api.createNote({
+        title: 'New note',
+        body: '',
+        visibility: 'private',
+        sharedWith: [],
+      });
       setNotes((prev) => [...prev, record]);
       setOpenId(record.id);
       setError('');
@@ -224,11 +255,12 @@ export default function Notes({
                 onClick={() => setOpenId(n.id)}
               >
                 <span className="note-item-title">{n.title || 'Untitled note'}</span>
-                {/* Only the DM has anything to learn from this: everything a
-                    player can see here is shared by definition. */}
-                {canEdit && (
-                  <span className={`note-flag${n.shared ? ' on' : ''}`}>
-                    {n.shared ? 'shared' : 'private'}
+                {/* Only on the notes you could change: a note somebody has
+                    handed you is one you can read, and saying "shared" over it
+                    describes your own screen back to you. */}
+                {mayEdit(n) && (
+                  <span className={`note-flag ${n.visibility || 'private'}`}>
+                    {flagLabel(n, players)}
                   </span>
                 )}
               </button>
@@ -251,9 +283,13 @@ export default function Notes({
           {open && (
             <NoteView
               note={open}
-              readOnly={readOnly}
+              readOnly={!mayEdit(open)}
+              players={players}
+              actor={actor}
               onEdit={edit}
-              onShare={(shared) => queueSave({ ...open, shared }, { immediate: true })}
+              // Sharing is a click with a consequence at the table rather than
+              // typing, so it goes at once instead of waiting out the debounce.
+              onShare={(patch) => queueSave({ ...open, ...patch }, { immediate: true })}
               onDelete={() => setConfirmDeleteId(open.id)}
               // Only offered from the pane. Inside a window it would be a
               // button to open the window you are already looking at.
@@ -281,29 +317,27 @@ export default function Notes({
           onClose={() => closeWindow(note.id)}
           controls={
             <>
-              {readOnly && <span className="badge role anon">read-only</span>}
+              {!mayEdit(note) && <span className="badge role anon">read-only</span>}
               <div className="spacer" />
-              {!readOnly && (
-                <>
-                  <ShareToggle
-                    note={note}
-                    onShare={(shared) => queueSave({ ...note, shared }, { immediate: true })}
-                  />
-                  <button className="del" onClick={() => setConfirmDeleteId(note.id)}>
-                    Delete note
-                  </button>
-                </>
+              {mayEdit(note) && (
+                <button className="del" onClick={() => setConfirmDeleteId(note.id)}>
+                  Delete note
+                </button>
               )}
             </>
           }
         >
           <NoteView
             note={note}
-            readOnly={readOnly}
+            readOnly={!mayEdit(note)}
+            players={players}
+            actor={actor}
             onEdit={(patch) => queueSave({ ...note, ...patch })}
-            onShare={(shared) => queueSave({ ...note, shared }, { immediate: true })}
+            onShare={(patch) => queueSave({ ...note, ...patch }, { immediate: true })}
             // Delete lives in the window's own header, where every other
-            // window keeps it, rather than twice in the same frame.
+            // window keeps it, rather than twice in the same frame. Sharing
+            // does not: it is a panel rather than a button now, and a panel
+            // that unfolds inside a header would push the note out of view.
             inWindow
           />
         </FloatingWindow>
@@ -313,9 +347,9 @@ export default function Notes({
         <ConfirmDeleteModal
           name={confirmNote.title || 'Untitled note'}
           description={
-            confirmNote.shared
-              ? 'This note is shared, so it disappears from your players’ handouts too. It can’t be undone.'
-              : 'This deletes the note for good. It can’t be undone.'
+            confirmNote.visibility === 'private'
+              ? 'This deletes the note for good. It can’t be undone.'
+              : 'Somebody else can read this note, so it disappears from their handouts too. It can’t be undone.'
           }
           confirmLabel="Delete note"
           onConfirm={() => removeNote(confirmNote.id)}
@@ -327,37 +361,162 @@ export default function Notes({
 }
 
 /**
- * One note, read or edited - the same thing whether it's in the side pane or
- * floating in a window of its own, so both render this rather than each
- * growing its own copy that drifts from the other.
- */
-/**
- * The one switch that decides who else can read this.
+ * Who can read this note, said in as few words as fit on a list row.
  *
- * A button rather than a checkbox because it is an action with a consequence at
- * the table - a handout appearing in front of the players - and because what it
- * says should be what happens when you press it. Its label is the next state,
- * not the current one; the colour carries the current one.
+ * "3 people" rather than their names: a row in the list is a title with a tag
+ * beside it, and three names is a second title. The panel below spells it out.
  */
-function ShareToggle({ note, onShare }) {
-  const shared = Boolean(note.shared);
+function flagLabel(note, players) {
+  const visibility = note.visibility || 'private';
+  if (visibility === 'public') return 'everyone';
+  if (visibility !== 'shared') return 'private';
+  // Counted against the people who are actually here. An id left behind by
+  // somebody who has left the table grants them nothing (the server checks
+  // membership before it checks a note), so counting it would be reporting a
+  // reader who does not exist.
+  const n = (note.sharedWith || []).filter((id) => players.some((p) => p.id === id)).length;
+  if (n === 0) return 'nobody';
+  return n === 1 ? '1 person' : `${n} people`;
+}
+
+/** The same answer at length, for the panel's own summary line. */
+function shareSummary(note, players) {
+  const visibility = note.visibility || 'private';
+  if (visibility === 'public') return 'Everyone at this table';
+  if (visibility !== 'shared') return 'Nobody but you';
+  const names = (note.sharedWith || [])
+    .map((id) => players.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p) => p.name);
+  if (names.length === 0) return 'Nobody yet';
+  if (names.length <= 3) return names.join(' · ');
+  return `${names.slice(0, 2).join(' · ')} and ${names.length - 2} others`;
+}
+
+/**
+ * Who else may read this note: nobody, some people, or the whole table.
+ *
+ * Three states rather than the switch this replaced, because "shared" turned
+ * out to be two different decisions wearing one word - handing the party a
+ * letter they all just read, and telling one player what their character alone
+ * noticed. A switch can only do the first.
+ *
+ * Public is deliberately not "everyone, as a list of names": it asks the
+ * campaign who its members are at the moment somebody reads it, so a player who
+ * joins next month gets the handouts the table already has rather than a
+ * silence nobody remembers to fix.
+ *
+ * Folded away by default, like the character sheets' access panel and for the
+ * same reason: it is consulted when a note changes hands, against a note that
+ * is read every session. The summary is on the fold, so it never has to be
+ * opened to be answered.
+ */
+function SharePanel({ note, players, actor, onShare }) {
+  const visibility = note.visibility || 'private';
+  const sharedWith = note.sharedWith || [];
+  // Everybody at the table except whoever is doing the sharing - the author
+  // reads their own note by definition, so a tick beside their own name would
+  // be a control that changes nothing.
+  const others = players.filter((p) => p.id !== actor?.userId);
+
+  const choose = (next) => {
+    if (next === visibility) return;
+    // The list of names is kept when the answer moves off Shared, rather than
+    // emptied: switching to Public to read something out and back again should
+    // not cost the DM the three ticks they set before.
+    onShare({ visibility: next, sharedWith });
+  };
+
+  const toggle = (id) => {
+    const next = sharedWith.includes(id)
+      ? sharedWith.filter((x) => x !== id)
+      : [...sharedWith, id];
+    onShare({ visibility: 'shared', sharedWith: next });
+  };
+
   return (
-    <button
-      className={`note-share-toggle${shared ? ' on' : ''}`}
-      onClick={() => onShare(!shared)}
-      title={
-        shared
-          ? 'Every player can read this. Press to take it back.'
-          : 'Only you can see this. Press to hand it to the players, read-only.'
-      }
-      aria-pressed={shared}
-    >
-      {shared ? 'Hide note' : 'Share note'}
-    </button>
+    <details className="share-panel">
+      <summary>
+        Who can read this - <strong>{shareSummary(note, players)}</strong>
+      </summary>
+
+      <div className="share-choices">
+        {[
+          ['private', 'Private', 'Yours alone. Nobody else at the table sees it, DM or player.'],
+          ['shared', 'Shared with…', 'Only the people you tick below.'],
+          ['public', 'Public', 'Everyone here, and anyone who joins later.'],
+        ].map(([value, label, hint]) => (
+          <label key={value} className={`share-choice${visibility === value ? ' on' : ''}`}>
+            <input
+              type="radio"
+              name={`share-${note.id}`}
+              checked={visibility === value}
+              onChange={() => choose(value)}
+            />
+            <span>
+              <strong>{label}</strong>
+              <small>{hint}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {/* Only under the answer it belongs to. A list of names beside a note
+          marked Public would invite the reading that those are the only
+          people who can see it. */}
+      {visibility === 'shared' &&
+        (others.length === 0 ? (
+          <p className="hint">
+            Nobody else is at this table yet. Add players under Campaigns → Members and they will
+            appear here.
+          </p>
+        ) : (
+          <ul className="share-list">
+            {others.map((p) => (
+              <li key={p.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={sharedWith.includes(p.id)}
+                    onChange={() => toggle(p.id)}
+                  />
+                  <span>{p.name}</span>
+                </label>
+                {/* A co-DM is a person at this table like any other, and gets
+                    no more of your prep than you give them. Saying which they
+                    are is worth one word. */}
+                {p.role === 'dm' && <span className="badge role gm">DM</span>}
+              </li>
+            ))}
+          </ul>
+        ))}
+
+      <p className="hint">
+        Whoever you share it with can read it and nothing more - a note is only ever edited by the
+        person who wrote it. Take it back and it disappears from their screen at once, even if they
+        have it open.
+      </p>
+    </details>
   );
 }
 
-function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutLabel, inWindow }) {
+/**
+ * One note, read or edited - the same thing whether it's in the side pane or
+ * floating in a window of its own, so both render this rather than each growing
+ * its own copy that drifts from the other.
+ */
+function NoteView({
+  note,
+  readOnly,
+  players = [],
+  actor,
+  onEdit,
+  onShare,
+  onDelete,
+  onPopOut,
+  popOutLabel,
+  inWindow,
+}) {
   if (readOnly) {
     return (
       <article className="note-read">
@@ -384,6 +543,11 @@ function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutL
         onChange={(e) => onEdit({ title: e.target.value })}
       />
 
+      {/* In both places, unlike Delete: sharing is the question you ask *about*
+          the note you are looking at, so it belongs beside it whether that is
+          in the pane or in a window of its own. */}
+      <SharePanel note={note} players={players} actor={actor} onShare={onShare} />
+
       <div className="note-controls">
         <div className="spacer" />
         {onPopOut && (
@@ -391,15 +555,12 @@ function NoteView({ note, readOnly, onEdit, onShare, onDelete, onPopOut, popOutL
             ⧉ {popOutLabel}
           </button>
         )}
-        {/* In a window this pair lives in the window's own header instead, so
-            neither of them appears twice in the same frame. */}
+        {/* In a window this lives in the window's own header instead, so it
+            doesn't appear twice in the same frame. */}
         {!inWindow && (
-          <>
-            <ShareToggle note={note} onShare={onShare} />
-            <button className="del" onClick={onDelete}>
-              Delete note
-            </button>
-          </>
+          <button className="del" onClick={onDelete}>
+            Delete note
+          </button>
         )}
       </div>
 

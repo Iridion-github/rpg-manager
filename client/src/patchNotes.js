@@ -24,6 +24,23 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-15',
+    entries: [
+      {
+        kind: 'change',
+        text: 'A note is shared with the people you choose, not just with everybody. Open a note and the line above it asks who can read it: Private is yours alone, Public is everyone at the table including anyone who joins later, and Shared with… gives you a tick beside each person\'s name. Change it whenever you like - take a note back and it vanishes from their screen at once, even if they have it open. Notes you had already handed out are Public, and the rest are Private, which is exactly what they were before.',
+      },
+      {
+        kind: 'change',
+        text: 'A note belongs to whoever wrote it. Anybody you share one with can read it and nothing else, and that now holds for a second DM at the same table as well: they read your prep the way a player reads a handout, and only you can edit or delete it. Notes written before this belong to the DM\'s chair rather than to a person, so nothing you already had has become read-only.',
+      },
+      {
+        kind: 'change',
+        text: 'The chat announces a handout only when a note goes Public. Sharing one with two named people no longer tells the other five that something was handed out - it simply appears in the handouts of the people you picked.',
+      },
+    ],
+  },
+  {
     date: '2026-08-14',
     entries: [
       {

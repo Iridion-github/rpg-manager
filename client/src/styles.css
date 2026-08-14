@@ -3754,9 +3754,18 @@ button.token-tile:hover {
   color: #8b90a0;
 }
 
-.note-flag.on {
+/* Three states, three readings at a glance. Green is the app's "this is live,
+   the table can see it" - the same green as the connection dot and the shared
+   badge elsewhere; blue is out with some people but not the table; and the
+   private one keeps the grey of a thing that is only yours. */
+.note-flag.public {
   background: #16351f;
   color: #6ee787;
+}
+
+.note-flag.shared {
+  background: #1b2a45;
+  color: #79b8ff;
 }
 
 .note-pane {
@@ -3781,17 +3790,111 @@ button.token-tile:hover {
   flex-wrap: wrap;
 }
 
-/* Green while the note is out with the players - the same "on" pair the
-   connection badge and the shared flag in the list already use, so the three
-   ways the app says "this is live" agree with each other. */
-.note-share-toggle.on {
-  background: #16351f;
-  border-color: #2f6b3e;
-  color: #6ee787;
+/* --- who can read a note ---
+
+   The same box as the character sheets' access panel, because it answers the
+   same question about a different thing: folded away, with the answer on the
+   fold so it never has to be opened to be read. */
+.share-panel {
+  background: #1a1d25;
+  border: 1px solid #2c3140;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
 }
 
-.note-share-toggle.on:hover {
-  background: #1d4a2a;
+.share-panel>summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: #8b90a0;
+  /* The marker sits on the line rather than hanging outside the padded box. */
+  list-style-position: inside;
+}
+
+.share-panel>summary strong {
+  color: #e7e9ee;
+}
+
+.share-panel[open]>summary {
+  margin-bottom: 0.6rem;
+}
+
+.share-panel .hint {
+  margin: 0.6rem 0 0;
+}
+
+/* The three answers, as one block of choices rather than a dropdown: they are
+   not equivalent options to be scrolled past, and which one is in force is
+   worth being able to see without opening anything. */
+.share-choices {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.share-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #2c3140;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.share-choice:hover {
+  border-color: #3a4256;
+}
+
+.share-choice.on {
+  background: #1e2430;
+  border-color: #58a6ff;
+}
+
+.share-choice span {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.share-choice small {
+  color: #8b90a0;
+  font-size: 0.72rem;
+}
+
+.share-choice input {
+  margin-top: 0.15rem;
+  flex: none;
+}
+
+/* Who it goes to. Two columns where there is room, because a table of six
+   people should not be six rows of one word. */
+.share-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.3rem 0.8rem;
+}
+
+.share-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.share-list label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.share-list label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .note-body-input {
