@@ -3309,6 +3309,106 @@ button.token-tile:hover {
   font-size: 0.8rem;
 }
 
+/* --- the sections that are lists of things ---
+
+   Proficiencies, inventory and features. The same card as a piece of armour,
+   for the same reason: a row has several named boxes on it and they have to
+   read as one thing in a column a third of a sheet wide. */
+/* The section's name at one end, what it adds up to at the other. Baselines
+   rather than centres, so the total sits on the same line as the heading it
+   answers to rather than floating above it. */
+.item-box-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.item-total {
+  flex: none;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
+  /* The heading carries the section's own bottom margin; this matches it so
+     the two sit on one line. */
+  margin-bottom: 0.45rem;
+}
+
+.item-total b {
+  color: #e7e9ee;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  margin-left: 0.2rem;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.item-row {
+  background: #10131a;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* The boxes that fit on one line, with the delete at the end of it. Wraps
+   rather than squeezing: three fields and a button in a narrow column would
+   otherwise leave each of them too small to read what is in it. */
+.item-head {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* Every box on the line is small by default; the one marked `grow` takes
+   whatever is left, which is always the row's own name. */
+.item-field {
+  flex: 0 1 6rem;
+  min-width: 0;
+}
+
+.item-field.grow {
+  flex: 1 1 8rem;
+}
+
+.item-field.narrow {
+  flex: 0 0 4.2rem;
+}
+
+.item-head input {
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* The ✕ sits on the input line rather than under the captions, which is where
+   `align-items: flex-end` would otherwise put it. */
+.item-head .del {
+  flex: none;
+  margin-bottom: 0.9rem;
+}
+
+.item-area textarea {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.item-list .empty {
+  color: #8b90a0;
+  font-size: 0.8rem;
+}
+
 /* What the armour list comes to, under the armour list. */
 .ac-sum {
   margin: 0.5rem 0 0;

@@ -10,6 +10,7 @@ import { attackRollLabels, characterRollLabel } from './rollLabels.js';
 import GlobalModifiers from './GlobalModifiers.jsx';
 import AcModifiers from './AcModifiers.jsx';
 import EquippedArmor from './EquippedArmor.jsx';
+import ItemList from './ItemList.jsx';
 import {
   ABILITIES,
   SKILLS,
@@ -23,7 +24,11 @@ import {
   armorClass,
   armorClassBreakdown,
   extrasNotation,
+  featureRows,
+  inventoryRows,
+  inventoryWeight,
   modifierExtras,
+  proficiencyRows,
   specAbilityBonus,
   proficiencyBonus,
   signed,
@@ -49,6 +54,59 @@ function setIn(obj, path, value) {
 }
 
 const uid = () => crypto.randomUUID();
+
+/**
+ * What a row is made of, in each of the three sections that are lists.
+ *
+ * Kept here, beside the sections they belong to, rather than inside the list
+ * component: what a proficiency has on it is a fact about a character sheet,
+ * and ItemList is only the thing that draws rows. The order is the order they
+ * appear in; `grow` is the field that takes the slack, and the areas fall
+ * underneath whatever sits on the first line. See ItemList.
+ */
+const PROFICIENCY_FIELDS = [
+  { key: 'title', label: 'Title', kind: 'text', width: 'grow', placeholder: "Thieves' tools" },
+  { key: 'subtitle', label: 'Subtitle', kind: 'text', placeholder: 'Optional' },
+  { key: 'description', label: 'Description', kind: 'area', rows: 2, placeholder: 'Optional' },
+];
+
+const INVENTORY_FIELDS = [
+  // Quantity leads, because that is the order the line is read in: two daggers,
+  // not daggers, two.
+  { key: 'quantity', label: 'Qty', kind: 'int', width: 'narrow', placeholder: '–' },
+  { key: 'title', label: 'Item', kind: 'text', width: 'grow', placeholder: 'Rope, 50 ft' },
+  { key: 'weight', label: 'Weight', kind: 'num', width: 'narrow', placeholder: '–' },
+];
+
+/**
+ * What the kit comes to, printed beside the Inventory heading.
+ *
+ * Absent, not zero, on a sheet where nobody has written a weight down: a table
+ * that ignores encumbrance should not have a running total of nothing sitting
+ * on their sheet. No unit, because the column it adds up hasn't got one either
+ * - the sheet doesn't know whether this table counts in pounds.
+ */
+function CarriedWeight({ sheet }) {
+  const total = inventoryWeight(sheet);
+  if (total === null) return null;
+  return (
+    <span className="item-total" title="Each row's weight times how many of it there are">
+      Total weight: <b>{total}</b>
+    </span>
+  );
+}
+
+const FEATURE_FIELDS = [
+  { key: 'title', label: 'Title', kind: 'text', width: 'grow', placeholder: 'Darkvision' },
+  { key: 'source', label: 'Source', kind: 'text', placeholder: 'Race, class, feat…' },
+  {
+    key: 'description',
+    label: 'Description',
+    kind: 'area',
+    rows: 3,
+    placeholder: 'What it does, and when',
+  },
+];
 
 export default function CharacterSheet({ sheet, onChange, readOnly }) {
   const [page, setPage] = useState('main');
@@ -430,12 +488,15 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
         </div>
 
         <Stat label="Passive Perception" value={passivePerception(sheet)} />
-        <Area
-          label="Other proficiencies & languages"
-          value={sheet.otherProficiencies}
+        <ItemList
+          title="Other proficiencies & languages"
+          items={proficiencyRows(sheet)}
           onChange={set('otherProficiencies')}
           readOnly={readOnly}
-          rows={4}
+          addLabel="+ Proficiency"
+          emptyLabel="Nothing written down yet."
+          noun="this proficiency"
+          fields={PROFICIENCY_FIELDS}
         />
       </div>
 
@@ -717,12 +778,19 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           breakdown={armorClassBreakdown(sheet)}
         />
 
-        <div className="box">
-          <h4>Inventory</h4>
-          {/* Still stored as `equipment`: the heading changed, and nobody's kit
-              should go missing over a word. */}
-          <Area label="" value={sheet.equipment} onChange={set('equipment')} readOnly={readOnly} rows={6} />
-        </div>
+        {/* Still stored as `equipment`: the heading changed, and nobody's kit
+            should go missing over a word. */}
+        <ItemList
+          title="Inventory"
+          items={inventoryRows(sheet)}
+          onChange={set('equipment')}
+          readOnly={readOnly}
+          addLabel="+ Item"
+          emptyLabel="Carrying nothing yet."
+          noun="this item"
+          fields={INVENTORY_FIELDS}
+          summary={<CarriedWeight sheet={sheet} />}
+        />
       </div>
 
       {/* ---- column three: roleplay ---- */}
@@ -731,7 +799,16 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
         <Area label="Ideals" value={sheet.ideals} onChange={set('ideals')} readOnly={readOnly} rows={3} />
         <Area label="Bonds" value={sheet.bonds} onChange={set('bonds')} readOnly={readOnly} rows={3} />
         <Area label="Flaws" value={sheet.flaws} onChange={set('flaws')} readOnly={readOnly} rows={3} />
-        <Area label="Features & traits" value={sheet.featuresAndTraits} onChange={set('featuresAndTraits')} readOnly={readOnly} rows={12} />
+        <ItemList
+          title="Features & traits"
+          items={featureRows(sheet)}
+          onChange={set('featuresAndTraits')}
+          readOnly={readOnly}
+          addLabel="+ Feature"
+          emptyLabel="No features written down yet."
+          noun="this feature"
+          fields={FEATURE_FIELDS}
+        />
         <Area label="Notes" value={sheet.notes} onChange={set('notes')} readOnly={readOnly} rows={5} />
       </div>
 

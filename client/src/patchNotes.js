@@ -28,6 +28,14 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'change',
+        text: 'Other proficiencies & languages, Inventory, and Features & traits are lists now instead of one long box of text. Each entry is a row you fill in, add and throw away on its own: a proficiency has a title, an optional subtitle and an optional description; an inventory item has an optional quantity, a name and an optional weight; a feature has a title, where it came from, and what it does. Inventory adds up what you are carrying and prints the total beside the heading: the weight you write is what one of the thing weighs, so fifty arrows at 0.05 come to 2.5. Write no weights and there is no total, because a table that does not track encumbrance should not be shown a running one. Anything you had already typed into those three boxes is read back as rows - one per line, and for features one per paragraph with its first line as the title - so nothing is lost and there is nothing to copy across by hand.',
+      },
+      {
+        kind: 'change',
+        text: 'Personality traits, Ideals, Bonds, Flaws and Notes are still plain text boxes. They are places to write about your character rather than lists of things, so nothing about them has changed.',
+      },
+      {
+        kind: 'change',
         text: 'A note is shared with the people you choose, not just with everybody. Open a note and the line above it asks who can read it: Private is yours alone, Public is everyone at the table including anyone who joins later, and Shared with… gives you a tick beside each person\'s name. Change it whenever you like - take a note back and it vanishes from their screen at once, even if they have it open. Notes you had already handed out are Public, and the rest are Private, which is exactly what they were before.',
       },
       {
@@ -69,7 +77,7 @@ export const PATCH_NOTES = [
       },
       {
         kind: 'change',
-        text: 'The Characters tab says "Figure on the map" now, rather than "Token", so it reads as the same question the Tokens tab asks from the other side. A character is on one figure and a figure is one character, as before: putting a character on a new figure takes it off the old one, and the dropdown tells you which character a figure is already carrying before you choose it.',
+        text: 'The Characters tab says "Linked Token" now, rather than "Token", so it reads as the same question the Tokens tab asks from the other side. A character is on one figure and a figure is one character, as before: putting a character on a new figure takes it off the old one, and the dropdown tells you which character a figure is already carrying before you choose it.',
       },
       {
         kind: 'change',

@@ -19,6 +19,12 @@ const MAX_ATTACKS = 24;
 const MAX_SPELLS = 400;
 const MAX_TEXT = 5000;
 
+// Proficiencies, inventory and features are lists now (see pickList). One
+// character's worth, not a warehouse; the description on a row is a paragraph
+// about one thing rather than a page.
+const MAX_ITEMS = 100;
+const MAX_ITEM_TEXT = 2000;
+
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 function num(v, fallback = 0) {
@@ -28,6 +34,22 @@ function num(v, fallback = 0) {
 const int = (v, fallback, lo, hi) => clamp(Math.round(num(v, fallback)), lo, hi);
 const text = (v, fallback = '', max = 200) => String(v ?? fallback).slice(0, max);
 const block = (v) => text(v, '', MAX_TEXT);
+const itemText = (v, max = 120) => text(v, '', max);
+
+/**
+ * A number somebody may simply not have filled in.
+ *
+ * Blank is a real answer on these rows - "a rope" is a line worth writing down
+ * before you have decided how many feet of it - and it is not the same answer
+ * as zero, which would print a 0 in every box on the sheet and mean "none of
+ * this thing". So the empty string comes back as null and is stored as null.
+ */
+function optional(v, { lo, hi, whole = false }) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return clamp(whole ? Math.round(n) : n, lo, hi);
+}
 
 function pickAbilities(source = {}) {
   const out = {};
@@ -229,6 +251,120 @@ function legacyAcBonus(body, abilities) {
 }
 
 /**
+ * The three sections that stopped being one long text box: what you are good
+ * at, what you are carrying, and what you can do.
+ *
+ * Each is a list of rows with named fields, because that is what all three of
+ * them always were - a person writing "Thieves' tools, Elvish, Dwarvish" into a
+ * paragraph is keeping a list in the only place the sheet gave them. Naming the
+ * fields is what lets the sheet lay them out, and lets a row be edited or
+ * thrown away without retyping the ones around it.
+ *
+ * Every row keeps an id so the browser can key its inputs to it: without one,
+ * deleting the second of four rows re-uses the third row's box for the fourth,
+ * and whatever was half-typed in it jumps a line.
+ *
+ * ## What happens to what people already wrote
+ *
+ * The old value was a string, and it is still read as one - see the `fromText`
+ * half of each picker below. Nothing is thrown away and nothing has to be
+ * migrated in a batch: a sheet nobody opens keeps its paragraph and reads back
+ * as rows, and the first save writes the rows down. The split differs by
+ * section because the sections were written differently:
+ *
+ *   proficiencies, inventory   one row per line. These are lists people already
+ *                              wrote as lists, one thing to a line.
+ *   features                   one row per paragraph, its first line the title
+ *                              and the rest the description - which is how a
+ *                              feature is written on paper ("Darkvision" and
+ *                              then what darkvision does).
+ */
+function rowsFromLines(value, key = 'title') {
+  return String(value ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, MAX_ITEMS)
+    .map((line) => ({ id: crypto.randomUUID(), [key]: itemText(line) }));
+}
+
+function rowsFromParagraphs(value) {
+  return String(value ?? '')
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .slice(0, MAX_ITEMS)
+    .map((chunk) => {
+      const [first, ...rest] = chunk.split('\n');
+      return {
+        id: crypto.randomUUID(),
+        title: itemText(first.trim()),
+        description: text(rest.join('\n').trim(), '', MAX_ITEM_TEXT),
+      };
+    });
+}
+
+/**
+ * A list of rows, however it arrives: as rows, or as the paragraph it used to
+ * be. Anything else at all - a number, a null, an object - is an empty list,
+ * which is what a section nobody has filled in looks like.
+ */
+function pickList(source, mapRow, fromText) {
+  if (Array.isArray(source)) {
+    return source.slice(0, MAX_ITEMS).map((row) => mapRow(row && typeof row === 'object' ? row : {}));
+  }
+  if (typeof source === 'string' && source.trim()) return fromText(source).map(mapRow);
+  return [];
+}
+
+const rowId = (row) => text(row.id, '', 64) || crypto.randomUUID();
+
+/** "Thieves' tools", "Elvish" - a name, and as much explanation as it needs. */
+const pickProficiencies = (source) =>
+  pickList(
+    source,
+    (row) => ({
+      id: rowId(row),
+      title: itemText(row.title, 120),
+      subtitle: itemText(row.subtitle, 120),
+      description: text(row.description, '', MAX_ITEM_TEXT),
+    }),
+    (value) => rowsFromLines(value)
+  );
+
+/**
+ * What the character is carrying. How many, what it is, and what it weighs.
+ *
+ * The two numbers are optional and stay optional - see `optional`. Weight
+ * allows a fraction because half a pound is a real weight for the things
+ * adventurers carry most of.
+ */
+const pickInventory = (source) =>
+  pickList(
+    source,
+    (row) => ({
+      id: rowId(row),
+      quantity: optional(row.quantity, { lo: 0, hi: 99999, whole: true }),
+      title: itemText(row.title, 120),
+      weight: optional(row.weight, { lo: 0, hi: 99999 }),
+    }),
+    (value) => rowsFromLines(value)
+  );
+
+/** A feature, and where it came from: a class, a race, a background, a boon. */
+const pickFeatures = (source) =>
+  pickList(
+    source,
+    (row) => ({
+      id: rowId(row),
+      title: itemText(row.title, 120),
+      source: itemText(row.source, 80),
+      description: text(row.description, '', MAX_ITEM_TEXT),
+    }),
+    rowsFromParagraphs
+  );
+
+/**
  * Attacks used to hold free text ("+5", "1d8 + 3 slashing"). Rather than drop
  * what people already typed, read a dice spec out of it where the shape is
  * obvious - anything unparseable simply comes back empty, which is what an
@@ -328,7 +464,9 @@ function sanitizeSheet(body = {}) {
     inspiration: Boolean(body.inspiration),
     saves: pickSaves(body.saves),
     skills: pickSkills(body.skills),
-    otherProficiencies: block(body.otherProficiencies),
+    // A list now, not a paragraph - and the same key, so a sheet that has one
+    // written as a paragraph still finds it there. See pickList.
+    otherProficiencies: pickProficiencies(body.otherProficiencies),
 
     // --- combat ---
     // No armorClass: it is the armour plus Dexterity plus the list below, and
@@ -355,7 +493,9 @@ function sanitizeSheet(body = {}) {
     globalModifiers: pickGlobalModifiers(body.globalModifiers),
 
     // --- kit ---
-    equipment: block(body.equipment),
+    // The sheet calls this Inventory; the key keeps its old name so that
+    // nobody's kit goes missing over a word.
+    equipment: pickInventory(body.equipment),
     currency: {
       cp: int(currency.cp, 0, 0, 999999),
       sp: int(currency.sp, 0, 0, 999999),
@@ -369,7 +509,7 @@ function sanitizeSheet(body = {}) {
     ideals: block(body.ideals),
     bonds: block(body.bonds),
     flaws: block(body.flaws),
-    featuresAndTraits: block(body.featuresAndTraits),
+    featuresAndTraits: pickFeatures(body.featuresAndTraits),
 
     // --- page two: character detail ---
     appearance: {

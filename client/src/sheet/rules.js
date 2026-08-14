@@ -277,6 +277,101 @@ export function extrasNotation(extras = []) {
   return [...dice, ...(flat ? [signed(flat)] : [])].join(' ');
 }
 
+/**
+ * The three sections that are lists of rows rather than paragraphs:
+ * proficiencies, inventory, features.
+ *
+ * Read here as well as on the server, and for the reason every other legacy
+ * field on this sheet is read twice: a sheet that has not been saved since the
+ * change still holds a paragraph, and the browser renders what it was given
+ * rather than what the server would store if asked. The two must agree about
+ * what that paragraph means, or the same character reads differently depending
+ * on whether anybody has touched it since. Keep this in step with pickList in
+ * server/sheetSchema.js.
+ *
+ * The split differs by section because the sections were written differently:
+ * proficiencies and inventory are lists people already kept one-to-a-line,
+ * while a feature is a heading and then what it does.
+ */
+/**
+ * The ids on a row read out of a paragraph are made from where it sits, not
+ * minted fresh.
+ *
+ * This runs on every render for as long as the section is still a paragraph,
+ * and a row's id is its React key: a new uuid each time would throw away and
+ * rebuild every input in the list whenever anything else on the sheet changed,
+ * which is a cursor jumping out of a box somebody is typing in. Position is
+ * stable for exactly as long as it needs to be - the first edit writes real
+ * rows, with real ids, and none of this runs again.
+ */
+const rowsFromLines = (value, prefix) =>
+  String(value ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, i) => ({ id: `${prefix}-${i}`, title: line }));
+
+const rowsFromParagraphs = (value, prefix) =>
+  String(value ?? '')
+    .split(/\n\s*\n/)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk, i) => {
+      const [first, ...rest] = chunk.split('\n');
+      return {
+        id: `${prefix}-${i}`,
+        title: first.trim(),
+        description: rest.join('\n').trim(),
+      };
+    });
+
+const asRows = (value, fromText, prefix) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) return fromText(value, prefix);
+  return [];
+};
+
+export const proficiencyRows = (sheet) =>
+  asRows(sheet?.otherProficiencies, rowsFromLines, 'prof');
+export const inventoryRows = (sheet) => asRows(sheet?.equipment, rowsFromLines, 'item');
+export const featureRows = (sheet) =>
+  asRows(sheet?.featuresAndTraits, rowsFromParagraphs, 'feat');
+
+/**
+ * What the inventory weighs, all together.
+ *
+ * A row's weight is what *one* of that thing weighs, so it is multiplied by how
+ * many there are: fifty arrows at a twentieth of a pound is the answer people
+ * expect, and it is what every other sheet that has both columns does. A row
+ * with no quantity written down is one of the thing; a row that says nought of
+ * something contributes nothing, which is the one case where those two have to
+ * be told apart.
+ *
+ * Null when nobody has weighed anything, rather than 0. A blank weight column
+ * is a table that does not track encumbrance, and printing "Total 0" over it
+ * would be the sheet answering a question nobody at that table asked.
+ *
+ * Rounded to two places on the way out: 0.1 + 0.2 is famously not 0.3 in binary
+ * floating point, and a carried weight of 3.0000000000000004 lb is a bug
+ * report waiting to be filed.
+ */
+export function inventoryWeight(sheet) {
+  const rows = inventoryRows(sheet);
+  let weighed = false;
+  let total = 0;
+  for (const row of rows) {
+    const weight = Number(row?.weight);
+    if (!Number.isFinite(weight) || row?.weight === null || row?.weight === '') continue;
+    weighed = true;
+    const quantity = Number(row?.quantity);
+    const count = Number.isFinite(quantity) && row?.quantity !== null && row?.quantity !== ''
+      ? quantity
+      : 1;
+    total += weight * count;
+  }
+  return weighed ? Math.round(total * 100) / 100 : null;
+}
+
 /** A blank sheet, matching the server's defaults. */
 export function blankSheet() {
   return {
@@ -294,7 +389,7 @@ export function blankSheet() {
     inspiration: false,
     saves: { str: false, dex: false, con: false, int: false, wis: false, cha: false },
     skills: {},
-    otherProficiencies: '',
+    otherProficiencies: [],
     // Armor Class is worked out from these two, not typed: the armour worn, and
     // the named list for everything the armour cannot account for.
     armor: [],
@@ -310,13 +405,13 @@ export function blankSheet() {
     globalModifiers: { on: false, effects: [] },
     // What the sheet calls Inventory. The key kept its old name so that every
     // character written before the section was renamed still has their kit.
-    equipment: '',
+    equipment: [],
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     personalityTraits: '',
     ideals: '',
     bonds: '',
     flaws: '',
-    featuresAndTraits: '',
+    featuresAndTraits: [],
     appearance: { age: '', height: '', weight: '', eyes: '', skin: '', hair: '' },
     appearanceNotes: '',
     backstory: '',

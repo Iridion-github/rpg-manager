@@ -597,7 +597,7 @@ export default function CharacterSheets({
                 of what this offers. */}
             {!readOnly && (
               <SheetTokenLink
-                label="Figure on the map"
+                label="Linked Token"
                 value={figureOf(tokens, sheet)?.id || ''}
                 emptyLabel="Not on the map"
                 busy={linkingId === sheet.id}
@@ -608,8 +608,7 @@ export default function CharacterSheets({
                   // off the character it currently is.
                   note:
                     t.sheetId && t.sheetId !== sheet.id
-                      ? `currently ${
-                        sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
+                      ? `currently ${sheets.find((s) => s.id === t.sheetId)?.name || 'another character'
                       }`
                       : '',
                 }))}
