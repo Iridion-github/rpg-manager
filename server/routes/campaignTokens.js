@@ -28,9 +28,17 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
-const { broadcast } = require('../realtime');
+const { broadcast, broadcastPerActor } = require('../realtime');
 const { requireUser } = require('../auth');
-const { scoped, canMoveToken, canViewSheet, canEditSheet, isDm } = require('../campaigns');
+const {
+  scoped,
+  canMoveToken,
+  canSeeToken,
+  sceneAsSeenBy,
+  canViewSheet,
+  canEditSheet,
+  isDm,
+} = require('../campaigns');
 const sheetLink = require('../sheetLink');
 const { locateToken } = require('../tokenCopies');
 
@@ -108,6 +116,21 @@ function sanitizeLook(body = {}, existing = {}) {
   };
 }
 
+/**
+ * A changed scene, announced to each person as they may see it.
+ *
+ * The same rule the tabletop's own announcements follow (routes/scenes.js): a
+ * scene record carries its tokens, and a token the DM has hidden must not
+ * travel to anybody else. Editing a token from the Tokens tab or coupling it to
+ * a character sends the whole board out, so it needs the same door.
+ */
+function announceScene(req, action, scene) {
+  broadcastPerActor(req, 'scenes:changed', (actor, role) => ({
+    action,
+    record: sceneAsSeenBy(role, scene),
+  }));
+}
+
 /** Every token in the campaign, with the scene it stands on if it stands on one. */
 async function everyToken(req) {
   const scenes = await store.list(scenesOf(req));
@@ -138,7 +161,15 @@ const locate = (req, tokenId) => locateToken(req.campaignId, tokenId);
 router.get('/', requireUser, async (req, res, next) => {
   try {
     const all = await everyToken(req);
-    const mine = all.filter((token) => canMoveToken(req.actor, req.campaignRole, token));
+    // Yours, and only the ones you can see. Both questions, because they are
+    // different questions: the DM can hide a token that belongs to somebody
+    // else, and handing that person its id here would be handing them the one
+    // thing the map is careful not to send - see canSeeToken.
+    const mine = all.filter(
+      (token) =>
+        canMoveToken(req.actor, req.campaignRole, token) &&
+        canSeeToken(req.campaignRole, token)
+    );
     // Unplaced first - those are the ones you can do something with from here -
     // and alphabetically within that, since this is a cast list rather than a
     // history.
@@ -175,6 +206,11 @@ router.post('/', requireUser, async (req, res, next) => {
       // A player's own token is theirs. The DM says who anybody else's belongs
       // to, and may say nobody - the monsters and the scenery.
       ownerId: dm ? (req.body?.ownerId ? String(req.body.ownerId) : null) : req.actor.userId,
+      // Whether the table can see it, which only the DM may decide. A player's
+      // own token is always visible: hiding one is a thing the person running
+      // the game does to the rest of the table, not a thing anybody does to
+      // themselves.
+      visible: dm ? req.body?.visible !== false : true,
       initiative: null,
       initiativeDie: null,
       initiativeMod: null,
@@ -212,12 +248,17 @@ router.put('/:tokenId', requireUser, async (req, res, next) => {
       throw new HttpError(403, 'You can only change your own token.');
     }
     const dm = isDm(req.campaign, req.actor);
-    // Handing a token to somebody is the DM's alone, so a player's edit cannot
-    // carry an owner even if the request does.
-    const owner = dm
-      ? { ownerId: req.body?.ownerId ? String(req.body.ownerId) : null }
+    // The two fields that are the DM's alone: handing a token to somebody, and
+    // deciding whether the table can see it. Absent from an owner's patch
+    // entirely, so what is stored stays whatever it was however the request was
+    // built. Same rule, same reason, as the tabletop's own editor.
+    const dmOnly = dm
+      ? {
+        ownerId: req.body?.ownerId ? String(req.body.ownerId) : null,
+        visible: req.body?.visible !== false,
+      }
       : {};
-    const patch = { ...sanitizeLook(req.body, found.token), ...owner };
+    const patch = { ...sanitizeLook(req.body, found.token), ...dmOnly };
 
     if (found.where === 'bench') {
       const updated = { ...found.token, ...patch };
@@ -230,7 +271,7 @@ router.put('/:tokenId', requireUser, async (req, res, next) => {
       ...current,
       tokens: current.tokens.map((t) => (t.id === req.params.tokenId ? { ...t, ...patch } : t)),
     }));
-    broadcast(req, 'scenes:changed', { action: 'token:update', record: scene });
+    announceScene(req, 'token:update', scene);
     const updated = scene.tokens.find((t) => t.id === req.params.tokenId);
     res.json({ ...updated, sceneId: scene.id, sceneName: scene.name });
   } catch (err) {
@@ -292,7 +333,7 @@ router.put('/:tokenId/sheet', requireUser, async (req, res, next) => {
     // that is what the board redraws from.
     for (const sceneId of scenes) {
       const other = await store.get(scoped(req.campaignId, 'scenes'), sceneId);
-      if (other) broadcast(req, 'scenes:changed', { action: 'token:update', record: other });
+      if (other) announceScene(req, 'token:update', other);
     }
     res.json({ ...found.token, ...patch });
   } catch (err) {
@@ -320,7 +361,7 @@ router.delete('/:tokenId', requireUser, async (req, res, next) => {
       tokens: current.tokens.filter((t) => t.id !== req.params.tokenId),
       turnTokenId: current.turnTokenId === req.params.tokenId ? null : current.turnTokenId,
     }));
-    broadcast(req, 'scenes:changed', { action: 'token:delete', record: scene });
+    announceScene(req, 'token:delete', scene);
     res.status(204).end();
   } catch (err) {
     next(err);

@@ -24,6 +24,19 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-16',
+    entries: [
+      {
+        kind: 'new',
+        text: 'Tokens can be hidden from the table. Creating or editing one, the DM gets a Visible to players tick, on by default: turn it off and the token is theirs alone. It is not merely invisible on the players\' screens; their browsers are never told it exists, so there is nothing to find by poking about. It still stands on the board, still moves, still rolls initiative and still takes damage, and turning the tick back on puts it in front of everybody at once. Only the DM can set it, on any token, including one belonging to a player.',
+      },
+      {
+        kind: 'new',
+        text: 'A hidden token wears a crossed-out eye where its nameplate goes, so the DM can tell at a glance which of the figures on their board only they can see. If the token shows its name too, the eye sits just to the left of it. Its tooltip says so in words as well.',
+      },
+    ],
+  },
+  {
     date: '2026-08-15',
     entries: [
       {

@@ -483,8 +483,9 @@ Right-clicking the **map** offers:
   offered every token in the campaign that isn't standing somewhere; everyone
   else is offered their own. Only shown when there is something to place, since
   an empty list behind a menu item is a promise the menu can't keep.
-- **Create token** (DM only) - a form for name, colour and size. It never asks
-  for a position, because the right-click already answered that; the token
+- **Create token** (DM only) - a form for name, colour, size and whether the
+  players can see it at all (see *Tokens only the DM can see* below). It never
+  asks for a position, because the right-click already answered that; the token
   appears where you clicked, sliding to the first free cell if that one is
   taken.
 - **Undo** and **Redo** - below a rule, because they act on what you have
@@ -598,6 +599,43 @@ different places, and cells stop being a unit at all when the grid is off.
 
 Neither ping nor focus is ever stored. They live on the socket and nowhere else:
 a minute later there is nothing that could have been saved.
+
+### Tokens only the DM can see
+Every token carries **Visible to players**, a tick in the create and edit forms
+that only the DM is offered and only the DM may change. On by default, and every
+token made before it existed reads as visible, which is the state they were
+already in. Turn it off and the token is the DM's alone: the ambush in the trees,
+the second half of the room, the thing behind the door.
+
+It is not hidden **in the browser**. A player's copy of the scene never contains
+the token at all - not over HTTP, not in the live update when it is placed or
+moved, not in the campaign's token list, and not as a drag ghost when the DM
+slides it across the board. Drawing it and then declining to paint it would put
+the monster in the page for anyone who opened the dev tools, which is the one
+thing this switch exists to prevent. The rule lives in `canSeeToken` and
+`sceneAsSeenBy` (server/campaigns.js), and every announcement that carries a
+scene goes out **per person** rather than as one payload for the table.
+
+The token is otherwise entirely normal. It stands on the board, moves, holds
+initiative and takes damage, and the moment the tick goes back on it is in front
+of everybody - no placing it again, no second copy.
+
+Two consequences worth knowing:
+
+- A square an invisible token stands on is still **taken**. A player who walks
+  into one is refused, and told *"Something is already there"* rather than the
+  creature's name: two tokens in one square would be a board that lies about
+  itself, and the refusal is unavoidable, but naming what did the refusing is
+  not.
+- Hiding a token that belongs to a **player** takes it off their board and out
+  of their token list as well. It is still theirs, and it comes back when the
+  tick does.
+
+On the DM's own screen a hidden token wears a **crossed-out eye** where its
+nameplate goes - to the left of the name when it has one, and alone in that spot
+when it hasn't. Drawn as an SVG rather than set as an emoji, because there is no
+dependable character for a barred eye and the near misses render as a different
+picture on every second machine. The tooltip says it in words too.
 
 ### The grid
 The scene bar carries two things: **Show grid**, with its checkbox, and a

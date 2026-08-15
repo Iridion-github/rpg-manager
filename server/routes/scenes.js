@@ -15,13 +15,17 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const store = require('../store');
-const { broadcast, broadcastPerActor } = require('../realtime');
+// Nothing on this router goes out to everybody as one payload any more: a scene
+// carries its tokens, and who may see which is a question about the reader.
+const { broadcastPerActor } = require('../realtime');
 const { requireUser } = require('../auth');
 const {
   scoped,
   requireDm,
   isDm,
   canMoveToken,
+  canSeeToken,
+  sceneAsSeenBy,
   canViewSheet,
   canEditSheet,
 } = require('../campaigns');
@@ -181,6 +185,19 @@ function sanitizeToken(body = {}, existing = {}) {
     borderColor = existing.borderColor ?? null,
     // A token's face. Empty means it shows its name instead.
     imageUrl = existing.imageUrl ?? '',
+    /**
+     * Whether the players can see this token at all.
+     *
+     * The DM's switch for the ambush in the trees: false and the token is on
+     * the board, moving and rolling initiative, for the DM alone. True unless
+     * somebody says otherwise, which covers a new token and every token made
+     * before the switch existed - all of which were already visible.
+     *
+     * Only the DM may set it, and that is checked in the routes below rather
+     * than here: this function is also how a copy inherits its source's fields,
+     * and a rule written into it would be a rule the paste had to work around.
+     */
+    visible = existing.visible ?? true,
     // What it is suffering from, as a plain string: one of the 5e conditions,
     // or whatever somebody typed for one this list doesn't name. Not checked
     // against that list, because half of it would refuse the custom ones - the
@@ -232,6 +249,10 @@ function sanitizeToken(body = {}, existing = {}) {
   return {
     label: String(label).slice(0, 60),
     showNameplate: showNameplate === true,
+    // Anything but an explicit false is visible: the switch is a promise about
+    // who *cannot* see the token, and a malformed value must never be what
+    // quietly takes a monster off the players' screens or puts it on.
+    visible: visible !== false,
     status: String(status).slice(0, 40),
     showStatus: showStatus === true,
     color: hexOr(color, '#58a6ff'),
@@ -251,8 +272,27 @@ function sanitizeToken(body = {}, existing = {}) {
   };
 }
 
+/**
+ * Tell the table the board changed - and tell each person only what they may
+ * see.
+ *
+ * Per actor rather than one payload for everyone, because a scene carries its
+ * tokens and some of those are the DM's alone (see canSeeToken). One broadcast
+ * would hand a player the ambush in the trees the moment it was placed, which
+ * is precisely the thing the switch promises it will not do.
+ *
+ * Every announcement on this router goes through here, so there is one place
+ * that has to remember - a second one would eventually be the one that forgot.
+ * `extra.token` is the newly placed token some actions carry beside the scene;
+ * it is dropped for anybody the token is hidden from, for the same reason.
+ */
 function announce(req, action, record, extra = {}) {
-  broadcast(req, 'scenes:changed', { action, record, ...extra });
+  broadcastPerActor(req, 'scenes:changed', (actor, role) => {
+    if (role === 'dm') return { action, record, ...extra };
+    const payload = { action, record: sceneAsSeenBy(role, record), ...extra };
+    if (payload.token && !canSeeToken(role, payload.token)) delete payload.token;
+    return payload;
+  });
 }
 
 /**
@@ -351,11 +391,22 @@ function firstFreeCell(scene, size, ignoreId) {
   return null;
 }
 
-function refuseOverlap(scene, candidate, ignoreId) {
+/**
+ * Refuse a move onto an occupied square, and say what is in the way.
+ *
+ * Named, because "the ogre is already there" is a better refusal than "no" -
+ * except when the thing in the way is one the DM has hidden. Then the square is
+ * still taken, and saying so is unavoidable: two tokens in one square would be
+ * a board that lies about itself, and the moment the monster was revealed they
+ * would be standing inside each other. What *is* avoidable is naming it, so a
+ * player who walks into an invisible dragon learns that something is there and
+ * nothing else about it.
+ */
+function refuseOverlap(scene, candidate, ignoreId, role) {
   const blocker = blockerFor(scene, candidate, ignoreId);
-  if (blocker) {
-    throw new HttpError(409, `${blocker.label || 'Another token'} is already there.`);
-  }
+  if (!blocker) return;
+  const named = canSeeToken(role, blocker) ? blocker.label : '';
+  throw new HttpError(409, `${named || 'Something'} is already there.`);
 }
 
 // Find a token or fail with the right status.
@@ -367,9 +418,14 @@ function tokenIn(scene, tokenId) {
 
 // ---- Scenes ----
 
+// Both reads answer with the board as this person may see it: a token the DM
+// has hidden is not sent, rather than sent and left out of the drawing. See
+// canSeeToken - a monster the browser was told about is a monster anybody can
+// find in the dev tools.
 router.get('/', async (req, res, next) => {
   try {
-    res.json(await store.list(scenesOf(req)));
+    const scenes = await store.list(scenesOf(req));
+    res.json(scenes.map((scene) => sceneAsSeenBy(req.campaignRole, scene)));
   } catch (err) {
     next(err);
   }
@@ -379,7 +435,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const scene = await store.get(scenesOf(req), req.params.id);
     if (!scene) return res.status(404).json({ error: 'Not found' });
-    res.json(scene);
+    res.json(sceneAsSeenBy(req.campaignRole, scene));
   } catch (err) {
     next(err);
   }
@@ -489,11 +545,17 @@ router.put('/:id/tokens/:tokenId', requireUser, async (req, res, next) => {
     const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
       const existing = tokenIn(current, req.params.tokenId);
       const asked = sanitizeToken(req.body, existing);
-      // Handing a token to somebody is the DM's alone, so an owner's edit
-      // cannot carry an owner even if the request does.
-      const updated = { ...existing, ...asked, ...(dm ? {} : { ownerId: existing.ownerId ?? null }) };
+      // Two fields an owner's edit cannot carry however the request was built.
+      // Handing a token to somebody takes it from them; hiding one decides what
+      // the rest of the table can see. Both are the DM's, and both are put back
+      // here rather than trusted to the form that drew them.
+      const updated = {
+        ...existing,
+        ...asked,
+        ...(dm ? {} : { ownerId: existing.ownerId ?? null, visible: existing.visible !== false }),
+      };
       // Growing a token can push it into a neighbour just as moving it can.
-      refuseOverlap(current, updated, updated.id);
+      refuseOverlap(current, updated, updated.id, req.campaignRole);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === updated.id ? updated : t)),
@@ -606,7 +668,7 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
         throw new HttpError(403, 'You can only move your own token.');
       }
       const moved = { ...existing, x: num(req.body?.x, existing.x), y: num(req.body?.y, existing.y) };
-      refuseOverlap(current, moved, moved.id);
+      refuseOverlap(current, moved, moved.id, req.campaignRole);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === moved.id ? moved : t)),

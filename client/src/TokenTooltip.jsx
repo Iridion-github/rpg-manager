@@ -121,6 +121,16 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note }) {
         Status <b>{token.status || 'Normal'}</b>
       </span>
 
+      {/* Only ever drawn on the DM's screen, because a token the players cannot
+          see is a token their browser was never sent. Said in words as well as
+          marked on the board: the eye on the plate is the glance, and this is
+          the answer when somebody is checking rather than scanning. */}
+      {token.visible === false && (
+        <span className="token-tip-row token-tip-hidden">
+          Hidden from players <b>Yes</b>
+        </span>
+      )}
+
       {/* Last, and not part of the token at all: this is what is happening to
           it this second, which outranks nothing and belongs after the facts. */}
       {note && <small>{note}</small>}

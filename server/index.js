@@ -35,7 +35,7 @@ const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
 const { router: tokensRouter, TOKENS_DIR } = require('./routes/tokens');
-const { registerTokenDrag, roomFor } = require('./tokenDrag');
+const { registerTokenDrag, roomFor, dmRoomFor } = require('./tokenDrag');
 const { announcePresence } = require('./realtime');
 const { registerSceneSignals } = require('./sceneSignals');
 
@@ -187,8 +187,12 @@ io.on('connection', (socket) => {
    */
   socket.on('campaign:enter', async ({ campaignId } = {}, ack) => {
     try {
-      if (socket.data.campaignId) socket.leave(roomFor(socket.data.campaignId));
+      if (socket.data.campaignId) {
+        socket.leave(roomFor(socket.data.campaignId));
+        socket.leave(dmRoomFor(socket.data.campaignId));
+      }
       socket.data.campaignId = null;
+      socket.data.campaignRole = null;
       socket.data.drag = null; // a drag doesn't survive leaving the table
 
       // Closing a campaign comes through here too, as an enter with nothing to
@@ -208,7 +212,15 @@ io.on('connection', (socket) => {
       if (!role) return ack?.({ ok: false, error: 'You are not at this table.' });
 
       socket.data.campaignId = campaignId;
+      socket.data.campaignRole = role;
       socket.join(roomFor(campaignId));
+      // A second room for the people running the table. It exists for the one
+      // thing that must reach them and nobody else while it is happening: the
+      // live position of a token the players cannot see (see tokenDrag.js).
+      // A room rather than a filter per frame, because a drag is dozens of
+      // messages a second and asking "who is the DM here?" on each of them
+      // would put a campaign lookup in the hot path.
+      if (role === 'dm') socket.join(dmRoomFor(campaignId));
 
       // "Last activity" on the campaign list means a DM was here. A player
       // wandering in doesn't make a table active - the person who runs it

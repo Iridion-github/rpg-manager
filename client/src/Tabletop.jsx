@@ -102,6 +102,33 @@ const MEASURE_THICK_MAX = 12;
 const PLATE_STRIP = 0.5;
 
 /**
+ * The mark on a token only the DM can see: an eye with a line through it.
+ *
+ * Drawn rather than written, and drawn as an SVG rather than set as an emoji:
+ * there is no dependable character for a crossed-out eye, and the ones that
+ * come close render as a different picture on every second machine. This is
+ * two strokes and a circle, and it is the same shape at any zoom.
+ *
+ * It sits where the nameplate sits, and in front of the name when there is one,
+ * because it qualifies everything else the plate says: what follows is a name
+ * nobody else is reading.
+ */
+function HiddenEye() {
+  return (
+    <svg
+      className="token-hidden-eye"
+      viewBox="0 0 24 24"
+      role="img"
+      aria-label="Hidden from players"
+    >
+      <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3.2" />
+      <line x1="3.5" y1="20.5" x2="20.5" y2="3.5" />
+    </svg>
+  );
+}
+
+/**
  * Which side of its token a nameplate sits on.
  *
  * Above and centred is the default, and it stays there unless there is a reason
@@ -3033,7 +3060,11 @@ export default function Tabletop({ actor, players, offline }) {
               // Two independent offers that share one plate: the name, and the
               // condition in brackets after it. Asking for neither is the usual
               // case and costs nothing beyond this line.
-              const plated = token.showNameplate || token.showStatus;
+              // A token the players cannot see. Only ever true on the DM's own
+              // screen: the others were never sent it (see canSeeToken on the
+              // server), so there is nothing here for them to draw.
+              const hidden = token.visible === false;
+              const plated = token.showNameplate || token.showStatus || hidden;
               const plate = plated ? plateSide(token, pos, tokensNow, minRow, maxRow) : null;
               const movable = canMove(token);
               // Whose token this is. A token can name somebody who has since left
@@ -3102,12 +3133,18 @@ export default function Tabletop({ actor, players, offline }) {
                       its labels most. */}
                   {plate && (
                     <span className={`token-plate ${plate}`}>
+                      {/* First, and on its own when nothing else asked for a
+                          plate: a token nobody else can see says so whether or
+                          not it is captioned. */}
+                      {hidden && <HiddenEye />}
+                      {hidden && token.showNameplate ? ' ' : ''}
                       {token.showNameplate && token.label}
                       {token.showStatus && (
                         <span className="token-plate-status">
-                          {/* Spaced off the name only when there is a name in
-                              front of it. Alone, it is the whole plate. */}
-                          {token.showNameplate ? ' ' : ''}[{token.status || 'Normal'}]
+                          {/* Spaced off whatever is in front of it - the name,
+                              or the hidden mark when there is no name. Alone,
+                              it is the whole plate and needs no gap. */}
+                          {token.showNameplate || hidden ? ' ' : ''}[{token.status || 'Normal'}]
                         </span>
                       )}
                     </span>
@@ -3655,8 +3692,10 @@ export default function Tabletop({ actor, players, offline }) {
           // same list the Players tab reads.
           players={players}
           // The DM's alone, and the server says so again on the way in - an
-          // owner's edit cannot carry an owner however the form was drawn.
+          // owner's edit cannot carry an owner, or hide a token from the table,
+          // however the form was drawn.
           canAssign={isDm}
+          canHide={isDm}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />

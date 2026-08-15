@@ -283,6 +283,7 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
           // it is doing in a fight.
           stats={false}
           canAssign={isDm}
+          canHide={isDm}
           title={form.token ? 'Edit token' : 'Create token'}
           onSubmit={save}
           onClose={() => setForm(null)}

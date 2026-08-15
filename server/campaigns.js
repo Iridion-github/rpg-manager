@@ -98,6 +98,39 @@ function canMoveToken(actor, role, token) {
 }
 
 /**
+ * Whether a token is on the board as far as this person is concerned.
+ *
+ * `visible` is the DM's switch for the ambush in the trees and the second half
+ * of the room: false means the token exists, moves and rolls initiative, and
+ * only the DM can see any of it. A token written before the switch existed has
+ * no such field, and absent reads as visible - which is the state every token
+ * was already in.
+ *
+ * **Enforced by not sending it.** A hidden token is filtered out of every scene
+ * a player receives (see sceneAsSeenBy), out of the campaign's token list, and
+ * out of the drag ghosts other people see. Hiding it in the browser instead
+ * would put the monster in the page for anyone who opened the dev tools, which
+ * is the one thing this switch exists to prevent.
+ */
+function canSeeToken(role, token) {
+  if (role === 'dm') return true;
+  return token?.visible !== false;
+}
+
+/**
+ * A scene as this role may see it.
+ *
+ * The whole scene goes out to every member - that is what the board is drawn
+ * from - so this is the one place a token can be taken back out of it. Anything
+ * that isn't a scene with tokens on it passes through untouched: a delete
+ * announcement carries an id and nothing else.
+ */
+function sceneAsSeenBy(role, scene) {
+  if (role === 'dm' || !scene || !Array.isArray(scene.tokens)) return scene;
+  return { ...scene, tokens: scene.tokens.filter((token) => canSeeToken(role, token)) };
+}
+
+/**
  * Who may read and write a character sheet.
  *
  * A sheet carries `access`, a map of userId → 'view' | 'edit'. A player who
@@ -240,6 +273,8 @@ module.exports = {
   isMember,
   isDm,
   canMoveToken,
+  canSeeToken,
+  sceneAsSeenBy,
   canViewSheet,
   canEditSheet,
   sanitizeSheetAccess,

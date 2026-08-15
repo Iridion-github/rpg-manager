@@ -1606,6 +1606,24 @@ button.linky:hover {
   color: #c3b2f0;
 }
 
+/* The crossed-out eye: this token is the DM's alone. Amber rather than the
+   plate's own grey, because it is not part of what the token is called - it is
+   a warning about who is looking at it, and it has to be findable at a glance
+   on a board where most plates are just names.
+
+   Sized in em so it grows with the plate's text and sits on the same line as a
+   name typed beside it. */
+.token-hidden-eye {
+  width: 1.05em;
+  height: 1.05em;
+  vertical-align: -0.15em;
+  fill: none;
+  stroke: #e3b341;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .token-plate.above {
   bottom: 100%;
   margin-bottom: 4px;
@@ -2142,6 +2160,14 @@ button.token-tile:hover {
   min-width: 0;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+/* The one row in the bubble that is about who is allowed to see the token
+   rather than about the creature, in the same amber as the mark on its plate so
+   the two read as one fact said twice. */
+.token-tip-hidden,
+.token-tip-hidden b {
+  color: #e3b341;
 }
 
 .token-tip small {
@@ -5328,6 +5354,16 @@ button.token-tile:hover {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+}
+
+/* What a tick means when it is off, under the tick rather than beside it: the
+   row is already as wide as the dialog, and a sentence appended to it would
+   push the box out of the column it lines up with. */
+.token-hint {
+  grid-column: 2;
+  color: #8b90a0;
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 /* The condition list, and the box that joins it when Custom is chosen. Wraps,

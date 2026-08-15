@@ -29,8 +29,23 @@ const SCENES = 'scenes';
 
 const roomFor = (campaignId) => `campaign:${campaignId}`;
 
+/**
+ * The same table, DMs only.
+ *
+ * Joined at `campaign:enter` (see index.js), and used for exactly one thing: a
+ * token the DM has hidden still has to be draggable, and the ghost that follows
+ * the pointer must not appear on the players' boards. They were never sent the
+ * token, so a ghost of it would be a monster announcing itself by moving.
+ */
+const dmRoomFor = (campaignId) => `campaign:${campaignId}:dm`;
+
 // Cheap sanity bounds: a drag position is in grid cells.
 const inBounds = (v) => Number.isFinite(v) && v >= -500 && v <= 500;
+
+// Where a drag's ghost is allowed to be seen: the whole table, or the people
+// running it when the token is one the players were never sent.
+const ghostRoom = (drag) =>
+  drag.hidden ? dmRoomFor(drag.campaignId) : roomFor(drag.campaignId);
 
 function registerTokenDrag(io) {
   io.on('connection', (socket) => {
@@ -52,7 +67,13 @@ function registerTokenDrag(io) {
         if (!canMoveToken(socket.data.actor, role, token)) {
           return ack?.({ ok: false, error: 'You can only move your own token.' });
         }
-        socket.data.drag = { campaignId, sceneId, tokenId };
+        // Whether the ghost this drag produces may be shown to the table.
+        // Decided here, with the token in hand, and remembered for the same
+        // reason permission is: a drag is dozens of frames a second and none of
+        // them should cost a disk read. A token hidden mid-drag keeps showing
+        // its ghost until the drag ends, which is a fraction of a second and
+        // the price of not re-reading the scene per frame.
+        socket.data.drag = { campaignId, sceneId, tokenId, hidden: token.visible === false };
         ack?.({ ok: true });
       } catch (err) {
         ack?.({ ok: false, error: 'Could not start drag' });
@@ -66,8 +87,9 @@ function registerTokenDrag(io) {
       if (!drag) return;
       if (!inBounds(Number(x)) || !inBounds(Number(y))) return;
       // To everyone at *this table* except the dragger, who is already
-      // rendering their own pointer.
-      socket.to(roomFor(drag.campaignId)).emit('token:dragging', {
+      // rendering their own pointer - or, for a token the players cannot see,
+      // to the other people running the table and nobody else.
+      socket.to(ghostRoom(drag)).emit('token:dragging', {
         sceneId: drag.sceneId,
         tokenId: drag.tokenId,
         x: Number(x),
@@ -82,7 +104,9 @@ function registerTokenDrag(io) {
       socket.data.drag = null;
       // Tell others the ghost is gone; the authoritative position arrives via
       // the scenes:changed broadcast from the persisted PUT.
-      socket.to(roomFor(drag.campaignId)).emit('token:drag:ended', {
+      // The same room the ghost went to, or the message that clears it would
+      // never reach the screens showing it.
+      socket.to(ghostRoom(drag)).emit('token:drag:ended', {
         sceneId: drag.sceneId,
         tokenId: drag.tokenId,
       });
@@ -93,4 +117,4 @@ function registerTokenDrag(io) {
   });
 }
 
-module.exports = { registerTokenDrag, roomFor };
+module.exports = { registerTokenDrag, roomFor, dmRoomFor };

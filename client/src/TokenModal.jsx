@@ -125,6 +125,11 @@ export default function TokenModal({
   players = [],
   stats = true,
   canAssign = true,
+  // Whether to offer the visibility tick at all. Defaults to *not* offering it:
+  // a caller that forgets is a caller whose form quietly can't hide anything,
+  // which is the harmless way round. The server refuses the field from anybody
+  // but the DM regardless of how the form was drawn.
+  canHide = false,
   title,
   onSubmit,
   onClose,
@@ -135,6 +140,16 @@ export default function TokenModal({
   // when somebody hovers it. Off unless the token says otherwise, which covers
   // both a new token and every token made before this existed.
   const [showNameplate, setShowNameplate] = useState(token?.showNameplate === true);
+  /**
+   * Whether the players can see this token at all.
+   *
+   * Visible unless the token says otherwise, which is a new token and every
+   * token made before the switch existed. Not the same question as the
+   * nameplate above: that decides whether a token everybody can see is also
+   * captioned, and this decides whether there is anything on their board to
+   * caption.
+   */
+  const [visible, setVisible] = useState(token?.visible !== false);
   const [color, setColor] = useState(token?.color ?? '#e5534b');
   // Null is a real value here, not a missing one: it means "leave the ring as
   // the stylesheet draws it" rather than any particular colour.
@@ -232,6 +247,10 @@ export default function TokenModal({
       await onSubmit({
         label: label.trim() || 'Token',
         showNameplate,
+        // Sent whether or not the tick was drawn, so an edit by somebody who
+        // cannot change it says what the token already is rather than leaving
+        // the field out. The server ignores it from anybody but the DM.
+        visible,
         status: statusValue(status, customStatus),
         showStatus,
         color,
@@ -302,6 +321,33 @@ export default function TokenModal({
               Show on map
             </span>
           </label>
+
+          {/* Whether the table can see the token at all, which is a bigger
+              question than the caption above it and is the DM's alone.
+
+              Worded as what is true rather than as what to do: a tick that is
+              on for every ordinary token has to read as the normal state, and
+              "Hide from players" ticked would say the opposite of what the
+              board is doing. The note under it appears only when it is off,
+              because that is the only state anybody needs telling about. */}
+          {canHide && (
+            <label className="token-field token-check">
+              <span>
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  onChange={(e) => setVisible(e.target.checked)}
+                />
+                Visible to players
+              </span>
+              {!visible && (
+                <small className="token-hint">
+                  Only you will see this token. It still moves, rolls initiative and takes
+                  damage.
+                </small>
+              )}
+            </label>
+          )}
 
           {/* The one field that hands something over. Everything else here is
             what a token looks like; this is who may move it, and it is the

@@ -17,7 +17,7 @@
 
 const express = require('express');
 const store = require('../store');
-const { broadcast, broadcastPerActor } = require('../realtime');
+const { broadcastPerActor } = require('../realtime');
 const sheetLink = require('../sheetLink');
 const {
   scoped,
@@ -25,6 +25,7 @@ const {
   canViewSheet,
   canEditSheet,
   sanitizeSheetAccess,
+  sceneAsSeenBy,
 } = require('../campaigns');
 const { sanitizeSheet } = require('../sheetSchema');
 
@@ -146,7 +147,15 @@ router.put('/:id', async (req, res, next) => {
     // of them at once.
     for (const sceneId of touched) {
       const scene = await store.get(scoped(req.campaignId, 'scenes'), sceneId);
-      if (scene) broadcast(req, 'scenes:changed', { action: 'token:update', record: scene });
+      // Per actor, like everything else that carries a scene: a token the DM
+      // has hidden is not on the players' board, and a character sheet edit
+      // must not be the thing that puts it there. See sceneAsSeenBy.
+      if (scene) {
+        broadcastPerActor(req, 'scenes:changed', (actor, role) => ({
+          action: 'token:update',
+          record: sceneAsSeenBy(role, scene),
+        }));
+      }
     }
     res.json(record);
   } catch (err) {
