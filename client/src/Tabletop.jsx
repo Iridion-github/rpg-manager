@@ -8,6 +8,7 @@ import TokenModal from './TokenModal.jsx';
 import TokenTooltip from './TokenTooltip.jsx';
 import InitiativeModal from './InitiativeModal.jsx';
 import SpawnModal from './SpawnModal.jsx';
+import PasteTokenModal from './PasteTokenModal.jsx';
 import ShapeTools from './ShapeTools.jsx';
 import MeasureTools from './MeasureTools.jsx';
 import GridSettings from './GridSettings.jsx';
@@ -55,6 +56,7 @@ import {
   recordTokenDelete,
   recordTokenEdit,
   recordTokenMove,
+  recordTokenPaste,
   recordTokenSpawn,
 } from './sceneHistory.js';
 
@@ -538,6 +540,23 @@ export default function Tabletop({ actor, players, offline }) {
   // is open; the spot was decided by the right-click that opened it, exactly as
   // it is for a brand new token.
   const [spawnAt, setSpawnAt] = useState(null);
+  /**
+   * The token on this browser's clipboard, if any: a snapshot of what Copy
+   * token was chosen on.
+   *
+   * Here rather than on the server, because "what did I copy" is a fact about
+   * one person at one keyboard - two people at the same table copy different
+   * things at the same time, and neither wants the other's. It survives pasting,
+   * so a copied goblin can be laid out four times in four right-clicks, and it
+   * is replaced when something else is copied. What it holds is a picture for
+   * the confirmation dialog to show; the paste itself sends the id and lets the
+   * server read the token as it actually stands.
+   */
+  const [clipboard, setClipboard] = useState(null);
+  // Where a copy is about to be pasted, in cells, once the dialog is answered.
+  const [pasteAt, setPasteAt] = useState(null);
+  const [pasting, setPasting] = useState(false);
+  const [pasteError, setPasteError] = useState('');
   // The token whose initiative is being set, if any.
   const [initiativeFor, setInitiativeFor] = useState(null);
   // The token the pointer is resting on, with the element to hang its tooltip
@@ -2171,6 +2190,98 @@ export default function Tabletop({ actor, players, offline }) {
     setMenu(null);
   }
 
+  /**
+   * Put this token on the clipboard.
+   *
+   * Nothing happens on the board and nothing is sent anywhere: copying is a
+   * note to yourself about what to paste next. Only the id matters when the
+   * paste finally happens - the rest of this snapshot is what the confirmation
+   * dialog draws, so that choosing between two goblins is done by looking at
+   * one rather than by remembering which was which.
+   */
+  function copyToken() {
+    const token = menuToken;
+    setMenu(null);
+    if (!token) return;
+    setClipboard({
+      id: token.id,
+      label: token.label,
+      imageUrl: token.imageUrl,
+      color: token.color,
+      borderColor: token.borderColor,
+      size: token.size,
+      ownerId: token.ownerId,
+      // Which family it belongs to, so the name the dialog promises is worked
+      // out from the same lineage the server will use. A copy of a copy is
+      // another copy of the original, not the start of something new.
+      copyOf: token.copyOf || null,
+    });
+  }
+
+  /**
+   * How many copies of the clipboard's token this browser can see.
+   *
+   * The server counts this again when the paste lands, and its count is the one
+   * that ends up in the name - it can see the whole campaign, including scenes
+   * nobody here has opened and other people's benched tokens. This is the same
+   * arithmetic over what is on screen, and it exists so the dialog can say what
+   * the copy will be called instead of asking somebody to accept a name they
+   * cannot see. The two agree in every ordinary case; where they don't, what
+   * arrives is what the server decided.
+   */
+  const copyCount = useMemo(() => {
+    if (!clipboard) return 0;
+    const root = clipboard.copyOf || clipboard.id;
+    const placed = scenes.flatMap((s) => s.tokens || []);
+    const benched = roster.filter((t) => !t.sceneId);
+    return [...placed, ...benched].filter((t) => t.copyOf === root).length;
+  }, [clipboard, scenes, roster]);
+
+  // What the next paste will be called: the original's name, and how many of
+  // them there will be once it exists. Kept in step with copyLabelFor on the
+  // server, which writes the name that actually arrives - two ideas of what the
+  // brackets look like would have the dialog promising one thing and the board
+  // showing another.
+  const pasteName = useMemo(() => {
+    if (!clipboard) return '';
+    const base = String(clipboard.label ?? '').replace(/\s*\(Copy \d+\)$/, '').trim() || 'Token';
+    const suffix = ` (Copy ${copyCount + 1})`;
+    return `${base.slice(0, 60 - suffix.length)}${suffix}`;
+  }, [clipboard, copyCount]);
+
+  /** And the other half: another one of it, on the square that was clicked. */
+  async function pasteToken() {
+    const at = pasteAt;
+    if (!at || !scene || !clipboard || pasting) return;
+    setPasting(true);
+    setPasteError('');
+    try {
+      const placed = await api.pasteToken(scene.id, clipboard.id, at.x, at.y);
+      setScenes((prev) =>
+        prev.map((s) => (s.id === scene.id ? { ...s, tokens: [...s.tokens, placed] } : s))
+      );
+      loadRoster();
+      recordTokenPaste({
+        sceneId: scene.id,
+        sourceId: clipboard.id,
+        token: placed,
+        x: at.x,
+        y: at.y,
+      });
+      // The clipboard stays loaded. Laying out four goblins is four
+      // right-clicks, not four trips back to the first one.
+      setPasteAt(null);
+    } catch (e) {
+      setPasteError(e.message);
+      // The token behind the clipboard has been deleted since it was copied.
+      // Nothing will ever paste from it again, so the item goes rather than
+      // staying in the menu as an offer that cannot be kept.
+      if (e.status === 404) setClipboard(null);
+    } finally {
+      setPasting(false);
+    }
+  }
+
   // Asking first, like every other delete in the app. The menu closes as the
   // dialog opens - leaving both on screen would be two things asking to be
   // answered about the same token.
@@ -3408,6 +3519,12 @@ export default function Tabletop({ actor, players, offline }) {
               >
                 Set initiative
               </button>
+              {/* Copying is the one item here that does nothing to the token it
+                  was chosen on, which is why it sits below the two that do and
+                  above the two that take it off the board. */}
+              <button onClick={copyToken} title="Then right-click the map to paste a copy">
+                Copy token
+              </button>
               {/* Above Delete and worded plainly, because these two look alike
                   and one of them can't be undone. This is the reversible one. */}
               <button onClick={benchToken}>Remove from table</button>
@@ -3421,6 +3538,23 @@ export default function Tabletop({ actor, players, offline }) {
             <>
               <button onClick={ping}>Ping</button>
               <button onClick={focusEveryone}>Focus</button>
+              {/* First of the three ways to put something here, because it is
+                  the one somebody has just set up: you copied a token a moment
+                  ago and this is what you came back for. Absent entirely until
+                  something has been copied - an item that would only tell you
+                  the clipboard is empty is an item worth not drawing. */}
+              {clipboard && (
+                <button
+                  onClick={() => {
+                    setPasteAt(cellAt(menu.mx, menu.my));
+                    setPasteError('');
+                    setMenu(null);
+                  }}
+                  title={`Paste a copy of ${clipboard.label || 'the copied token'} here`}
+                >
+                  Paste token
+                </button>
+              )}
               {/* Above Create token, and shown to anybody with a token of
                   their own waiting: placing one you already have is the common
                   act, and making a new one is the occasional one. Only when
@@ -3497,6 +3631,20 @@ export default function Tabletop({ actor, players, offline }) {
           owners={players}
           onPick={spawnFromBench}
           onClose={() => setSpawnAt(null)}
+        />
+      )}
+
+      {pasteAt && clipboard && (
+        <PasteTokenModal
+          token={clipboard}
+          name={pasteName}
+          busy={pasting}
+          error={pasteError}
+          onConfirm={pasteToken}
+          onClose={() => {
+            setPasteAt(null);
+            setPasteError('');
+          }}
         />
       )}
 

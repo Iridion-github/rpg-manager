@@ -476,6 +476,9 @@ Right-clicking the **map** offers:
   spot ends up off-centre rather than the map being padded with nothing. Anyone
   reading a *different* scene is left alone: moving their view to somewhere they
   can't see would be motion with no meaning.
+- **Paste token** - another one of whatever you last copied, here. Only shown
+  once something has been copied, for the same reason Place Token is only shown
+  when there is something to place. See *Copying a token* below.
 - **Place Token** - put a token you already have onto this spot. The DM is
   offered every token in the campaign that isn't standing somewhere; everyone
   else is offered their own. Only shown when there is something to place, since
@@ -510,6 +513,9 @@ Right-clicking a **token** offers:
   It keeps its own route even now that the owner has Edit: it is the one write a
   player makes on a token in the middle of somebody else's turn, and a form that
   can only reach three numbers can't grow a fourth by accident.
+- **Copy token** - puts it on your clipboard, ready to paste. The only item here
+  that does nothing to the token it was chosen on, which is why it sits below
+  the two that change it. Open to the owner. See *Copying a token* below.
 - **Remove from table** - takes the token off this map and keeps it. Open to the
   owner. See below.
 - **Delete** (DM only) - gone for good, at once, with no confirmation.
@@ -524,6 +530,55 @@ than not offering it.
 While **measuring mode** is on, both of these are replaced by a menu about the
 ruler - the board is inert, so a menu offering to edit a token you can't even
 drag would be describing a different mode. See *Measuring* below.
+
+### Copying a token
+**Copy token** on a figure, then **Paste token** on an empty spot, and another
+one of it is standing there. It is how a warband gets onto the board: the second
+goblin is the first goblin again, not a form to fill in.
+
+Copying does nothing and sends nothing - it is a note to yourself about what to
+paste next. The clipboard is **per browser**, since "what did I copy" is a fact
+about one person at one keyboard, and it **survives pasting**, so four goblins
+is four right-clicks rather than four trips back to the first one. Copying
+something else replaces it.
+
+Pasting **asks first**, and shows the face and the name the copy will arrive
+with. The thing it is about to make is deliberately indistinguishable from one
+already on the board, and what the dialog is really answering is *which* token
+is on the clipboard - a question about something you did some minutes and
+several clicks ago.
+
+What comes across is everything: the picture, the size, the colours, the
+condition, the hit points, the initiative and who it belongs to. Three things
+are deliberately not the same.
+
+- **Its id.** A new one. Two tokens with one id would be one token in two
+  places, which nothing downstream could make sense of.
+- **Its name.** The original's, with the number of copies in brackets: *Ogre
+  (Copy 1)*, then *(Copy 2)*. Editable like any other name afterwards.
+- **Its character.** The sheet link is **not** copied. A sheet belongs to one
+  token - that is what makes a wound on the map a wound on the character - and
+  two figures writing to one sheet is the single thing that relation promises
+  cannot happen. A copy is another figure, not another character.
+
+**Who may:** exactly who may move the token being copied. Your own familiar is
+your business, the DM's board is theirs, and nobody gets a way to duplicate
+somebody else's figure. The menu doesn't appear on a token you couldn't copy,
+and the server checks again on the way in.
+
+Under all this the app keeps two facts about a copy that nothing shows you:
+which token it came from, and which number it was given. They exist because
+"identical" is exactly what makes them impossible to work out later - a board
+with four ogres on it can be asked how many of them are copies of the same
+thing, and answer. A copy of a copy joins the same family rather than starting
+one, so the count is one comparison and not a walk that a single deletion could
+break in the middle. **How many is counted, never stored**: a number written
+onto a token goes stale the moment a sibling is deleted, and the tokens
+themselves are the one thing that cannot be wrong about it.
+
+Copying a token whose name already ends in *(Copy 2)* gives *(Copy 3)*, not
+*(Copy 2) (Copy 3)* - what somebody wants a second time is another ogre, and the
+brackets are the app's bookkeeping rather than part of the creature's name.
 
 ### Off the table, but not gone
 **Remove from table** doesn't delete anything. The token moves to the campaign's

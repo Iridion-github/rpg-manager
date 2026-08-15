@@ -32,6 +32,7 @@ const { broadcast } = require('../realtime');
 const { requireUser } = require('../auth');
 const { scoped, canMoveToken, canViewSheet, canEditSheet, isDm } = require('../campaigns');
 const sheetLink = require('../sheetLink');
+const { locateToken } = require('../tokenCopies');
 
 const router = express.Router({ mergeParams: true });
 
@@ -124,17 +125,15 @@ async function everyToken(req) {
   return [...placed, ...benched];
 }
 
-/** Find one, wherever it happens to be. */
-async function locate(req, tokenId) {
-  const benched = await store.get(benchOf(req), tokenId);
-  if (benched) return { where: 'bench', token: benched };
-  const scenes = await store.list(scenesOf(req));
-  for (const scene of scenes) {
-    const token = (scene.tokens || []).find((t) => t.id === tokenId);
-    if (token) return { where: 'scene', token, sceneId: scene.id };
-  }
-  return null;
-}
+/**
+ * Find one, wherever it happens to be.
+ *
+ * The search itself lives in tokenCopies.js, which needs the same answer when a
+ * copy is pasted from a token that has since been benched. One walk of the
+ * campaign rather than two: the second one would eventually forget about the
+ * bench, or about a scene, and only one of the two would be wrong.
+ */
+const locate = (req, tokenId) => locateToken(req.campaignId, tokenId);
 
 router.get('/', requireUser, async (req, res, next) => {
   try {
@@ -182,6 +181,11 @@ router.post('/', requireUser, async (req, res, next) => {
       hp: null,
       maxHp: null,
       sheetId: null,
+      // Not a copy of anything: this one was made rather than pasted. Written
+      // down as null rather than left absent so that every token has the same
+      // shape, whichever of the two ways it came into existence.
+      copyOf: null,
+      copyIndex: null,
       benchedAt: new Date().toISOString(),
     };
     await store.put(benchOf(req), token);

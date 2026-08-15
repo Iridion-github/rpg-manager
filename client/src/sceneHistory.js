@@ -138,6 +138,37 @@ export function recordTokenAdd({ sceneId, token }) {
   });
 }
 
+/**
+ * Pasting a copy of one. Undo takes it back off the map; redo pastes again.
+ *
+ * A recorder of its own rather than recordTokenAdd, because putting this token
+ * back is not the same call as putting an ordinary new one back: what makes a
+ * copy a copy - which token it came from, and the number in its name - is
+ * decided by the paste endpoint and cannot be sent to the plain add. Redoing
+ * through the same door is also what keeps the number honest, since the count
+ * it is read from is back to what it was the moment undo removed this one.
+ */
+export function recordTokenPaste({ sceneId, sourceId, token, x, y }) {
+  const live = { id: token.id };
+  record({
+    label: `paste ${token.label || 'that token'}`,
+    sceneId,
+    undo: async () => {
+      await tokenNow(sceneId, live.id); // gone already? then there's nothing of ours here
+      // Deleted as one of the campaign's tokens rather than through the scene's
+      // own door, which is the DM's alone. A player may paste a copy of their
+      // own familiar, so a player has to be able to take it back, and the
+      // campaign's delete asks the question that actually applies: is this
+      // token yours? Undoing is not a second authority.
+      await api.deleteCampaignToken(live.id);
+    },
+    redo: async () => {
+      const again = await api.pasteToken(sceneId, sourceId, x, y);
+      live.id = again.id;
+    },
+  });
+}
+
 /** Deleting one - the same pair the other way round. */
 export function recordTokenDelete({ sceneId, token }) {
   const live = { id: token.id };

@@ -26,6 +26,7 @@ const {
   canEditSheet,
 } = require('../campaigns');
 const sheetLink = require('../sheetLink');
+const { rootIdOf, locateToken, countCopies, copyLabelFor } = require('../tokenCopies');
 
 const COLLECTION = 'scenes';
 const router = express.Router({ mergeParams: true });
@@ -217,6 +218,17 @@ function sanitizeToken(body = {}, existing = {}) {
    * happen.
    */
   const sheetId = existing.sheetId ?? null;
+  /**
+   * Where this token was copied from, and which copy it is.
+   *
+   * Read off the stored token and never off the body, for the same reason
+   * `sheetId` above is: lineage is decided once, by the paste that created the
+   * token (see POST /:id/tokens/paste), and a client that could assert it could
+   * claim to be the third copy of somebody else's dragon. Carried through every
+   * ordinary edit so that renaming a copy does not quietly make it an original.
+   */
+  const copyOf = existing.copyOf ?? null;
+  const copyIndex = existing.copyIndex ?? null;
   return {
     label: String(label).slice(0, 60),
     showNameplate: showNameplate === true,
@@ -234,6 +246,8 @@ function sanitizeToken(body = {}, existing = {}) {
     size: clamp(num(size, 1), 0.5, 10),
     ownerId: ownerId ? String(ownerId) : null,
     sheetId: sheetId ? String(sheetId) : null,
+    copyOf: copyOf ? String(copyOf) : null,
+    copyIndex: copyIndex === null ? null : num(copyIndex, null),
   };
 }
 
@@ -699,6 +713,88 @@ router.post('/:id/tokens/from-bench', async (req, res, next) => {
     // - the other order loses it entirely.
     await store.remove(benchOf(req), benched.id);
     const placed = scene.tokens.find((t) => t.id === benched.id);
+    announce(req, 'token:add', scene, { token: placed });
+    res.status(201).json(placed);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Paste a copy of a token onto the square that was right-clicked.
+ *
+ * What arrives is the same creature again: the same face, size, colour,
+ * condition, hit points and initiative, belonging to the same person. Three
+ * things are deliberately not the same.
+ *
+ *   its id        a new one, minted here. Two tokens with one id would be one
+ *                 token that is in two places, which nothing downstream could
+ *                 make sense of.
+ *   its name      the original's, with the number of copies in brackets - so a
+ *                 board with four ogres on it can be talked about out loud.
+ *   its character The sheet link is **not** copied. A sheet belongs to one
+ *                 token (see sheetLink.js): coupling is what makes a wound on
+ *                 the map a wound on the character, and two figures writing to
+ *                 one sheet is the single thing that relation promises cannot
+ *                 happen. A copy is another figure, not another character, and
+ *                 whoever wants it linked can link it.
+ *
+ * Who may: exactly who may move the token being copied. Copying your own
+ * familiar is your business, the DM's board is theirs, and nobody gets a way to
+ * duplicate somebody else's figure.
+ *
+ * The source is looked up across the whole campaign rather than in this scene,
+ * because copy and paste are two acts with as much time between them as
+ * somebody likes: the token may have been benched, or the map changed, in
+ * between. Pasting from another scene is not an error either - the copy is a
+ * new token, and where it came from is only a name and a number.
+ */
+router.post('/:id/tokens/paste', requireUser, async (req, res, next) => {
+  try {
+    const found = await locateToken(req.campaignId, String(req.body?.tokenId || ''));
+    if (!found) return res.status(404).json({ error: 'That token no longer exists.' });
+    if (!canMoveToken(req.actor, req.campaignRole, found.token)) {
+      throw new HttpError(403, 'You can only copy a token that belongs to you.');
+    }
+
+    const source = found.token;
+    const root = rootIdOf(source);
+    // Counted now, at the moment of pasting, and counting the one about to
+    // exist: the first copy of an ogre is "Ogre (Copy 1)".
+    const number = (await countCopies(req.campaignId, root)) + 1;
+
+    const wanted = {
+      // Everything the token is, normalised the same way an edit would be. The
+      // empty second argument is what drops the two fields sanitizeToken reads
+      // only from storage - the sheet link, which a copy must not inherit, and
+      // the lineage, which is set below rather than carried across.
+      ...sanitizeToken(source, {}),
+      id: crypto.randomUUID(),
+      label: copyLabelFor(source.label, number),
+      // Whose hand made this one. Ownership came across with the rest above: a
+      // copy of a player's familiar is still that player's.
+      createdBy: req.actor?.userId || null,
+      copyOf: root,
+      copyIndex: number,
+      x: num(req.body?.x, 0),
+      y: num(req.body?.y, 0),
+    };
+
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      let token = wanted;
+      // The same courtesy adding and placing take: a copy dropped on an
+      // occupied square slides to the first free one. Pasting beside the thing
+      // you copied is the normal case, and "on top of it" is a near miss.
+      if (blockerFor(current, token, null)) {
+        const free = firstFreeCell(current, token.size, null);
+        if (!free) throw new HttpError(409, 'No free cell left on this scene.');
+        token = { ...token, ...free };
+      }
+      return { ...current, tokens: [...(current.tokens || []), token] };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+
+    const placed = scene.tokens.find((t) => t.id === wanted.id);
     announce(req, 'token:add', scene, { token: placed });
     res.status(201).json(placed);
   } catch (err) {

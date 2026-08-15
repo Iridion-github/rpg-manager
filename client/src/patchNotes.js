@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Copy and paste a token. Right-click one of your own figures and choose Copy token, then right-click any empty spot on the map and choose Paste token: you get another one of it, exactly the same, standing where you pointed. It asks first and shows you what it is about to put down, because two goblins look alike and pasting the wrong one is easy. The copy is named after the original with a number in brackets - Ogre (Copy 1), then (Copy 2) - so you can tell four of them apart out loud. The clipboard keeps hold of whatever you copied, so laying out a whole warband is one right-click each, and copying something else replaces it. Everything comes across: the picture, the size, the colours, the condition, the hit points, the initiative and who it belongs to. The one thing that does not is the character sheet, since a character belongs to one figure; link the copy yourself if you want it to have one.',
+      },
+      {
+        kind: 'new',
         text: 'A spell on your sheet is the whole spell now, not just its name. Open one with the little arrow beside it and write down its level, school, casting time, range, area, components (with the material ones spelled out when it needs them), duration, what it asks for as an attack or a save, what it does, and the description in full. Shut again, each spell shows a short line of what kind of magic it is, what it costs to cast and how far it reaches, so you can find the one you want without opening five of them.',
       },
       {

@@ -283,6 +283,17 @@ export const api = {
   benchToken: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/tokens/${tokenId}/bench`), {}),
   spawnToken: (sceneId, tokenId, x, y) =>
     post(table(`/scenes/${sceneId}/tokens/from-bench`), { tokenId, x, y }),
+  /**
+   * Another one of that token, on the square you right-clicked.
+   *
+   * Only the id of what to copy travels: the copy is built on the server from
+   * what is stored there, so a copy is a copy of the token as it actually is
+   * rather than of whatever this browser last heard about it. The name it gets
+   * is decided there too - it counts how many copies exist, which is a question
+   * about the whole campaign and not about the map on screen.
+   */
+  pasteToken: (sceneId, tokenId, x, y) =>
+    post(table(`/scenes/${sceneId}/tokens/paste`), { tokenId, x, y }),
   // This campaign's cast: every token the caller may see, whether it is
   // standing on a scene (sceneId set) or waiting off one (sceneId null).
   listCampaignTokens: () => get(table('/tokens')),

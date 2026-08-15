@@ -4870,6 +4870,47 @@ button.token-tile:hover {
   font-size: 0.75rem;
 }
 
+/* --- pasting a copy ---
+
+   One token rather than a list, so it is a card to look at rather than a row
+   to pick: the choice was made when Copy token was clicked, and what is left
+   is recognising it. The face is the bench list's, at the size a single
+   subject earns. */
+.paste-modal {
+  max-width: 24rem;
+}
+
+.paste-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: #1a1e27;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  margin: 0.25rem 0 0.6rem;
+}
+
+.paste-preview .spawn-face {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.paste-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.paste-who strong {
+  font-size: 1rem;
+}
+
+.paste-who small {
+  color: #8b90a0;
+  font-size: 0.75rem;
+}
+
 /* --- roll results --- */
 .roll {
   display: flex;
