@@ -27,6 +27,22 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'change',
+        text: 'The top of the tabletop is down to what you use while playing: which scene, how far in, the grid, and one Scene Manager button. Naming a scene, choosing its picture, making one and deleting one were six controls sitting across the top of the board being read past all game; they are all inside the manager now. Players see no change - none of it was ever theirs.',
+      },
+      {
+        kind: 'new',
+        text: 'Scene Manager, the DM\'s workbench. Every scene down the left, and picking one there picks it on the board too. On the right, that scene\'s name, a Delete scene button, and the pictures you can give it: your own images, and the maps that came with the app.',
+      },
+      {
+        kind: 'new',
+        text: 'You have somewhere to keep your maps. Inside the Scene Manager is your own store of images, with folders you can nest as deep as you like: make them, rename them, drag pictures and folders between them, throw them away. Upload from a file or paste one you have copied, straight into the folder you are looking at, and click Use on any picture to make it the board. Each account gets 250 MB, shared across every table you run, and a bar shows what is left. The folders belong to the campaign, so a table you DM with somebody else is one set of folders you both keep - open a different campaign and you are looking at different folders.',
+      },
+      {
+        kind: 'change',
+        text: 'An image that is a scene\'s background cannot be deleted while it is still being used, and the refusal names the scenes so you know where to look. Nobody\'s board is going to go blank in the middle of a session because somebody was tidying folders.',
+      },
+      {
         kind: 'new',
         text: 'Tokens can be hidden from the table. Creating or editing one, the DM gets a Visible to players tick, on by default: turn it off and the token is theirs alone. It is not merely invisible on the players\' screens; their browsers are never told it exists, so there is nothing to find by poking about. It still stands on the board, still moves, still rolls initiative and still takes damage, and turning the tick back on puts it in front of everybody at once. Only the DM can set it, on any token, including one belonging to a player.',
       },

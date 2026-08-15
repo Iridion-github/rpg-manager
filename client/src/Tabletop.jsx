@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, clientId } from './api.js';
 import { socket } from './socket.js';
-import ClipboardImage from './ClipboardImage.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import TokenModal from './TokenModal.jsx';
@@ -9,6 +8,7 @@ import TokenTooltip from './TokenTooltip.jsx';
 import InitiativeModal from './InitiativeModal.jsx';
 import SpawnModal from './SpawnModal.jsx';
 import PasteTokenModal from './PasteTokenModal.jsx';
+import SceneManager from './SceneManager.jsx';
 import ShapeTools from './ShapeTools.jsx';
 import MeasureTools from './MeasureTools.jsx';
 import GridSettings from './GridSettings.jsx';
@@ -579,6 +579,9 @@ export default function Tabletop({ actor, players, offline }) {
    * the confirmation dialog to show; the paste itself sends the id and lets the
    * server read the token as it actually stands.
    */
+  // Whether the Scene Manager is open over the board. The DM's window, and the
+  // only way in to everything that used to live along the top of the map.
+  const [managing, setManaging] = useState(false);
   const [clipboard, setClipboard] = useState(null);
   // Where a copy is about to be pasted, in cells, once the dialog is answered.
   const [pasteAt, setPasteAt] = useState(null);
@@ -2646,13 +2649,6 @@ export default function Tabletop({ actor, players, offline }) {
       await patchScene({ imageUrl: url, width, height });
     });
 
-  const uploadMap = (file) =>
-    guard(async () => {
-      const { url } = await api.uploadImage(file);
-      const { width, height } = await imageSize(url);
-      await patchScene({ imageUrl: url, width, height });
-    });
-
   // --- grid settings ---
   const GRID_FIELDS = [
     'gridSize',
@@ -2880,60 +2876,17 @@ export default function Tabletop({ actor, players, offline }) {
               </button>
             </div>
 
-            <input
-              className="scene-name"
-              value={scene.name}
-              onChange={(e) =>
-                setScenes((prev) =>
-                  prev.map((s) => (s.id === scene.id ? { ...s, name: e.target.value } : s))
-                )
-              }
-              onBlur={(e) => patchScene({ name: e.target.value })}
-            />
-
-            {maps.length > 0 && (
-              <select
-                className="map-picker"
-                value={maps.some((m) => m.url === scene.imageUrl) ? scene.imageUrl : ''}
-                onChange={(e) => e.target.value && setMap(e.target.value)}
-                disabled={busy}
-                title="Maps from public/maps"
-              >
-                {maps.map((m) => (
-                  <option key={m.url} value={m.url}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <label className="upload">
-              Upload image
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = ''; // let the same file be picked again
-                  if (file) uploadMap(file);
-                }}
-              />
-            </label>
-            {/* Beside Upload image because it is the same act: a map cropped
-                out of a PDF is on the clipboard already, and saving it to disk
-                first is a step that exists only to satisfy a file picker. */}
-            <ClipboardImage onImage={uploadMap} disabled={busy} />
-            <button onClick={newScene} disabled={busy}>
-              + Scene
-            </button>
+            {/* One button where six controls used to sit. Naming the scene,
+                choosing its picture, making one and throwing one away are all
+                things done between sessions rather than during them, and they
+                were being read past all game to reach the three that aren't.
+                See SceneManager.jsx. */}
             <button
-              className="del"
-              onClick={() =>
-                setConfirmDelete({ kind: 'scene', id: scene.id, name: scene.name || 'this scene' })
-              }
+              onClick={() => setManaging(true)}
               disabled={busy}
+              title="Scenes, their backgrounds, and your images"
             >
-              Delete scene
+              Scene Manager
             </button>
           </>
         )}
@@ -3326,6 +3279,31 @@ export default function Tabletop({ actor, players, offline }) {
             setShapeWindow(false);
           }}
           offline={offline}
+        />
+      )}
+
+      {/* The scene bench: every scene, this one's name and picture, and the
+          campaign's own folders full of maps. The DM's alone, and closed while
+          the server is unreachable - everything in it is a write. */}
+      {managing && isDm && !offline && scene && (
+        <SceneManager
+          scenes={scenes}
+          activeId={selectedId}
+          scene={scene}
+          maps={maps}
+          busy={busy}
+          onSelect={setActiveId}
+          onRename={(name) => name !== scene.name && patchScene({ name })}
+          onCreate={newScene}
+          onDelete={(doomed) =>
+            setConfirmDelete({
+              kind: 'scene',
+              id: doomed.id,
+              name: doomed.name || 'this scene',
+            })
+          }
+          onUse={setMap}
+          onClose={() => setManaging(false)}
         />
       )}
 

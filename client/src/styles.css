@@ -596,9 +596,6 @@ button.linky:hover {
   margin-bottom: 0.75rem;
 }
 
-.scene-bar .scene-name {
-  min-width: 10rem;
-}
 
 .zoom {
   display: flex;
@@ -5322,6 +5319,399 @@ button.token-tile:hover {
 
 .confirm-delete .modal-actions .del:not(:disabled):hover {
   background: #4d2626;
+}
+
+/* --- the scene manager ---
+
+   A fixed workbench, not one of the floating windows: you come to it, do
+   something, and leave. Sized against the *map* rather than the window, which
+   is what the offset below is for - the chat has its own column, and a dialog
+   centred on the viewport would sit half under it. Both numbers are the ones
+   .app is built from; two places that must agree, and this is the second. */
+.scene-manager-back {
+  --chat-col: 375px;
+  --shell-gap: 1rem;
+}
+
+.scene-manager {
+  /* Eighty percent of the board's own width and height. Border-box, so that is
+     what the numbers mean rather than what they mean before the padding. */
+  box-sizing: border-box;
+  width: calc(0.8 * (100vw - var(--chat-col) - var(--shell-gap) - 1.4rem));
+  height: 80vh;
+  max-width: none;
+  max-height: none;
+  /* Shifts the box left by half of what it names, which lands it in the middle
+     of the map rather than the middle of the window. */
+  margin-right: calc(var(--chat-col) + var(--shell-gap));
+  padding: 0.9rem 1rem;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+
+  /* The chat has dropped below the table by here, so there is no column to
+     dodge and the window is the board. */
+  .scene-manager {
+    width: min(100%, 60rem);
+    margin-right: 0;
+  }
+}
+
+.sm-body {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: 0.9rem;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.6rem;
+}
+
+/* The list of scenes, which is also how you switch between them. */
+.sm-scenes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  border-right: 1px solid #262b38;
+  padding-right: 0.9rem;
+}
+
+.sm-scenes h4 {
+  margin: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
+}
+
+.sm-scenes ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+  /* Packed at the top rather than spread down the column: a grid that is
+     taller than its rows shares the slack between them, and three scenes would
+     otherwise sit one at the top, one in the middle and one at the bottom. */
+  align-content: start;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.sm-scenes li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  text-align: left;
+  background: #10131a;
+  border: 1px solid #262b38;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.45rem;
+}
+
+.sm-scenes li button.active {
+  background: #24304a;
+  border-color: #58a6ff;
+  color: #e7e9ee;
+}
+
+.sm-scene-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How many figures are standing on it, which is the one fact that tells a
+   prepared scene from one in play. */
+.sm-scenes li small {
+  flex: none;
+  color: #8b90a0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sm-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.sm-scene-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.sm-scene-head .fld {
+  flex: 1;
+  min-width: 0;
+}
+
+.sm-scene-head .del {
+  flex: none;
+  margin-bottom: 0.05rem;
+}
+
+.sm-hint {
+  margin: 0.5rem 0 0.6rem;
+}
+
+/* --- the image cloud --- */
+.cloud {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.cloud-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cloud-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.cloud-crumbs i {
+  color: #4a5163;
+  font-style: normal;
+  margin: 0 0.15rem;
+}
+
+/* A crumb is a path, so it dresses as text - the border only appears when it
+   is a place something can be dropped. */
+.crumb {
+  background: none;
+  border: 1px solid transparent;
+  color: #9fb4ff;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.82rem;
+}
+
+.crumb:hover {
+  color: #e7e9ee;
+}
+
+.crumb.over {
+  border-color: #58a6ff;
+  background: #24304a;
+  color: #e7e9ee;
+}
+
+.cloud-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* What is left of the allowance. A bar rather than a number alone: "173 of 250"
+   is arithmetic, and a bar is a glance. */
+.cloud-quota {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.4rem;
+}
+
+.cloud-quota-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: #10131a;
+  border: 1px solid #262b38;
+  overflow: hidden;
+}
+
+.cloud-quota-fill {
+  display: block;
+  height: 100%;
+  background: #4a7dd4;
+}
+
+/* Amber near the top, because the next upload is the one that gets refused. */
+.cloud-quota-fill.full {
+  background: #e3b341;
+}
+
+.cloud-quota small {
+  flex: none;
+  color: #8b90a0;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cloud-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.6rem;
+  align-content: start;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 0.4rem;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+}
+
+.cloud-grid.over {
+  border-color: #35406a;
+}
+
+.cloud-empty {
+  grid-column: 1 / -1;
+  margin: 0.5rem 0;
+}
+
+.cloud-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: #10131a;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0.35rem;
+  min-width: 0;
+}
+
+.cloud-card.over {
+  border-color: #58a6ff;
+  background: #1b2333;
+}
+
+.cloud-card.dragging {
+  opacity: 0.45;
+}
+
+/* The picture this scene is standing on, marked where it sits rather than in a
+   list somewhere else. */
+.cloud-card.current {
+  border-color: #6ee787;
+}
+
+/* The face of a card: the thumbnail, or the folder's own shape. Fixed height so
+   a wall of them lines up whatever shape the pictures are. */
+.cloud-face {
+  height: 5.2rem;
+  border-radius: 6px;
+  border: 1px solid #262b38;
+  background-color: #1a1e27;
+  background-size: cover;
+  background-position: center;
+  padding: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cloud-face:hover:not(:disabled) {
+  border-color: #58a6ff;
+}
+
+.cloud-folder-icon svg {
+  width: 2.6rem;
+  height: 2.6rem;
+  fill: none;
+  stroke: #8b90a0;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.cloud-card.folder .cloud-face:hover .cloud-folder-icon svg {
+  stroke: #9fb4ff;
+}
+
+.cloud-current {
+  position: absolute;
+  bottom: 0.25rem;
+  left: 0.25rem;
+  background: rgba(16, 19, 26, 0.85);
+  color: #6ee787;
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* The name reads as text and edits in place, so it is a button that does not
+   look like one until it is pointed at. */
+.cloud-name {
+  background: none;
+  border: none;
+  color: #e7e9ee;
+  font-size: 0.78rem;
+  text-align: left;
+  padding: 0.1rem 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-name:hover:not(:disabled) {
+  background: #1b2333;
+  border-radius: 4px;
+}
+
+.cloud-name-edit {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cloud-card-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cloud-card-tools button {
+  font-size: 0.68rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.cloud-card-tools .del {
+  margin-left: auto;
+}
+
+.cloud-size {
+  color: #8b90a0;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The maps that ship with the app: their own shelf under your folders, because
+   they are the same for everybody and none of them can be changed. */
+.cloud-builtin {
+  border-top: 1px solid #262b38;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cloud-builtin h4 {
+  margin: 0 0 0.3rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b90a0;
 }
 
 /* --- create-token form --- */

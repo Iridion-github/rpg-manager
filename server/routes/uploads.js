@@ -3,7 +3,10 @@
 /**
  * Map image uploads - the first binary assets in the project.
  *
- * Files land in DATA_DIR/uploads and are served read-only from /uploads.
+ * Files land in DATA_DIR/uploads and are served read-only from /uploads. What
+ * an image is, how big it may be and what it ends up called all live in
+ * imageStore.js now, because the image cloud (routes/cloud.js) is a second door
+ * into the same room and the two must not answer those questions differently.
  *
  * Uploading needs an identity but not a campaign: an image is the same image
  * whichever table it ends up on, and anyone who can run a campaign needs to be
@@ -11,50 +14,20 @@
  * actual disk, which makes it the one endpoint where getting the gate wrong is
  * expensive.
  *
- * Filenames are generated, never taken from the client. A name like
- * "../../index.js" would otherwise let an upload escape the uploads directory.
+ * Nothing here counts against the cloud's quota. This route is what a character
+ * portrait, a profile picture and the tabletop's own paste-a-map still use: a
+ * picture that is filed in nobody's folders is not taking up room in them
+ * either, and the cloud is the thing that is metered.
  */
 
 const express = require('express');
-const crypto = require('node:crypto');
-const path = require('node:path');
-const fsp = require('node:fs/promises');
 const multer = require('multer');
 
-const store = require('../store');
 const limits = require('../rateLimit');
 const { requireUser } = require('../auth');
+const { UPLOAD_DIR, MAX_BYTES, ALLOWED, megabytes, sniffBytes, saveImage } = require('../imageStore');
 
 const router = express.Router();
-
-const UPLOAD_DIR = path.join(store.DATA_DIR, 'uploads');
-
-/**
- * How big an upload may be, by what it is for.
- *
- * A map is the whole board and is looked at on its own, so it gets the room it
- * needs. A profile picture and a character portrait are drawn an inch across
- * beside a name, and every person at the table downloads every one of them - so
- * a 20 MB photograph straight off a phone would be twenty megabytes spent to
- * fill a thumbnail, over and over, on somebody's home connection. 5 MB is far
- * more than a picture that size can use and still leaves an unedited photo
- * through, which is the file people actually have to hand.
- *
- * The caller says which it is (?kind=portrait); the cap is applied here rather
- * than believed from the browser, so an oversized file is refused as it arrives
- * instead of after it has been carried.
- */
-const MAX_BYTES = { map: 20 * 1024 * 1024, portrait: 5 * 1024 * 1024 };
-
-const megabytes = (bytes) => bytes / 1024 / 1024;
-
-// Extension is chosen by us from the detected mime type, not from the upload.
-const ALLOWED = new Map([
-  ['image/png', '.png'],
-  ['image/jpeg', '.jpg'],
-  ['image/webp', '.webp'],
-  ['image/gif', '.gif'],
-]);
 
 const uploaderFor = (fileSize) =>
   multer({
@@ -62,7 +35,7 @@ const uploaderFor = (fileSize) =>
     limits: { fileSize, files: 1 },
     fileFilter: (req, file, cb) => {
       // A first pass only. `file.mimetype` is the browser's claim about its own
-      // upload, not a fact - sniffBytes below is what actually decides.
+      // upload, not a fact - sniffBytes is what actually decides.
       if (!ALLOWED.has(file.mimetype)) {
         return cb(new Error(`Unsupported image type: ${file.mimetype}`));
       }
@@ -76,34 +49,6 @@ const uploaders = {
   map: uploaderFor(MAX_BYTES.map),
   portrait: uploaderFor(MAX_BYTES.portrait),
 };
-
-/**
- * What this file actually is, read from its first bytes.
- *
- * The declared type is worth nothing on its own: anyone can post a script, a
- * page, or a zip and label it image/png. It would then sit on this origin under
- * a name we chose, and the only thing standing between that and a script
- * running in someone's session would be the browser declining to sniff it.
- * Deciding here means the file never lands at all.
- *
- * Four signatures, because four types are allowed. WEBP is a RIFF container, so
- * it needs the tag twelve bytes in as well.
- */
-function sniffBytes(buf) {
-  if (!buf || buf.length < 12) return null;
-  const startsWith = (...bytes) => bytes.every((b, i) => buf[i] === b);
-
-  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
-  if (startsWith(0xff, 0xd8, 0xff)) return 'image/jpeg';
-  if (startsWith(0x47, 0x49, 0x46, 0x38)) return 'image/gif'; // GIF8
-  if (
-    startsWith(0x52, 0x49, 0x46, 0x46) && // RIFF
-    buf.toString('latin1', 8, 12) === 'WEBP'
-  ) {
-    return 'image/webp';
-  }
-  return null;
-}
 
 router.post('/', requireUser, (req, res, next) => {
   // Charged before the body is read, so a caller who is over their quota costs
@@ -134,15 +79,7 @@ router.post('/', requireUser, (req, res, next) => {
     }
 
     try {
-      await fsp.mkdir(UPLOAD_DIR, { recursive: true });
-      const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ALLOWED.get(actual)}`;
-      // Same temp-then-rename dance as the JSON store: a half-written image
-      // should never be reachable at its final URL.
-      const finalPath = path.join(UPLOAD_DIR, name);
-      const tmpPath = `${finalPath}.tmp`;
-      await fsp.writeFile(tmpPath, req.file.buffer);
-      await fsp.rename(tmpPath, finalPath);
-      res.status(201).json({ url: `/uploads/${name}`, bytes: req.file.size });
+      res.status(201).json(await saveImage(req.file.buffer, actual));
     } catch (e) {
       next(e);
     }

@@ -29,6 +29,7 @@ const campaignsRouter = require('./routes/campaigns');
 const sheetsRouter = require('./routes/sheets');
 const scenesRouter = require('./routes/scenes');
 const campaignTokensRouter = require('./routes/campaignTokens');
+const cloudRouter = require('./routes/cloud');
 const { router: chatRouter } = require('./routes/chat');
 const notesRouter = require('./routes/notes');
 const musicRouter = require('./routes/music');
@@ -264,6 +265,9 @@ app.use('/api/campaigns/:campaignId/scenes', attachCampaign, scenesRouter);
 // Campaign-level, because that is what lets a token be made before there is a
 // scene for it and come back on a different map from the one it left.
 app.use('/api/campaigns/:campaignId/tokens', attachCampaign, campaignTokensRouter);
+// The DM's own folders full of maps. Gated to them inside the router rather
+// than here, since a player has no read of it at all.
+app.use('/api/campaigns/:campaignId/cloud', attachCampaign, cloudRouter);
 app.use('/api/campaigns/:campaignId/chat', attachCampaign, chatRouter);
 app.use('/api/campaigns/:campaignId/notes', attachCampaign, notesRouter);
 app.use('/api/campaigns/:campaignId/music', attachCampaign, musicRouter);

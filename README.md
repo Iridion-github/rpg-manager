@@ -418,15 +418,75 @@ on a token with no border chosen it read as a white border nobody had asked for,
 and on one the DM had outlined in a colour it drew a second ring inside the
 first, which looks like a rendering fault rather than a fact about ownership.
 
-### Maps
-Two ways to give a scene a background:
+### The Scene Manager
+The scene bar along the top of the map carries what you use **while playing**:
+which scene, how far in, and the grid. Everything else is behind one DM-only
+button, because naming a scene, choosing its picture, making one and throwing
+one away are things done between sessions and were being read past all game.
 
-- **Built-in** - drop image files into `public/maps/`. They appear in the DM's
-  *Built-in map…* dropdown. Served straight off disk, so adding one is a file
-  copy: no rebuild, no restart.
-- **Upload** - the *Upload map* button, for one-offs. Stored in `data/uploads`.
+It is a **fixed dialog**, deliberately not one of the floating windows: no drag,
+no resize, no opacity, no minimising. The sheets float because you play with
+them open; this is a workbench you come to, do something at, and leave. It is
+sized at 80% of the *map's* width and height rather than the window's, so it
+never sits under the chat.
+
+Inside: every scene down the left, and picking one there picks it on the board
+too - there is one "the scene you are looking at", and a manager with a private
+idea of which one that is would be a second answer to the same question. On the
+right, that scene's name, **Delete scene**, and the pictures you can give it.
+
+### Maps
+Three ways to give a scene a background, all of them in the Scene Manager:
+
+- **Your images** - the campaign's own folders. See below.
+- **Built-in** - drop image files into `public/maps/` and they appear on their
+  own shelf under your folders. Served straight off disk, so adding one is a
+  file copy: no rebuild, no restart. Their own shelf rather than a folder among
+  yours, because they are the same for everybody and none of them can be
+  renamed, moved or deleted - a folder whose every action is refused would be a
+  worse lie than a shelf.
+- **Paste** - a map cropped out of a PDF is on the clipboard already, and saving
+  it to disk first is a step that exists only to satisfy a file picker.
 
 Either way the scene adopts the image's real pixel dimensions.
+
+### The image cloud
+Each campaign has a **tree of folders full of pictures**, nested as deep as you
+like, with create, rename, move (drag a card onto a folder or onto a crumb) and
+delete. Alphabetical, folders first. It is the DM's alone: a player has no read
+of it at all, since half of what is in there is places the party has not been
+told about yet.
+
+**Folders are records, not directories.** A node is a row with a parent, and the
+pictures stay flat on disk under the names the uploader never chose. Moving a
+map between folders is therefore one field changing, a URL already written into
+a scene cannot break because somebody tidied up, and a folder may be called
+`Session 4: the docks / part two` without the filesystem having an opinion.
+
+**Space is metered per person, not per table**: `CLOUD_QUOTA_MB`, 250 by
+default, counted across every campaign you run, because it is one disk either
+way. The tree belongs to the campaign and is shared by everyone who DMs it - two
+people prepping the same game are prepping it together - while each picture
+counts against whoever uploaded it. Usage is **counted, never stored**: a
+running total drifts the first time a delete half-fails, and the rows are the
+only thing that cannot be wrong about what is on the disk.
+
+Deleting an image that is a scene's background is **refused**, and the refusal
+names the scenes. A folder holding one is refused for the same reason. The
+alternative is somebody's board going blank mid-session because a folder was
+being tidied, and no confirmation dialog makes that acceptable.
+
+Uploads reuse the existing pipeline: the type is decided by **sniffing the first
+bytes**, never by the name or the declared MIME type, and the file is written
+under a name this app chose. Nothing about a cloud upload trusts the client
+beyond the bytes themselves.
+
+Written by hand rather than taken off the shelf. The maintained React
+file-manager packages are 400kB and up, arrive with their own icons, fonts and
+i18n stack, and supply the half that was never the problem: the browser. The
+half that is work here - a tree per campaign, a quota per account, and a rule
+about what may be deleted - is server-side and would have had to be written
+either way.
 
 ### One token per cell
 Two tokens can't share a square. Tokens may be larger than one cell (a size-2

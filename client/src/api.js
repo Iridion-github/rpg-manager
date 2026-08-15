@@ -351,4 +351,26 @@ export const api = {
     // No Content-Type header: the browser must set the multipart boundary.
     return fetch(where, { method: 'POST', headers: authHeaders(), body: form }).then(json);
   },
+
+  /* --- the image cloud: this campaign's own folders full of maps ---
+     The DM's alone, and the server says so on every one of these. The tree
+     arrives whole, because the browser draws a folder tree and a request per
+     folder opened would be a request per click. */
+  listCloud: () => get(table('/cloud')),
+  createCloudFolder: (name, parentId) => post(table('/cloud/folders'), { name, parentId }),
+  // Renaming and moving are one call: a drag that drops a folder somewhere and
+  // a rename in place are the same edit as far as storage is concerned.
+  updateCloudNode: (nodeId, patch) => put(table(`/cloud/nodes/${nodeId}`), patch),
+  deleteCloudNode: (nodeId) => del(table(`/cloud/nodes/${nodeId}`)),
+  uploadCloudImage: (file, { name, parentId } = {}) => {
+    const form = new FormData();
+    form.append('image', file);
+    if (name) form.append('name', name);
+    if (parentId) form.append('parentId', parentId);
+    return fetch(table('/cloud/images'), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    }).then(json);
+  },
 };
