@@ -621,7 +621,15 @@ export default function CharacterSheets({
               />
             )}
 
-            <CharacterSheet sheet={sheet} onChange={queueSave} readOnly={readOnly} />
+            <CharacterSheet
+              sheet={sheet}
+              onChange={queueSave}
+              readOnly={readOnly}
+              // Whether the portrait may be picked out of this campaign's own
+              // images. The cloud is the DM's, so a player editing their own
+              // character is offered the two roads in they always had.
+              canCloud={isDm && !offline}
+            />
           </FloatingWindow>
         );
       })}

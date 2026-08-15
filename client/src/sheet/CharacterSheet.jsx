@@ -146,7 +146,7 @@ const FEATURE_FIELDS = [
   },
 ];
 
-export default function CharacterSheet({ sheet, onChange, readOnly }) {
+export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = false }) {
   const [page, setPage] = useState('main');
   // A roll waiting to be confirmed: { title, rolls, allowAdvantage }.
   const [confirming, setConfirming] = useState(null);
@@ -393,6 +393,10 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
           // here and the thumbnail on the card without either one guessing.
           aspect={3 / 4}
           cropTitle="Frame the portrait"
+          // The DM's own images, offered beside the file picker. A player
+          // editing their character never sees it: the cloud is prep.
+          cloud={canCloud && !locked}
+          cloudPurpose="as this character's portrait"
           alt={sheet.name || 'Character portrait'}
           placeholder="No portrait"
         />

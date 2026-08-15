@@ -40,7 +40,17 @@ const sizeText = (bytes) => {
 // called docks, and the three letters after it are how the disk feels about it.
 const nameFromFile = (file) => String(file?.name || 'Image').replace(/\.[^.]+$/, '');
 
-export default function ImageCloud({ onUse, currentUrl, builtIn = [], disabled = false }) {
+export default function ImageCloud({
+  onUse,
+  currentUrl,
+  builtIn = [],
+  disabled = false,
+  // What the button on a picture says, and what it says it is *for*. The cloud
+  // is opened from four places now and "Use" alone would leave each of them
+  // asking "use it as what?" - see CloudPicker.
+  useLabel = 'Use',
+  purpose = '',
+}) {
   const [nodes, setNodes] = useState([]);
   const [quota, setQuota] = useState({ used: 0, limit: 0 });
   // Which folder is open. Null is the root.
@@ -297,7 +307,7 @@ export default function ImageCloud({ onUse, currentUrl, builtIn = [], disabled =
               <button
                 type="button"
                 className="cloud-face"
-                title={`Use ${node.name} as this scene's background`}
+                title={`${useLabel} ${node.name}${purpose ? ` ${purpose}` : ''}`}
                 disabled={disabled || !onUse}
                 onClick={() => onUse?.(node.url)}
                 style={{ backgroundImage: `url(${JSON.stringify(node.url)})` }}
@@ -313,7 +323,7 @@ export default function ImageCloud({ onUse, currentUrl, builtIn = [], disabled =
               />
               <div className="cloud-card-tools">
                 <button type="button" disabled={disabled || !onUse} onClick={() => onUse?.(node.url)}>
-                  Use
+                  {useLabel}
                 </button>
                 {!disabled && (
                   <>
@@ -349,7 +359,7 @@ export default function ImageCloud({ onUse, currentUrl, builtIn = [], disabled =
                 <button
                   type="button"
                   className="cloud-face"
-                  title={`Use ${map.name} as this scene's background`}
+                  title={`${useLabel} ${map.name}${purpose ? ` ${purpose}` : ''}`}
                   disabled={disabled || !onUse}
                   onClick={() => onUse?.(map.url)}
                   style={{ backgroundImage: `url(${JSON.stringify(map.url)})` }}
@@ -359,7 +369,7 @@ export default function ImageCloud({ onUse, currentUrl, builtIn = [], disabled =
                 <span className="cloud-name">{map.name}</span>
                 <div className="cloud-card-tools">
                   <button type="button" disabled={disabled || !onUse} onClick={() => onUse?.(map.url)}>
-                    Use
+                    {useLabel}
                   </button>
                 </div>
               </div>

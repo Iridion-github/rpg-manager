@@ -5460,6 +5460,24 @@ button.token-tile:hover {
   margin: 0.5rem 0 0.6rem;
 }
 
+/* The same folders, opened from a form that wants one picture out of them.
+   Smaller than the Scene Manager and centred on the window rather than on the
+   map: this one is opened from dialogs that are themselves centred, and from
+   the character sheet, which floats wherever it was dragged. */
+.cloud-picker {
+  box-sizing: border-box;
+  width: min(52rem, 92vw);
+  height: min(34rem, 82vh);
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+}
+
+/* Over whatever opened it, which is itself a dialog. */
+.cloud-picker-back {
+  z-index: 520;
+}
+
 /* --- the image cloud --- */
 .cloud {
   display: flex;

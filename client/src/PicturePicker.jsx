@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { api } from './api.js';
 import ClipboardImage from './ClipboardImage.jsx';
 import CropModal from './CropModal.jsx';
+import CloudPicker from './CloudPicker.jsx';
 
 /**
  * One picture of a person: a profile picture, or a character's portrait.
@@ -46,11 +47,19 @@ export default function PicturePicker({
   cropTitle = 'Frame the picture',
   placeholder = 'No picture',
   alt = '',
+  // Whether this campaign's own images are offered as a third way in. The DM's
+  // alone, and it needs a campaign to be in - so the account screen, which has
+  // neither, simply doesn't pass it.
+  cloud = false,
+  cloudPurpose = 'as this picture',
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   // The file waiting to be framed. Non-null is what puts the dialog on screen.
   const [cropping, setCropping] = useState(null);
+  // Whether the cloud is open over this. Its own window, closed the moment
+  // something is chosen from it.
+  const [picking, setPicking] = useState(false);
   const fileRef = useRef(null);
 
   // Clearing the input matters more than it looks: without it, choosing the same
@@ -70,6 +79,36 @@ export default function PicturePicker({
       return;
     }
     setCropping(file);
+  }
+
+  /**
+   * A picture out of the cloud, brought to the same cropping dialog.
+   *
+   * Fetched back into a file rather than used where it lies, and that is the
+   * whole point of routing it through here: the frame is what makes a portrait
+   * a portrait, and a battle map dropped into one unframed would show its
+   * middle. What gets saved is the part somebody chose, a few hundred
+   * kilobytes of it, exactly as when the file came off their disk.
+   *
+   * So it leaves a copy. That is the honest trade for the promise the cropper
+   * makes, the copy is the small one, and the picture in the cloud is untouched
+   * and still counts once against the allowance.
+   */
+  async function pickFromCloud(chosen) {
+    if (!chosen || busy) return;
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch(chosen);
+      if (!res.ok) throw new Error('That picture could not be opened.');
+      const blob = await res.blob();
+      const name = chosen.split('/').pop() || 'picture';
+      setCropping(new File([blob], name, { type: blob.type || 'image/png' }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   /**
@@ -117,6 +156,14 @@ export default function PicturePicker({
               pick it up again is a step for the sake of one. It lands in the
               same cropping dialog. */}
           <ClipboardImage onImage={pick} disabled={busy} />
+          {/* The third road in, for whoever keeps their pictures in this
+              campaign's folders: it lands in the same cropping dialog as the
+              other two, so a portrait is framed however it was found. */}
+          {cloud && (
+            <button type="button" className="linky" disabled={busy} onClick={() => setPicking(true)}>
+              My images
+            </button>
+          )}
           {url && !busy && (
             <button type="button" className="linky" onClick={() => onChange('')}>
               Remove
@@ -126,6 +173,15 @@ export default function PicturePicker({
           <small className="picture-limit">PNG, JPEG, WEBP or GIF, up to {MAX_MB} MB.</small>
           {error && <small className="clipboard-error">{error}</small>}
         </div>
+      )}
+
+      {picking && (
+        <CloudPicker
+          title="Choose from my images"
+          purpose={cloudPurpose}
+          onPick={pickFromCloud}
+          onClose={() => setPicking(false)}
+        />
       )}
 
       {cropping && (

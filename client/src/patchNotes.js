@@ -27,6 +27,14 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'new',
+        text: 'Your images are reachable wherever you set a picture, not just on a scene. Creating or editing a token, the DM gets a Choose from my images button beside Choose from library; on a character sheet, My images sits beside the file picker. It is the same window with the same folders, so you can upload the portrait you have just found straight into the folder you are looking at without closing anything first.',
+      },
+      {
+        kind: 'change',
+        text: 'A picture taken from your images for a character portrait still goes through the framing box, exactly as a file off your disk does: the frame is what makes a portrait a portrait, and what gets saved is the part you chose. Your original stays in its folder, untouched.',
+      },
+      {
         kind: 'change',
         text: 'The top of the tabletop is down to what you use while playing: which scene, how far in, the grid, and one Scene Manager button. Naming a scene, choosing its picture, making one and deleting one were six controls sitting across the top of the board being read past all game; they are all inside the manager now. Players see no change - none of it was ever theirs.',
       },

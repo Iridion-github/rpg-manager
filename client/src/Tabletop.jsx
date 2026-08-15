@@ -3674,6 +3674,7 @@ export default function Tabletop({ actor, players, offline }) {
           // however the form was drawn.
           canAssign={isDm}
           canHide={isDm}
+          canCloud={isDm}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />

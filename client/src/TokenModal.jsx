@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import ClipboardImage from './ClipboardImage.jsx';
 import TokenLibrary from './TokenLibrary.jsx';
+import CloudPicker from './CloudPicker.jsx';
 
 /**
  * "What token?" - the step between choosing Create token on the map and a
@@ -130,6 +131,10 @@ export default function TokenModal({
   // which is the harmless way round. The server refuses the field from anybody
   // but the DM regardless of how the form was drawn.
   canHide = false,
+  // Whether to offer this campaign's own images. The DM's, like the cloud
+  // itself, and off unless the caller says otherwise - a form that quietly
+  // cannot reach the cloud is the harmless way to get this wrong.
+  canCloud = false,
   title,
   onSubmit,
   onClose,
@@ -188,6 +193,11 @@ export default function TokenModal({
   // Whether the library is open over this form. One at a time: the browser is
   // the whole dialog while it's up, because a grid of tokens needs the room.
   const [browsing, setBrowsing] = useState(false);
+  // The campaign's own folders, over this form. A second window rather than
+  // taking over the dialog the way the library does: the library is two
+  // thousand pictures and needs the room, and this is a handful you filed
+  // yourself.
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef(null);
@@ -540,6 +550,14 @@ export default function TokenModal({
               <button type="button" onClick={() => setBrowsing(true)}>
                 Choose from library
               </button>
+              {/* Your own uploads, second: the library is the answer almost
+                  every time, and this is for the map or the portrait you
+                  brought to this campaign yourself. */}
+              {canCloud && (
+                <button type="button" onClick={() => setPicking(true)}>
+                  Choose from my images
+                </button>
+              )}
               {uploading && <small>Uploading…</small>}
               {/* Removing it puts the name back - the picture stands in for the
                 name rather than sitting alongside it. */}
@@ -639,6 +657,19 @@ export default function TokenModal({
             />
           </div>
         </div>
+      )}
+
+      {/* The campaign's own images, in the same window they are managed in.
+          Sets the field and closes, like the library above it - the picture is
+          not saved until this form is. */}
+      {picking && (
+        <CloudPicker
+          title="Choose from my images"
+          purpose="as this token's picture"
+          currentUrl={imageUrl}
+          onPick={setImageUrl}
+          onClose={() => setPicking(false)}
+        />
       )}
     </>
   );

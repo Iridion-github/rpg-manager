@@ -457,6 +457,33 @@ delete. Alphabetical, folders first. It is the DM's alone: a player has no read
 of it at all, since half of what is in there is places the party has not been
 told about yet.
 
+**It opens wherever a picture is set**, not only on a scene: the map you
+uploaded for the crypt is the picture you want on the token standing in it, and
+a store only one screen can reach is half a store. The same browser, in a
+smaller window, from:
+
+| Where | How |
+| --- | --- |
+| A scene's background | The Scene Manager, which is the cloud's own home |
+| A token, created or edited | **Choose from my images**, beside *Choose from library* |
+| A character's portrait | **My images**, beside the file picker |
+
+Always the whole browser rather than a read-only grid, so somebody choosing a
+token's face who finds they never uploaded it can upload it *there*, into the
+folder they are looking at, instead of closing two dialogs to go and file it
+first.
+
+Two details worth knowing. A portrait taken from the cloud goes through the
+**framing box** like any other picture, because the frame is what makes a
+portrait a portrait and an unframed battle map would show its middle; what gets
+saved is the small cropped copy, and the original stays in its folder counting
+once against the allowance. A token's picture is not cropped and is used where
+it lies, which is what *Choose from library* has always done.
+
+The account's own profile picture is deliberately left out: it belongs to a
+person rather than to a table, and there is no campaign in scope on that screen
+to have a cloud in.
+
 **Folders are records, not directories.** A node is a row with a parent, and the
 pictures stay flat on disk under the names the uploader never chose. Moving a
 map between folders is therefore one field changing, a URL already written into
