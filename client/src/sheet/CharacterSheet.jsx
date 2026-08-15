@@ -11,6 +11,35 @@ import GlobalModifiers from './GlobalModifiers.jsx';
 import AcModifiers from './AcModifiers.jsx';
 import EquippedArmor from './EquippedArmor.jsx';
 import ItemList from './ItemList.jsx';
+import Shareable, { SharePreviewModal, shareProps } from './Shareable.jsx';
+import {
+  shareAbility,
+  shareAcModifiers,
+  shareAppearance,
+  shareArmorClass,
+  shareArmorPiece,
+  shareAttack,
+  shareCurrency,
+  shareFeature,
+  shareGlobalModifiers,
+  shareDeathSaves,
+  shareHitDice,
+  shareHitPoints,
+  shareField,
+  shareInspiration,
+  shareInitiative,
+  shareInventoryItem,
+  sharePassivePerception,
+  shareProficiency,
+  shareProficiencyBonus,
+  shareProse,
+  shareSkill,
+  shareSave,
+  shareSpeed,
+  shareSpell,
+  shareSpellSlots,
+  shareSpellcasting,
+} from './shareText.js';
 import {
   ABILITIES,
   SKILLS,
@@ -113,8 +142,53 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   // A roll waiting to be confirmed: { title, rolls, allowAdvantage }.
   const [confirming, setConfirming] = useState(null);
 
+  /**
+   * Sharing mode: the sheet as something you point at rather than fill in.
+   *
+   * One mode rather than a share button beside every section, because there
+   * would be forty of them and the sheet is crowded enough. While it is on,
+   * every part worth quoting lights up and takes the click, and nothing on the
+   * sheet can be edited or rolled - see `locked` below, and Shareable.jsx.
+   */
+  const [sharing, setSharing] = useState(false);
+  // The block waiting to be confirmed: { title, text }.
+  const [preview, setPreview] = useState(null);
+  const [sendingShare, setSendingShare] = useState(false);
+  const [shareError, setShareError] = useState('');
+
   const set = (path) => (value) => onChange(setIn(sheet, path, value));
   const pb = proficiencyBonus(sheet.level);
+
+  /**
+   * Hands off, whichever reason there is for it.
+   *
+   * A sheet somebody may only read and a sheet in sharing mode want the same
+   * thing from every field on it: show the value, take no input. Passing one
+   * flag means no field has to know which of the two it is - and it is what
+   * keeps a click in sharing mode from landing in a text box instead of
+   * sharing the section it is in.
+   */
+  const locked = readOnly || sharing;
+
+  // The identity boxes at the top all take the same two props; only their
+  // payload differs.
+  const identity = (payload) => ({ sharing, share: payload, onPick: setPreview });
+
+  async function sendShare() {
+    if (!preview || sendingShare) return;
+    setSendingShare(true);
+    setShareError('');
+    try {
+      await api.shareToChat(preview);
+      // Only the dialog closes. The mode stays on, because somebody showing
+      // the table their character is usually showing it more than one thing.
+      setPreview(null);
+    } catch (err) {
+      setShareError(err.message);
+    } finally {
+      setSendingShare(false);
+    }
+  }
 
   /**
    * A d20 check against some bonus - abilities, saves and skills all share it.
@@ -212,7 +286,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
   }
 
   return (
-    <div className="sheet-full">
+    <div className={`sheet-full${sharing ? ' sharing' : ''}`}>
       <nav className="sheet-pages">
         {[
           ['main', 'Character'],
@@ -223,7 +297,34 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
             {label}
           </button>
         ))}
+        <div className="spacer" />
+        {/* The pages are where you are; this is what the sheet is *for* right
+            now, so it sits at the other end of the same row rather than in the
+            middle of them. Its label is the way out, because while the mode is
+            on the whole sheet is already saying it is on. */}
+        <button
+          className={`share-mode-toggle${sharing ? ' on' : ''}`}
+          aria-pressed={sharing}
+          onClick={() => {
+            setSharing((on) => !on);
+            setPreview(null);
+          }}
+          title={
+            sharing
+              ? 'Go back to reading and editing the sheet'
+              : 'Click any part of the sheet to show it to the table'
+          }
+        >
+          {sharing ? 'Exit Sharing mode' : 'Enter Sharing mode'}
+        </button>
       </nav>
+
+      {sharing && (
+        <p className="hint share-hint">
+          Click any part of the sheet to show it in the chat. Nothing can be edited or rolled until
+          you leave.
+        </p>
+      )}
 
       <header className="sheet-top">
         {/* The character's own face, first thing on the sheet. Read-only for
@@ -232,7 +333,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
         <PicturePicker
           url={sheet.portraitUrl || ''}
           onChange={set('portraitUrl')}
-          disabled={readOnly}
+          disabled={locked}
           // Taller than it is wide, which is the shape a person is. The cropper
           // is cut to the same three-by-four, so what is saved fills the frame
           // here and the thumbnail on the card without either one guessing.
@@ -246,31 +347,58 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
             fields with a hand's depth of nothing under them; as one grid they
             share the portrait's height between them, which is what the boxes on
             a printed sheet do. */}
+        {/* Nine boxes, and nine things to share: the name spans the row and the
+            rest fill the grid, in sharing mode exactly as out of it. Each
+            wrapper stands in for the cell its field was, which is what the
+            class on the name is for. */}
         <div className="sheet-identity">
-          <label className="fld char-name">
-            <input
-              type="text"
-              value={sheet.name ?? ''}
-              placeholder="Character name"
-              disabled={readOnly}
-              onChange={(e) => set('name')(e.target.value)}
+          <Shareable
+            sharing={sharing}
+            share={shareField(sheet, 'Character name', sheet.name)}
+            onPick={setPreview}
+            className="char-name-cell"
+          >
+            <label className="fld char-name">
+              <input
+                type="text"
+                value={sheet.name ?? ''}
+                placeholder="Character name"
+                disabled={locked}
+                onChange={(e) => set('name')(e.target.value)}
+              />
+              <span>Character name</span>
+            </label>
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Class', sheet.class))}>
+            <Text label="Class" value={sheet.class} onChange={set('class')} readOnly={locked} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Level', sheet.level))}>
+            <Num label="Level" value={sheet.level} onChange={set('level')} readOnly={locked} min={1} max={20} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Subclass', sheet.subclass))}>
+            <Text label="Subclass" value={sheet.subclass} onChange={set('subclass')} readOnly={locked} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Background', sheet.background))}>
+            <Text label="Background" value={sheet.background} onChange={set('background')} readOnly={locked} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Race', sheet.race))}>
+            <Text label="Race" value={sheet.race} onChange={set('race')} readOnly={locked} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Alignment', sheet.alignment))}>
+            <Select
+              label="Alignment"
+              value={sheet.alignment}
+              onChange={set('alignment')}
+              readOnly={locked}
+              options={ALIGNMENTS}
             />
-            <span>Character name</span>
-          </label>
-          <Text label="Class" value={sheet.class} onChange={set('class')} readOnly={readOnly} />
-          <Num label="Level" value={sheet.level} onChange={set('level')} readOnly={readOnly} min={1} max={20} />
-          <Text label="Subclass" value={sheet.subclass} onChange={set('subclass')} readOnly={readOnly} />
-          <Text label="Background" value={sheet.background} onChange={set('background')} readOnly={readOnly} />
-          <Text label="Race" value={sheet.race} onChange={set('race')} readOnly={readOnly} />
-          <Select
-            label="Alignment"
-            value={sheet.alignment}
-            onChange={set('alignment')}
-            readOnly={readOnly}
-            options={ALIGNMENTS}
-          />
-          <Text label="Player" value={sheet.playerName} onChange={set('playerName')} readOnly={readOnly} />
-          <Num label="XP" value={sheet.xp} onChange={set('xp')} readOnly={readOnly} min={0} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'Player', sheet.playerName))}>
+            <Text label="Player" value={sheet.playerName} onChange={set('playerName')} readOnly={locked} />
+          </Shareable>
+          <Shareable {...identity(shareField(sheet, 'XP', sheet.xp))}>
+            <Num label="XP" value={sheet.xp} onChange={set('xp')} readOnly={locked} min={0} />
+          </Shareable>
         </div>
       </header>
 
@@ -279,15 +407,32 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
           sheet={sheet}
           set={set}
           onChange={onChange}
-          readOnly={readOnly}
+          readOnly={locked}
           pb={pb}
           askCheck={askCheck}
           askAttack={askAttack}
+          sharing={sharing}
+          onPick={setPreview}
         />
       )}
-      {page === 'details' && <DetailsPage sheet={sheet} set={set} readOnly={readOnly} />}
+      {page === 'details' && (
+        <DetailsPage
+          sheet={sheet}
+          set={set}
+          readOnly={locked}
+          sharing={sharing}
+          onPick={setPreview}
+        />
+      )}
       {page === 'spells' && (
-        <SpellsPage sheet={sheet} set={set} onChange={onChange} readOnly={readOnly} />
+        <SpellsPage
+          sheet={sheet}
+          set={set}
+          onChange={onChange}
+          readOnly={locked}
+          sharing={sharing}
+          onPick={setPreview}
+        />
       )}
 
       {confirming && (
@@ -300,11 +445,28 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
           onClose={() => setConfirming(null)}
         />
       )}
+
+      {preview && (
+        <SharePreviewModal
+          share={preview}
+          busy={sendingShare}
+          error={shareError}
+          onCancel={() => {
+            setPreview(null);
+            setShareError('');
+          }}
+          onSend={sendShare}
+        />
+      )}
     </div>
   );
 }
 
-function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
+function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sharing, onPick }) {
+  // Every region on this page takes the same two props, so they are bundled
+  // once rather than spelled out forty times.
+  const share = (payload) => ({ sharing, share: payload, onPick });
+
   const attacks = sheet.attacks || [];
   // Which attack field is currently being picked: { id, field }.
   const [picking, setPicking] = useState(null);
@@ -385,7 +547,8 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
       <div className="sheet-col">
         <div className="ability-list">
           {ABILITIES.map((a) => (
-            <div key={a.key} className="ability">
+            <Shareable key={a.key} {...share(shareAbility(sheet, a))}>
+            <div className="ability">
               {/* The name is the roll handle; the score below stays editable. */}
               <button
                 type="button"
@@ -406,26 +569,36 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                 onChange={(e) => set(`abilities.${a.key}`)(Number(e.target.value) || 0)}
               />
             </div>
+            </Shareable>
           ))}
         </div>
 
         <div className="box inline-stats">
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={Boolean(sheet.inspiration)}
-              disabled={readOnly}
-              onChange={(e) => set('inspiration')(e.target.checked)}
-            />
-            Inspiration
-          </label>
-          <Stat label="Proficiency bonus" value={signed(pb)} hint="Derived from level" />
+          <Shareable {...share(shareInspiration(sheet))}>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={Boolean(sheet.inspiration)}
+                disabled={readOnly}
+                onChange={(e) => set('inspiration')(e.target.checked)}
+              />
+              Inspiration
+            </label>
+          </Shareable>
+          <Shareable {...share(shareProficiencyBonus(sheet))}>
+            <Stat label="Proficiency bonus" value={signed(pb)} hint="Derived from level" />
+          </Shareable>
         </div>
 
+        {/* One save at a time. The section as a whole is not something anybody
+            shows a table - "here are all six of my saves" is a data dump, and
+            what actually gets said out loud is "my Dexterity save is +7". Same
+            reasoning everywhere below: the row is the unit, not the box. */}
         <div className="box">
           <h4>Saving throws</h4>
           {ABILITIES.map((a) => (
-            <div key={a.key} className="prof-row">
+            <Shareable key={a.key} {...share(shareSave(sheet, a))}>
+            <div className="prof-row">
               <input
                 type="checkbox"
                 checked={Boolean(sheet.saves?.[a.key])}
@@ -445,6 +618,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                 {a.label}
               </button>
             </div>
+            </Shareable>
           ))}
         </div>
 
@@ -455,7 +629,8 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
             // The one skill the armour has an opinion about.
             const hampered = s.key === 'stealth' && stealthDisadvantage(sheet);
             return (
-              <div key={s.key} className="prof-row">
+              <Shareable key={s.key} {...share(shareSkill(sheet, s))}>
+              <div className="prof-row">
                 {/* One control cycling none → proficient → expertise, which is
                     what the two little circles on the paper sheet mean. */}
                 <button
@@ -483,11 +658,15 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
                   {s.label} <i>({s.ability})</i>
                 </button>
               </div>
+              </Shareable>
             );
           })}
         </div>
 
-        <Stat label="Passive Perception" value={passivePerception(sheet)} />
+        <Shareable {...share(sharePassivePerception(sheet))}>
+          <Stat label="Passive Perception" value={passivePerception(sheet)} />
+        </Shareable>
+
         <ItemList
           title="Other proficiencies & languages"
           items={proficiencyRows(sheet)}
@@ -497,6 +676,9 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           emptyLabel="Nothing written down yet."
           noun="this proficiency"
           fields={PROFICIENCY_FIELDS}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareProficiency(sheet, row)}
         />
       </div>
 
@@ -507,18 +689,24 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
               this sheet: it is the armour below, plus Dexterity, plus the list
               under it, and a number somebody typed here would be free to
               disagree with all three. */}
-          <Stat
-            label="Armor Class"
-            value={armorClass(sheet)}
-            hint={armorClassBreakdown(sheet)}
-          />
-          <Stat
-            label="Initiative"
-            value={signed(initiative(sheet))}
-            hint="DEX modifier + bonus"
-            onClick={() => askCheck('Initiative', initiative(sheet))}
-          />
-          <Text label="Speed" value={sheet.speed} onChange={set('speed')} readOnly={readOnly} />
+          <Shareable {...share(shareArmorClass(sheet))}>
+            <Stat
+              label="Armor Class"
+              value={armorClass(sheet)}
+              hint={armorClassBreakdown(sheet)}
+            />
+          </Shareable>
+          <Shareable {...share(shareInitiative(sheet))}>
+            <Stat
+              label="Initiative"
+              value={signed(initiative(sheet))}
+              hint="DEX modifier + bonus"
+              onClick={() => askCheck('Initiative', initiative(sheet))}
+            />
+          </Shareable>
+          <Shareable {...share(shareSpeed(sheet))}>
+            <Text label="Speed" value={sheet.speed} onChange={set('speed')} readOnly={readOnly} />
+          </Shareable>
         </div>
 
         {/* Directly under the number it changes, and worked the same way as the
@@ -526,6 +714,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
             the list the first time, Edit is what reopens it afterwards, and the
             names of what is running are printed where they can be read without
             opening anything. */}
+        <Shareable {...share(shareAcModifiers(sheet))}>
         <div className="gm-row-inline ac-mods-row">
           <label className="check">
             <input
@@ -547,6 +736,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
             </button>
           )}
         </div>
+        </Shareable>
 
         {editingAc && (
           <AcModifiers
@@ -559,28 +749,38 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           />
         )}
 
-        <div className="box hp-box">
-          <h4>Hit points</h4>
-          <div className="hp-row">
-            <Num label="Current" value={sheet.hp?.current} onChange={set('hp.current')} readOnly={readOnly} />
-            <Num label="Maximum" value={sheet.hp?.max} onChange={set('hp.max')} readOnly={readOnly} />
-            <Num label="Temporary" value={sheet.hp?.temp} onChange={set('hp.temp')} readOnly={readOnly} />
+        <Shareable {...share(shareHitPoints(sheet))}>
+          <div className="box hp-box">
+            <h4>Hit points</h4>
+            <div className="hp-row">
+              <Num label="Current" value={sheet.hp?.current} onChange={set('hp.current')} readOnly={readOnly} />
+              <Num label="Maximum" value={sheet.hp?.max} onChange={set('hp.max')} readOnly={readOnly} />
+              <Num label="Temporary" value={sheet.hp?.temp} onChange={set('hp.temp')} readOnly={readOnly} />
+            </div>
+            <div className="hp-bar" aria-hidden="true">
+              <i style={{ width: `${hpPercent(sheet)}%` }} />
+            </div>
           </div>
-          <div className="hp-bar" aria-hidden="true">
-            <i style={{ width: `${hpPercent(sheet)}%` }} />
-          </div>
-        </div>
+        </Shareable>
 
         <div className="box">
-          <h4>Hit dice</h4>
-          <div className="hp-row">
-            <Text label="Die" value={sheet.hitDice?.die} onChange={set('hitDice.die')} readOnly={readOnly} />
-            <Num label="Total" value={sheet.hitDice?.total} onChange={set('hitDice.total')} readOnly={readOnly} />
-            <Num label="Used" value={sheet.hitDice?.used} onChange={set('hitDice.used')} readOnly={readOnly} />
-          </div>
-          <h4>Death saves</h4>
-          {deathBoxes('successes')}
-          {deathBoxes('failures')}
+          <Shareable {...share(shareHitDice(sheet))}>
+            <div>
+              <h4>Hit dice</h4>
+              <div className="hp-row">
+                <Text label="Die" value={sheet.hitDice?.die} onChange={set('hitDice.die')} readOnly={readOnly} />
+                <Num label="Total" value={sheet.hitDice?.total} onChange={set('hitDice.total')} readOnly={readOnly} />
+                <Num label="Used" value={sheet.hitDice?.used} onChange={set('hitDice.used')} readOnly={readOnly} />
+              </div>
+            </div>
+          </Shareable>
+          <Shareable {...share(shareDeathSaves(sheet))}>
+            <div>
+              <h4>Death saves</h4>
+              {deathBoxes('successes')}
+              {deathBoxes('failures')}
+            </div>
+          </Shareable>
         </div>
 
         <div className="box">
@@ -606,8 +806,11 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
               </tr>
             </thead>
             <tbody>
+              {/* A row cannot be wrapped in a div without breaking the table,
+                  so each one wears the sharing behaviour instead of being put
+                  inside it. Same click, same class. */}
               {attacks.map((a) => (
-                <tr key={a.id}>
+                <tr key={a.id} {...shareProps(share(shareAttack(sheet, a)))}>
                   <td>
                     <button
                       type="button"
@@ -695,6 +898,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
               reopens it afterwards. Without that, the way back in would be to
               untick and retick, which turns every visit into a round trip
               through having the thing switched off. */}
+          <Shareable {...share(shareGlobalModifiers(sheet))}>
           <div className="gm-row-inline">
             <label className="check">
               <input
@@ -724,6 +928,7 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
               {liveDamage && <>damage {liveDamage}</>}
             </small>
           )}
+          </Shareable>
 
           {editingModifiers && (
             <GlobalModifiers
@@ -755,20 +960,22 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           )}
         </div>
 
-        <div className="box">
-          <h4>Currency</h4>
-          <div className="currency">
-            {['cp', 'sp', 'ep', 'gp', 'pp'].map((c) => (
-              <Num
-                key={c}
-                label={c.toUpperCase()}
-                value={sheet.currency?.[c]}
-                onChange={set(`currency.${c}`)}
-                readOnly={readOnly}
-              />
-            ))}
+        <Shareable {...share(shareCurrency(sheet))}>
+          <div className="box">
+            <h4>Currency</h4>
+            <div className="currency">
+              {['cp', 'sp', 'ep', 'gp', 'pp'].map((c) => (
+                <Num
+                  key={c}
+                  label={c.toUpperCase()}
+                  value={sheet.currency?.[c]}
+                  onChange={set(`currency.${c}`)}
+                  readOnly={readOnly}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        </Shareable>
 
         <EquippedArmor
           armor={sheet.armor || []}
@@ -776,6 +983,9 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           readOnly={readOnly}
           total={armorClass(sheet)}
           breakdown={armorClassBreakdown(sheet)}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareArmorPiece(sheet, row)}
         />
 
         {/* Still stored as `equipment`: the heading changed, and nobody's kit
@@ -790,15 +1000,30 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           noun="this item"
           fields={INVENTORY_FIELDS}
           summary={<CarriedWeight sheet={sheet} />}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareInventoryItem(sheet, row)}
         />
       </div>
 
       {/* ---- column three: roleplay ---- */}
       <div className="sheet-col">
-        <Area label="Personality traits" value={sheet.personalityTraits} onChange={set('personalityTraits')} readOnly={readOnly} rows={3} />
-        <Area label="Ideals" value={sheet.ideals} onChange={set('ideals')} readOnly={readOnly} rows={3} />
-        <Area label="Bonds" value={sheet.bonds} onChange={set('bonds')} readOnly={readOnly} rows={3} />
-        <Area label="Flaws" value={sheet.flaws} onChange={set('flaws')} readOnly={readOnly} rows={3} />
+        {[
+          ['Personality traits', 'personalityTraits', 3],
+          ['Ideals', 'ideals', 3],
+          ['Bonds', 'bonds', 3],
+          ['Flaws', 'flaws', 3],
+        ].map(([label, key, rows]) => (
+          <Shareable key={key} {...share(shareProse(sheet, label, sheet[key]))}>
+            <Area
+              label={label}
+              value={sheet[key]}
+              onChange={set(key)}
+              readOnly={readOnly}
+              rows={rows}
+            />
+          </Shareable>
+        ))}
         <ItemList
           title="Features & traits"
           items={featureRows(sheet)}
@@ -808,8 +1033,13 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack }) {
           emptyLabel="No features written down yet."
           noun="this feature"
           fields={FEATURE_FIELDS}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareFeature(sheet, row)}
         />
-        <Area label="Notes" value={sheet.notes} onChange={set('notes')} readOnly={readOnly} rows={5} />
+        <Shareable {...share(shareProse(sheet, 'Notes', sheet.notes))}>
+          <Area label="Notes" value={sheet.notes} onChange={set('notes')} readOnly={readOnly} rows={5} />
+        </Shareable>
       </div>
 
       {confirmAttack && (
@@ -832,37 +1062,49 @@ function hpPercent(sheet) {
   return Math.max(0, Math.min(100, (current / max) * 100));
 }
 
-function DetailsPage({ sheet, set, readOnly }) {
+function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {
+  const share = (payload) => ({ sharing, share: payload, onPick });
+  // Every box on this page is a prose field, so they are drawn from one list
+  // rather than written out twice each - once to render and once to share.
+  const prose = (label, key, rows) => (
+    <Shareable key={key} {...share(shareProse(sheet, label, sheet[key]))}>
+      <Area label={label} value={sheet[key]} onChange={set(key)} readOnly={readOnly} rows={rows} />
+    </Shareable>
+  );
+
   return (
     <div className="sheet-grid two">
       <div className="sheet-col">
-        <div className="box">
-          <h4>Appearance</h4>
-          <div className="appearance">
-            {['age', 'height', 'weight', 'eyes', 'skin', 'hair'].map((k) => (
-              <Text
-                key={k}
-                label={k[0].toUpperCase() + k.slice(1)}
-                value={sheet.appearance?.[k]}
-                onChange={set(`appearance.${k}`)}
-                readOnly={readOnly}
-              />
-            ))}
+        <Shareable {...share(shareAppearance(sheet))}>
+          <div className="box">
+            <h4>Appearance</h4>
+            <div className="appearance">
+              {['age', 'height', 'weight', 'eyes', 'skin', 'hair'].map((k) => (
+                <Text
+                  key={k}
+                  label={k[0].toUpperCase() + k.slice(1)}
+                  value={sheet.appearance?.[k]}
+                  onChange={set(`appearance.${k}`)}
+                  readOnly={readOnly}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-        <Area label="Character appearance" value={sheet.appearanceNotes} onChange={set('appearanceNotes')} readOnly={readOnly} rows={6} />
-        <Area label="Allies & organizations" value={sheet.alliesAndOrganizations} onChange={set('alliesAndOrganizations')} readOnly={readOnly} rows={6} />
+        </Shareable>
+        {prose('Character appearance', 'appearanceNotes', 6)}
+        {prose('Allies & organizations', 'alliesAndOrganizations', 6)}
       </div>
       <div className="sheet-col">
-        <Area label="Character backstory" value={sheet.backstory} onChange={set('backstory')} readOnly={readOnly} rows={12} />
-        <Area label="Additional features & traits" value={sheet.additionalFeatures} onChange={set('additionalFeatures')} readOnly={readOnly} rows={8} />
-        <Area label="Treasure" value={sheet.treasure} onChange={set('treasure')} readOnly={readOnly} rows={6} />
+        {prose('Character backstory', 'backstory', 12)}
+        {prose('Additional features & traits', 'additionalFeatures', 8)}
+        {prose('Treasure', 'treasure', 6)}
       </div>
     </div>
   );
 }
 
-function SpellsPage({ sheet, set, onChange, readOnly }) {
+function SpellsPage({ sheet, set, onChange, readOnly, sharing, onPick }) {
+  const share = (payload) => ({ sharing, share: payload, onPick });
   const casting = sheet.spellcasting || {};
   const spells = casting.spells || [];
   const dc = spellSaveDc(sheet);
@@ -896,18 +1138,20 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
 
   return (
     <div className="spells-page">
-      <div className="box inline-stats">
-        <Text label="Spellcasting class" value={casting.class} onChange={set('spellcasting.class')} readOnly={readOnly} />
-        <Select
-          label="Spellcasting ability"
-          value={casting.ability}
-          onChange={set('spellcasting.ability')}
-          readOnly={readOnly}
-          options={ABILITIES.map((a) => ({ value: a.key, label: a.label }))}
-        />
-        <Stat label="Spell save DC" value={dc ?? '-'} hint="8 + proficiency + ability modifier" />
-        <Stat label="Spell attack" value={atk === null ? '-' : signed(atk)} hint="proficiency + ability modifier" />
-      </div>
+      <Shareable {...share(shareSpellcasting(sheet))}>
+        <div className="box inline-stats">
+          <Text label="Spellcasting class" value={casting.class} onChange={set('spellcasting.class')} readOnly={readOnly} />
+          <Select
+            label="Spellcasting ability"
+            value={casting.ability}
+            onChange={set('spellcasting.ability')}
+            readOnly={readOnly}
+            options={ABILITIES.map((a) => ({ value: a.key, label: a.label }))}
+          />
+          <Stat label="Spell save DC" value={dc ?? '-'} hint="8 + proficiency + ability modifier" />
+          <Stat label="Spell attack" value={atk === null ? '-' : signed(atk)} hint="proficiency + ability modifier" />
+        </div>
+      </Shareable>
 
       <div className="spell-levels">
         {SPELL_LEVELS.map((level) => {
@@ -918,14 +1162,17 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
               <div className="spell-level-head">
                 <h4>{level === 0 ? 'Cantrips' : `Level ${level}`}</h4>
                 {level > 0 && (
+                  <Shareable {...share(shareSpellSlots(sheet, level))}>
                   <div className="slots">
                     <Num label="Slots" value={slot.total} onChange={set(`spellcasting.slots.${level}.total`)} readOnly={readOnly} min={0} max={9} />
                     <Num label="Used" value={slot.expended} onChange={set(`spellcasting.slots.${level}.expended`)} readOnly={readOnly} min={0} max={9} />
                   </div>
+                  </Shareable>
                 )}
               </div>
               {atLevel.map((s) => (
-                <div key={s.id} className="spell-row">
+                <Shareable key={s.id} {...share(shareSpell(sheet, s))}>
+                <div className="spell-row">
                   {level > 0 && (
                     <input
                       type="checkbox"
@@ -951,6 +1198,7 @@ function SpellsPage({ sheet, set, onChange, readOnly }) {
                     </button>
                   )}
                 </div>
+                </Shareable>
               ))}
               {!readOnly && (
                 <button className="add-spell" onClick={() => addSpell(level)}>

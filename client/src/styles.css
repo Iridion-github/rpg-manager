@@ -2566,8 +2566,23 @@ button.token-tile:hover {
 }
 
 /* The name is the heading of this block, so it takes the whole first row. */
-.char-name {
+.char-name,
+.char-name-cell {
   grid-column: 1 / -1;
+}
+
+/* In sharing mode each of these nine boxes is its own region, which puts a
+   wrapper between the grid and the field. It has to hand the cell straight
+   through: without this the boxes would shrink to their natural height the
+   moment the mode came on, and the row somebody was looking at would move. */
+.sheet-identity>.shareable {
+  display: flex;
+  min-width: 0;
+}
+
+.sheet-identity>.shareable>.fld {
+  flex: 1;
+  min-width: 0;
 }
 
 .char-name input {
@@ -3307,6 +3322,80 @@ button.token-tile:hover {
 .armor-list .empty {
   color: #8b90a0;
   font-size: 0.8rem;
+}
+
+/* --- sharing mode ---
+
+   The sheet stops being something you fill in and becomes something you point
+   at. Out of the mode a wrapper is not in the layout at all, so nothing here
+   costs the sheet a pixel until somebody asks for it. */
+.shareable {
+  /* Only ever rendered while the mode is on (see Shareable.jsx), so this is
+     the whole of what a region looks like: a card you can hit. */
+  border-radius: 8px;
+  outline: 1px dashed #35406a;
+  outline-offset: 2px;
+  cursor: pointer;
+  position: relative;
+}
+
+.shareable:hover,
+.shareable:focus-visible {
+  outline: 2px solid #58a6ff;
+  background: #1b2333;
+}
+
+/* Everything inside a region is deaf to the pointer while the mode is on: the
+   region takes the click, whatever it lands on. Without this a disabled input
+   would swallow the click and leave a hole in the middle of a section - and a
+   live button would roll dice instead of sharing them. */
+.sheet-full.sharing .shareable * {
+  pointer-events: none;
+}
+
+.share-mode-toggle.on {
+  background: #35406a;
+  border-color: #58a6ff;
+  color: #e7e9ee;
+}
+
+.share-hint {
+  margin: 0 0 0.6rem;
+}
+
+/* The heading and the lines, drawn the same in the preview and in the log, so
+   what is confirmed is what arrives. */
+.chat-excerpt {
+  border-left: 3px solid #35406a;
+  padding-left: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.chat-excerpt strong {
+  display: block;
+  font-size: 0.8rem;
+  color: #9aa0b2;
+  margin-bottom: 0.15rem;
+}
+
+/* The line breaks somebody composed are the formatting, so they are kept. */
+.chat-excerpt p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.share-modal {
+  width: min(30rem, 92vw);
+}
+
+/* Long enough to need its own scroll: a spell list or a feature can run past
+   the height of a dialog, and the point of the preview is to read it. */
+.share-preview {
+  max-height: 45vh;
+  overflow-y: auto;
+  background: #12151d;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
 }
 
 /* --- the sections that are lists of things ---

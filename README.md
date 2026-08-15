@@ -886,7 +886,7 @@ is held by at most one token. Pointing a character at a second figure *releases*
 the first rather than refusing - moving a character across is what you meant -
 and the dropdown says which character is already spoken for, and by what, before
 you choose it (*"Gerald - currently Gerald on deck"*). It reads the same from
-either end: *Linked to which Char Sheet* in the Tokens tab, *Figure on the map*
+either end: *Linked to which Char Sheet* in the Tokens tab, *Linked Token*
 in the Characters tab.
 
 The server's queries are written in the plural even so. Not to permit a second

@@ -219,6 +219,10 @@ export const api = {
 
   listChat: () => get(table('/chat')),
   sendChat: (text) => post(table('/chat'), { text }),
+  // A block read off a character sheet, with its own heading. Longer than a
+  // typed line is allowed to be, and drawn as a block in the log - see the
+  // share route in server/routes/chat.js.
+  shareToChat: ({ title, text }) => post(table('/chat/share'), { title, text }),
   // `extras` are named things riding along on this one roll - a sheet's global
   // modifiers - each some dice, some flat bonus, or both. The server rolls them
   // with it and folds them into the same total, so an extra d4 is part of the

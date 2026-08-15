@@ -23,6 +23,19 @@ const LOG_ID = 'log';
 const MAX_MESSAGES = 300; // old talk isn't worth unbounded disk
 const MAX_LENGTH = 500;
 
+/**
+ * A block read off a character sheet is allowed to be longer than a line of
+ * talk, and is capped separately.
+ *
+ * 500 is a sentence somebody types, and it is the right size for one. A shared
+ * block is a section of a sheet - eighteen skills, or a feature and what it
+ * does - and cutting one at 500 characters would post half a feature, which is
+ * worse than not posting it. This is what the browser's own preview is measured
+ * against, so nothing is ever silently trimmed on the way in.
+ */
+const MAX_SHARE_LENGTH = 1500;
+const MAX_SHARE_TITLE = 120;
+
 // A coin is just a two-sided die as far as the maths is concerned.
 const DICE = new Set([2, 4, 6, 8, 10, 12, 20, 100]);
 const COIN = 2;
@@ -201,6 +214,54 @@ router.post('/', async (req, res, next) => {
     // cannot post as somebody else by asking nicely.
     const message = {
       id: crypto.randomUUID(),
+      text,
+      author: speaker.author,
+      role: speaker.role,
+      at: new Date().toISOString(),
+    };
+
+    await appendMessage(req, message);
+    broadcast(req, 'chat:message', { message });
+    res.status(201).json(message);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Show the table something off a character sheet.
+ *
+ * A route of its own rather than a long chat line, for two reasons. It is
+ * allowed more room, because a section of a sheet is longer than a sentence;
+ * and it arrives with its own heading, so the log can draw it as the block it
+ * is - "Evol - Features & traits" over the features - instead of a wall of text
+ * somebody has to work out the shape of.
+ *
+ * The text is composed in the browser, which is the only place that knows what
+ * a sheet says: the server stores sheets as documents and has no opinion about
+ * how a skill list reads. What it does insist on is the same thing it insists
+ * on for every other message - the author is whoever's credential sent it, and
+ * nothing in the body can change that.
+ *
+ * Nothing here checks that the sender may read the sheet they are quoting. It
+ * would be a check about the wrong thing: this posts text the sender already
+ * had on their screen, and anybody at this table can type the same words into
+ * the chat box by hand. The sheet's own permissions are what decide who can see
+ * it in the first place (routes/sheets.js).
+ */
+router.post('/share', async (req, res, next) => {
+  try {
+    const speaker = speakerFor(req);
+    if (!speaker) return res.status(403).json({ error: 'You are not at this table.' });
+
+    const title = String(req.body?.title ?? '').trim().slice(0, MAX_SHARE_TITLE);
+    const text = String(req.body?.text ?? '').trim().slice(0, MAX_SHARE_LENGTH);
+    if (!text) return res.status(400).json({ error: 'Nothing to send.' });
+
+    const message = {
+      id: crypto.randomUUID(),
+      kind: 'sheet',
+      title,
       text,
       author: speaker.author,
       role: speaker.role,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Num, Select } from './fields.jsx';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
+import Shareable from './Shareable.jsx';
 import {
   ARMOR_DEFAULTS,
   ARMOR_TYPES,
@@ -24,7 +25,18 @@ const uid = () => crypto.randomUUID();
  * armour usually does and then gets out of the way, because the armour worth
  * writing down in a campaign is the piece that breaks the rule.
  */
-export default function EquippedArmor({ armor, onChange, readOnly, total, breakdown }) {
+export default function EquippedArmor({
+  armor,
+  onChange,
+  readOnly,
+  total,
+  breakdown,
+  // Sharing mode, passed through: a piece of armour is a thing you show the
+  // table, and the list around it is not. See Shareable.jsx.
+  sharing = false,
+  onPick = null,
+  shareRow = null,
+}) {
   // Same reasoning as the attack rows: one click, and a sheet has no undo.
   const [confirmId, setConfirmId] = useState('');
   const confirming = armor.find((a) => a.id === confirmId) || null;
@@ -85,7 +97,13 @@ export default function EquippedArmor({ armor, onChange, readOnly, total, breakd
 
       <ul className="armor-list">
         {armor.map((a) => (
-          <li key={a.id} className={`armor-row${a.equipped ? ' worn' : ''}`}>
+          <Shareable
+            key={a.id}
+            sharing={sharing}
+            share={shareRow ? shareRow(a) : null}
+            onPick={onPick}
+          >
+          <li className={`armor-row${a.equipped ? ' worn' : ''}`}>
             <div className="armor-head">
               <label className="check" title="What the character is wearing right now">
                 <input
@@ -153,6 +171,7 @@ export default function EquippedArmor({ armor, onChange, readOnly, total, breakd
               Stealth disadvantage
             </label>
           </li>
+          </Shareable>
         ))}
         {armor.length === 0 && <li className="empty">No armor yet.</li>}
       </ul>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
+import Shareable from './Shareable.jsx';
 
 const uid = () => crypto.randomUUID();
 
@@ -40,6 +41,12 @@ export default function ItemList({
   // heading. Optional, because only one of these sections has a total worth
   // printing: three languages do not come to anything.
   summary = null,
+  // Sharing mode, passed straight through: each row is a thing you can show
+  // the table. The section is not - "here is my whole inventory" is a data
+  // dump, and what gets shown is the rope. See Shareable.jsx.
+  sharing = false,
+  onPick = null,
+  shareRow = null,
 }) {
   // Same reasoning as the armour and attack rows: one click, and a sheet has
   // no undo. The dialog names the row so that a column of identical ✕ buttons
@@ -74,7 +81,13 @@ export default function ItemList({
 
       <ul className="item-list">
         {items.map((item) => (
-          <li key={item.id} className="item-row">
+          <Shareable
+            key={item.id}
+            sharing={sharing}
+            share={shareRow ? shareRow(item) : null}
+            onPick={onPick}
+          >
+          <li className="item-row">
             <div className="item-head">
               {inline.map((f) => (
                 <label key={f.key} className={`fld item-field ${f.width || ''}`}>
@@ -111,6 +124,7 @@ export default function ItemList({
               </label>
             ))}
           </li>
+          </Shareable>
         ))}
         {items.length === 0 && <li className="empty">{emptyLabel}</li>}
       </ul>

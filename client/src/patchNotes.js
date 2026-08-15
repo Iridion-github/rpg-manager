@@ -27,6 +27,14 @@ export const PATCH_NOTES = [
     date: '2026-08-15',
     entries: [
       {
+        kind: 'new',
+        text: 'Sharing mode, on the top row of an open character sheet. Press Enter Sharing mode and the sheet lights up: click anything on it and a box shows you exactly what will appear in the chat. Send to chat posts it, Cancel takes you back with the mode still on, so you can show the table three things in a row. Nothing can be edited or rolled while the mode is on, so a click never lands in a text box by accident; Exit Sharing mode gives you the sheet back.',
+      },
+      {
+        kind: 'change',
+        text: 'What you share is one thing at a time: this saving throw, this skill, this item, this feature, this spell, this piece of armour. Nothing sends a whole section at once, because "here are all eighteen of my skills" is a wall of text nobody reads, and what actually gets said at a table is "my Stealth is +6". The boxes at the top of the sheet go the same way - your name, class, level, subclass, background, race, alignment, player and XP are nine separate things to send, not one block. So are hit points, hit dice and death saves, and so are Inspiration and your proficiency bonus.',
+      },
+      {
         kind: 'change',
         text: 'Other proficiencies & languages, Inventory, and Features & traits are lists now instead of one long box of text. Each entry is a row you fill in, add and throw away on its own: a proficiency has a title, an optional subtitle and an optional description; an inventory item has an optional quantity, a name and an optional weight; a feature has a title, where it came from, and what it does. Inventory adds up what you are carrying and prints the total beside the heading: the weight you write is what one of the thing weighs, so fifty arrows at 0.05 come to 2.5. Write no weights and there is no total, because a table that does not track encumbrance should not be shown a running one. Anything you had already typed into those three boxes is read back as rows - one per line, and for features one per paragraph with its first line as the title - so nothing is lost and there is nothing to copy across by hand.',
       },

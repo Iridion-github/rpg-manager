@@ -115,7 +115,13 @@ export default function Chat({ actor, offline }) {
                   so is what stops it being read as a public result. */}
               {m.secret && <span className="badge secret-badge">DM only</span>}
             </div>
-            {m.kind === 'roll' && m.roll ? <RollResult roll={m.roll} /> : <p>{m.text}</p>}
+            {m.kind === 'roll' && m.roll ? (
+              <RollResult roll={m.roll} />
+            ) : m.kind === 'sheet' ? (
+              <SheetExcerpt title={m.title} text={m.text} />
+            ) : (
+              <p>{m.text}</p>
+            )}
           </div>
         ))}
         {messages.length === 0 && <p className="empty">No messages yet.</p>}
@@ -160,6 +166,24 @@ export default function Chat({ actor, offline }) {
         />
       )}
     </aside>
+  );
+}
+
+/**
+ * Something somebody read off their character sheet and showed the table.
+ *
+ * A block with its own heading rather than another paragraph of chat: what
+ * arrives here is a section - a feature and what it does, eighteen skills - and
+ * the whole reason it was sent is that somebody wanted it read. The line breaks
+ * it was written with are kept (the CSS preserves them), because they are the
+ * formatting.
+ */
+function SheetExcerpt({ title, text }) {
+  return (
+    <div className="chat-excerpt">
+      {title && <strong>{title}</strong>}
+      <p>{text}</p>
+    </div>
   );
 }
 
