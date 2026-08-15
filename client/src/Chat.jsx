@@ -19,14 +19,32 @@ export default function Chat({ actor, offline }) {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [diceOpen, setDiceOpen] = useState(false);
+  // The message a right-click menu is open on: { id, clientX, clientY }.
+  const [menu, setMenu] = useState(null);
 
   const listRef = useRef(null);
+  const menuRef = useRef(null);
   // Whether to auto-scroll after the next render. We only follow along if the
   // reader was already at the bottom - yanking someone back down while they're
   // reading history is worse than missing a line.
   const stickRef = useRef(true);
 
   const canPost = !offline && (actor?.role === 'dm' || actor?.role === 'player');
+
+  /**
+   * Whose line is this to remove?
+   *
+   * Your own, or anybody's if you're the DM - the same rule the server enforces
+   * (see routes/chat.js), asked here only so a menu isn't offered for something
+   * that would be refused. A line posted before authorship was recorded belongs
+   * to nobody, so only the DM is offered it.
+   */
+  const canDelete = useCallback(
+    (m) =>
+      !offline &&
+      (actor?.role === 'dm' || Boolean(m.authorId && actor?.userId && m.authorId === actor.userId)),
+    [offline, actor?.role, actor?.userId]
+  );
 
   const load = useCallback(async () => {
     try {
@@ -51,13 +69,45 @@ export default function Chat({ actor, offline }) {
       // pass through this component to be appended optimistically.
       setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     };
+    // Somebody took a line back. Our own echo included - dropping it twice is
+    // the same list either way, and the person who did it may be reading this
+    // table in a second tab.
+    const onDeleted = ({ id }) => {
+      if (!id) return;
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      setMenu((open) => (open?.id === id ? null : open));
+    };
     socket.on('chat:message', onMessage);
+    socket.on('chat:deleted', onDeleted);
     socket.on('connect', load); // reconnected → we may have missed lines
     return () => {
       socket.off('chat:message', onMessage);
+      socket.off('chat:deleted', onDeleted);
       socket.off('connect', load);
     };
   }, [load]);
+
+  // An open menu is dismissed by anything that isn't using it - the same rule
+  // the map's and the player list's right-click menus follow. The log scrolling
+  // counts: the menu is pinned to the screen, not to the message under it.
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e) => {
+      if (e?.target && menuRef.current?.contains(e.target)) return;
+      setMenu(null);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMenu(null);
+    };
+    window.addEventListener('pointerdown', close, true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('wheel', close, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('wheel', close);
+    };
+  }, [menu]);
 
   // Record whether we're following *before* the DOM changes height.
   function onScroll() {
@@ -97,6 +147,25 @@ export default function Chat({ actor, offline }) {
     setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
   }
 
+  /**
+   * Take a line back out of the log.
+   *
+   * Removed here as well as by the broadcast that follows, so it goes the
+   * moment the server agrees rather than a round trip later. A refusal leaves
+   * the message where it is and says why - the server is the one that decides,
+   * and the menu offering this is only a guess at what it will say.
+   */
+  async function removeMessage(id) {
+    setMenu(null);
+    try {
+      await api.deleteChat(id);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <aside className="chat">
       <h2>Chat</h2>
@@ -106,6 +175,13 @@ export default function Chat({ actor, offline }) {
           <div
             key={m.id}
             className={`chat-msg${m.role === 'dm' ? ' from-gm' : ''}${m.secret ? ' secret' : ''}`}
+            // No menu on a line you can't do anything to: the browser's own
+            // right-click menu is more use there than an empty one of ours.
+            onContextMenu={(e) => {
+              if (!canDelete(m)) return;
+              e.preventDefault();
+              setMenu({ id: m.id, clientX: e.clientX, clientY: e.clientY });
+            }}
           >
             <div className="chat-meta">
               <strong>{m.author}</strong>
@@ -126,6 +202,14 @@ export default function Chat({ actor, offline }) {
         ))}
         {messages.length === 0 && <p className="empty">No messages yet.</p>}
       </div>
+
+      {menu && messages.some((m) => m.id === menu.id) && (
+        <div className="map-menu" ref={menuRef} style={{ left: menu.clientX, top: menu.clientY }}>
+          <button className="danger" onClick={() => removeMessage(menu.id)}>
+            Delete message
+          </button>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
 

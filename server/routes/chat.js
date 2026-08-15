@@ -54,10 +54,15 @@ const chatOf = (req) => scoped(req.campaignId, COLLECTION);
 // The name on a message is the name of whoever's credential sent it, and the
 // role is the one they hold *at this table* - the same person is "DM" in one
 // campaign's log and themselves in another's.
+//
+// `authorId` rides along unchanged by any of that: it is who posted it, which
+// is what "your own message" means when it comes to deleting one. It can be
+// null for a credential with no account behind it.
 function speakerFor(req) {
   if (!req.campaignRole) return null;
-  if (req.campaignRole === 'dm') return { author: 'DM', role: 'dm' };
-  return { author: req.actor.name || 'Player', role: 'player' };
+  const authorId = req.actor?.userId || null;
+  if (req.campaignRole === 'dm') return { author: 'DM', role: 'dm', authorId };
+  return { author: req.actor.name || 'Player', role: 'player', authorId };
 }
 
 /**
@@ -74,6 +79,21 @@ function speakerFor(req) {
  */
 const canSeeMessage = (message, actor, role) =>
   !message.secret || role === 'dm' || Boolean(actor?.userId && actor.userId === message.secretFor);
+
+/**
+ * May this connection take this line back out of the log?
+ *
+ * Your own, always; anybody's if you're the DM, who owns the table and is the
+ * one person who can clear up somebody else's mess.
+ *
+ * `authorId` is the user id behind the credential that posted it, recorded at
+ * the time rather than read off the name - two people called Evol at different
+ * tables are two people, and a name is not an identity. A line posted before
+ * that was recorded has none, and so belongs to nobody: the DM can still remove
+ * it, and no player can claim it, which is the safe way for that to be wrong.
+ */
+const canDeleteMessage = (message, actor, role) =>
+  role === 'dm' || Boolean(message.authorId && actor?.userId && message.authorId === actor.userId);
 
 // Append + trim in one atomic write; creates the log on the very first message.
 function appendMessage(req, message) {
@@ -186,6 +206,10 @@ async function postSystemMessage(req, text) {
     text: String(text).slice(0, MAX_LENGTH),
     author: 'DM',
     role: 'dm',
+    // Nobody's in particular, even though it is signed DM: it reports something
+    // that happened rather than something somebody said, so it is the DM's to
+    // remove by their role and not by having written it.
+    authorId: null,
     at: new Date().toISOString(),
   };
   await appendMessage(req, message);
@@ -217,6 +241,7 @@ router.post('/', async (req, res, next) => {
       text,
       author: speaker.author,
       role: speaker.role,
+      authorId: speaker.authorId,
       at: new Date().toISOString(),
     };
 
@@ -265,6 +290,7 @@ router.post('/share', async (req, res, next) => {
       text,
       author: speaker.author,
       role: speaker.role,
+      authorId: speaker.authorId,
       at: new Date().toISOString(),
     };
 
@@ -366,6 +392,7 @@ router.post('/roll', async (req, res, next) => {
       roll,
       author: speaker.author,
       role: speaker.role,
+      authorId: speaker.authorId,
       at: new Date().toISOString(),
       // Only carried when it means something, so an ordinary roll keeps the
       // shape it has always had - including in browsers holding an older
@@ -380,6 +407,50 @@ router.post('/roll', async (req, res, next) => {
       canSeeMessage(message, actor, role) ? { message } : null
     );
     res.status(201).json(message);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Take one line back out of the log.
+ *
+ * The read and the removal happen in a single write, for the same reason
+ * appending does: the log is one record, so a check made before the write would
+ * be a check against a log that may have moved by the time it lands - two
+ * people deleting at once, or a message arriving in between, and one of the two
+ * changes is quietly lost.
+ *
+ * A message you may not see is a message that is not there, so the answer for a
+ * secret roll somebody else made is 404 rather than 403. Telling a player that
+ * a line exists but isn't theirs is the one thing the secret rule is for.
+ */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    if (!req.campaignRole) return res.status(403).json({ error: 'You are not at this table.' });
+
+    let found = null;
+    let allowed = false;
+    await store.mutate(chatOf(req), LOG_ID, (current) => {
+      const messages = current.messages || [];
+      const seen = messages.find((m) => m.id === req.params.id);
+      if (!seen || !canSeeMessage(seen, req.actor, req.campaignRole)) return null;
+      found = seen;
+      allowed = canDeleteMessage(seen, req.actor, req.campaignRole);
+      if (!allowed) return null; // write nothing
+      return { ...current, messages: messages.filter((m) => m.id !== req.params.id) };
+    });
+
+    if (!found) return res.status(404).json({ error: 'Not found' });
+    if (!allowed) {
+      return res.status(403).json({ error: 'You can only delete your own messages.' });
+    }
+
+    // To the whole table, secret rolls included: an id on its own says nothing
+    // about what the line was, and a browser that was never sent the message
+    // has nothing to remove.
+    broadcast(req, 'chat:deleted', { id: req.params.id });
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

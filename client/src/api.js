@@ -219,6 +219,10 @@ export const api = {
 
   listChat: () => get(table('/chat')),
   sendChat: (text) => post(table('/chat'), { text }),
+  // Your own line, or anybody's if you're the DM. The server decides which -
+  // the menu that offers this only hides what it already knows would be
+  // refused.
+  deleteChat: (id) => del(table(`/chat/${id}`)),
   // A block read off a character sheet, with its own heading. Longer than a
   // typed line is allowed to be, and drawn as a block in the log - see the
   // share route in server/routes/chat.js.

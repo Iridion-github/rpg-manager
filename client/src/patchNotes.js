@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'You can take a message back out of the chat. Right-click one of your own lines and choose Delete message, and it goes for everyone at the table straight away. The DM can do it to any message, not just their own; the menu only appears on a line you are allowed to remove. Anything posted before today has nobody\'s name attached to it in a way the server can check, so those are the DM\'s to tidy up.',
+      },
+      {
+        kind: 'new',
         text: 'Sharing mode, on the top row of an open character sheet. Press Enter Sharing mode and the sheet lights up: click anything on it and a box shows you exactly what will appear in the chat. Send to chat posts it, Cancel takes you back with the mode still on, so you can show the table three things in a row. Nothing can be edited or rolled while the mode is on, so a click never lands in a text box by accident; Exit Sharing mode gives you the sheet back.',
       },
       {
