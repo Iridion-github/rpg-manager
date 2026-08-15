@@ -404,23 +404,85 @@ function pickAttacks(source) {
   }));
 }
 
+/**
+ * A spell: everything the spell's entry in a book says, plus the dice for it.
+ *
+ * It used to be a name and a tick, which is all a printed sheet has room for.
+ * A sheet on a screen has room for the entry itself, and the entry is what
+ * somebody actually needs mid-turn: what it costs to cast, how far it reaches,
+ * what it does to whoever is standing there.
+ *
+ * The school is checked against the eight because it is a closed list; nothing
+ * else is. "1 Action" is the usual casting time and "1 Action, plus a Bonus
+ * Action on later turns" is a real one, and a sheet that only accepted the
+ * first would be a sheet people keep their odd spells off.
+ *
+ * A spell written before any of this existed arrives with none of these fields
+ * and comes back with them empty, which is a spell nobody has written the rest
+ * of down yet.
+ */
+const SPELL_SCHOOLS = new Set([
+  'Abjuration',
+  'Conjuration',
+  'Divination',
+  'Enchantment',
+  'Evocation',
+  'Illusion',
+  'Necromancy',
+  'Transmutation',
+]);
+
+// V, S, M. Three booleans rather than a typed string, so "V,S" and "V, S" are
+// the same answer and the sheet can ask whether a spell needs materials.
+const pickComponents = (source = {}) => ({
+  v: Boolean(source?.v),
+  s: Boolean(source?.s),
+  m: Boolean(source?.m),
+});
+
 function pickSpells(source) {
   if (!Array.isArray(source)) return [];
-  return source.slice(0, MAX_SPELLS).map((s = {}) => ({
-    id: text(s.id, '', 64) || crypto.randomUUID(),
-    level: int(s.level, 0, 0, 9), // 0 = cantrip
-    name: text(s.name, '', 80),
-    prepared: Boolean(s.prepared),
-  }));
+  return source.slice(0, MAX_SPELLS).map((raw) => {
+    const s = raw && typeof raw === 'object' ? raw : {};
+    return {
+      id: text(s.id, '', 64) || crypto.randomUUID(),
+      level: int(s.level, 0, 0, 9), // 0 = cantrip
+      name: text(s.name, '', 80),
+      prepared: Boolean(s.prepared),
+      school: SPELL_SCHOOLS.has(s.school) ? s.school : '',
+      castingTime: text(s.castingTime, '', 60),
+      range: text(s.range, '', 60),
+      area: text(s.area, '', 60),
+      components: pickComponents(s.components),
+      materials: text(s.materials, '', 200),
+      duration: text(s.duration, '', 60),
+      attackSave: text(s.attackSave, '', 60),
+      damageEffect: text(s.damageEffect, '', 60),
+      description: text(s.description, '', MAX_ITEM_TEXT),
+      // The same dice an attack carries, and stored the same way: the ability
+      // by key, never its bonus.
+      toHit: pickDice(s.toHit, TO_HIT_DICE),
+      damage: pickDice(s.damage, DAMAGE_DICE),
+      // Whether the character's spell attack bonus rides on the to-hit. A flag
+      // and not a number, because the number is proficiency plus an ability
+      // score and both of those move.
+      useAttackBonus: Boolean(s.useAttackBonus),
+    };
+  });
 }
 
 function pickSlots(source = {}) {
   const out = {};
   for (let level = 1; level <= 9; level++) {
-    const slot = (source && source[level]) || {};
+    const raw = source && source[level];
+    const slot = raw && typeof raw === 'object' ? raw : {};
+    const total = int(slot.total, 0, 0, 9);
     out[level] = {
-      total: int(slot.total, 0, 0, 9),
-      expended: int(slot.expended, 0, 0, 9),
+      total,
+      // Never more spent than there were: a level with two slots and three of
+      // them used is a sheet that has lost count, and "1 of 2 left" would then
+      // be a negative number on somebody's screen.
+      expended: int(slot.expended, 0, 0, total),
     };
   }
   return out;

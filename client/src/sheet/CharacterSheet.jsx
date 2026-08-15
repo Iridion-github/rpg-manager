@@ -6,11 +6,12 @@ import RollConfirmModal from '../RollConfirmModal.jsx';
 import PicturePicker from '../PicturePicker.jsx';
 import { api } from '../api.js';
 import { TO_HIT_DICE, DAMAGE_DICE, notation } from '../dice.js';
-import { attackRollLabels, characterRollLabel } from './rollLabels.js';
+import { attackRollLabels, characterRollLabel, spellRollLabels } from './rollLabels.js';
 import GlobalModifiers from './GlobalModifiers.jsx';
 import AcModifiers from './AcModifiers.jsx';
 import EquippedArmor from './EquippedArmor.jsx';
 import ItemList from './ItemList.jsx';
+import SpellRow from './SpellRow.jsx';
 import Shareable, { SharePreviewModal, shareProps } from './Shareable.jsx';
 import {
   shareAbility,
@@ -46,6 +47,7 @@ import {
   ALIGNMENTS,
   SPELL_LEVELS,
   abilityMod,
+  blankSpell,
   acModifiers,
   acOther,
   activeAcModifiers,
@@ -68,18 +70,25 @@ import {
   initiative,
   spellSaveDc,
   spellAttackBonus,
+  spellToHitBonus,
 } from './rules.js';
 
-// Paths are at most three deep (spellcasting.slots.3), so a tiny setter beats
-// pulling in a library.
+/**
+ * Write one value into a copy of the sheet, at a dotted path.
+ *
+ * As deep as it is given rather than the three levels it used to unroll by
+ * hand: `spellcasting.slots.3.total` is four, and the hand-written version
+ * quietly wrote the number over the whole slot instead - which is why typing a
+ * number of spell slots did nothing and took the used count with it.
+ *
+ * Whatever is not an object on the way down is replaced by one, so a path into
+ * a sheet that has never held that section still arrives.
+ */
 function setIn(obj, path, value) {
-  const [a, b, c] = path.split('.');
-  if (b === undefined) return { ...obj, [a]: value };
-  if (c === undefined) return { ...obj, [a]: { ...(obj[a] || {}), [b]: value } };
-  return {
-    ...obj,
-    [a]: { ...(obj[a] || {}), [b]: { ...((obj[a] || {})[b] || {}), [c]: value } },
-  };
+  const [head, ...rest] = path.split('.');
+  const base = obj && typeof obj === 'object' ? obj : {};
+  if (!rest.length) return { ...base, [head]: value };
+  return { ...base, [head]: setIn(base[head], rest.join('.'), value) };
 }
 
 const uid = () => crypto.randomUUID();
@@ -252,6 +261,51 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
     setConfirming({
       title: attack.name || 'Attack',
       allowAdvantage: Boolean(attack.toHit),
+      rolls,
+    });
+  };
+
+  /**
+   * The same, for a spell.
+   *
+   * Built beside the attacks rather than shared with them, because the two
+   * differ in exactly the place that matters: a spell's attack roll carries the
+   * character's spell attack bonus, which is proficiency plus their casting
+   * ability and is nothing an attack knows about. Everything else - the global
+   * modifiers riding along, the labels the chat gets - is the same, and comes
+   * from the same two helpers.
+   */
+  const askSpell = (spell) => {
+    const names = spellRollLabels(spell);
+    const effect = (spell.damageEffect || '').trim();
+    const effects = activeModifiers(sheet);
+    const rolls = [];
+    if (spell.toHit) {
+      rolls.push({
+        key: 'toHit',
+        label: 'To hit',
+        logLabel: names.toHit,
+        advantage: true,
+        spec: spell.toHit,
+        abilityBonus: spellToHitBonus(sheet, spell),
+        extras: modifierExtras(effects, 'toHit'),
+      });
+    }
+    if (spell.damage) {
+      rolls.push({
+        key: 'damage',
+        label: effect ? `Damage (${effect})` : 'Damage',
+        logLabel: names.damage,
+        advantage: false,
+        spec: spell.damage,
+        abilityBonus: specAbilityBonus(sheet, spell.damage),
+        extras: modifierExtras(effects, 'damage'),
+      });
+    }
+    if (!rolls.length) return; // nothing set on this spell yet
+    setConfirming({
+      title: spell.name || 'Spell',
+      allowAdvantage: Boolean(spell.toHit),
       rolls,
     });
   };
@@ -432,6 +486,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly }) {
           readOnly={locked}
           sharing={sharing}
           onPick={setPreview}
+          askSpell={askSpell}
         />
       )}
 
@@ -1103,34 +1158,47 @@ function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {
   );
 }
 
-function SpellsPage({ sheet, set, onChange, readOnly, sharing, onPick }) {
+function SpellsPage({ sheet, set, onChange, readOnly, sharing, onPick, askSpell }) {
   const share = (payload) => ({ sharing, share: payload, onPick });
   const casting = sheet.spellcasting || {};
   const spells = casting.spells || [];
   const dc = spellSaveDc(sheet);
   const atk = spellAttackBonus(sheet);
 
-  const setSpell = (id, field, value) =>
+  // A patch rather than one named field at a time: a spell has a dozen boxes
+  // now, and two of them - the components - change together.
+  const patchSpell = (id, patch) =>
     onChange({
       ...sheet,
       spellcasting: {
         ...casting,
-        spells: spells.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
+        spells: spells.map((s) => (s.id === id ? { ...s, ...patch } : s)),
       },
     });
   const addSpell = (level) =>
     onChange({
       ...sheet,
-      spellcasting: {
-        ...casting,
-        spells: [...spells, { id: uid(), level, name: '', prepared: false }],
-      },
+      spellcasting: { ...casting, spells: [...spells, blankSpell(level)] },
     });
   const removeSpell = (id) =>
     onChange({
       ...sheet,
       spellcasting: { ...casting, spells: spells.filter((s) => s.id !== id) },
     });
+
+  /**
+   * The slots at one level, kept honest against each other.
+   *
+   * Used can never run past the total, and lowering the total brings it down
+   * with it: a level with two slots and three of them spent would print a
+   * negative number of slots left, which is a sheet disagreeing with itself.
+   */
+  const setSlot = (level, field, value) => {
+    const slot = casting.slots?.[level] || {};
+    const total = field === 'total' ? value : Number(slot.total) || 0;
+    const expended = field === 'expended' ? value : Number(slot.expended) || 0;
+    set(`spellcasting.slots.${level}`)({ total, expended: Math.min(expended, total) });
+  };
 
   // Same reasoning as the attack rows: one click, no undo.
   const [confirmSpellId, setConfirmSpellId] = useState('');
@@ -1155,7 +1223,10 @@ function SpellsPage({ sheet, set, onChange, readOnly, sharing, onPick }) {
 
       <div className="spell-levels">
         {SPELL_LEVELS.map((level) => {
-          const atLevel = spells.filter((s) => s.level === level);
+          // By value rather than identity: a spell that arrived with its level
+          // as a string would otherwise belong to no card at all, which is a
+          // spell nobody can see or delete.
+          const atLevel = spells.filter((s) => (Number(s.level) || 0) === level);
           const slot = casting.slots?.[level] || {};
           return (
             <div key={level} className="box spell-level">
@@ -1164,41 +1235,25 @@ function SpellsPage({ sheet, set, onChange, readOnly, sharing, onPick }) {
                 {level > 0 && (
                   <Shareable {...share(shareSpellSlots(sheet, level))}>
                   <div className="slots">
-                    <Num label="Slots" value={slot.total} onChange={set(`spellcasting.slots.${level}.total`)} readOnly={readOnly} min={0} max={9} />
-                    <Num label="Used" value={slot.expended} onChange={set(`spellcasting.slots.${level}.expended`)} readOnly={readOnly} min={0} max={9} />
+                    <Num label="Slots" value={slot.total} onChange={(v) => setSlot(level, 'total', v)} readOnly={readOnly} min={0} max={9} />
+                    <Num label="Used" value={slot.expended} onChange={(v) => setSlot(level, 'expended', v)} readOnly={readOnly} min={0} max={Number(slot.total) || 0} />
                   </div>
                   </Shareable>
                 )}
               </div>
               {atLevel.map((s) => (
-                <Shareable key={s.id} {...share(shareSpell(sheet, s))}>
-                <div className="spell-row">
-                  {level > 0 && (
-                    <input
-                      type="checkbox"
-                      checked={Boolean(s.prepared)}
-                      disabled={readOnly}
-                      title="Prepared"
-                      onChange={(e) => setSpell(s.id, 'prepared', e.target.checked)}
-                    />
-                  )}
-                  <input
-                    value={s.name}
-                    placeholder="Spell name"
-                    disabled={readOnly}
-                    onChange={(e) => setSpell(s.id, 'name', e.target.value)}
-                  />
-                  {!readOnly && (
-                    <button
-                      className="del"
-                      onClick={() => setConfirmSpellId(s.id)}
-                      title={s.name ? `Remove ${s.name}` : 'Remove this spell'}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-                </Shareable>
+                <SpellRow
+                  key={s.id}
+                  sheet={sheet}
+                  spell={s}
+                  readOnly={readOnly}
+                  sharing={sharing}
+                  share={shareSpell(sheet, s)}
+                  onPick={onPick}
+                  onPatch={(patch) => patchSpell(s.id, patch)}
+                  onRemove={setConfirmSpellId}
+                  onRoll={askSpell}
+                />
               ))}
               {!readOnly && (
                 <button className="add-spell" onClick={() => addSpell(level)}>

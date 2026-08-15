@@ -228,6 +228,86 @@ export const spellAttackBonus = (sheet) =>
     ? proficiencyBonus(sheet.level) + abilityMod(sheet.abilities?.[sheet.spellcasting.ability])
     : null;
 
+/* ---------------------------------------------------------------------------
+   Spells: what one is made of, and how it reads.
+   ------------------------------------------------------------------------ */
+
+/** The eight schools. Blank stays allowed: not every spell at a table has one. */
+export const SPELL_SCHOOLS = [
+  'Abjuration',
+  'Conjuration',
+  'Divination',
+  'Enchantment',
+  'Evocation',
+  'Illusion',
+  'Necromancy',
+  'Transmutation',
+];
+
+const SPELL_ORDINALS = ['Cantrip', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
+
+/** "Cantrip", "8th" - a level said the way a spell list says it. */
+export const spellLevelLabel = (level) =>
+  SPELL_ORDINALS[Math.min(9, Math.max(0, Math.round(Number(level) || 0)))];
+
+/** The same, as it reads in a sentence: "Cantrip", "8th level". */
+export const spellLevelName = (level) =>
+  Number(level) ? `${spellLevelLabel(level)} level` : 'Cantrip';
+
+/** "V, S, M" - what a spell needs, in the order everybody writes them. */
+export function spellComponents(spell) {
+  const c = spell?.components || {};
+  return [c.v && 'V', c.s && 'S', c.m && 'M'].filter(Boolean).join(', ');
+}
+
+/**
+ * The one line a spell shows while it is folded shut.
+ *
+ * Not the level, which is the card the spell is sitting in, and not the name,
+ * which is the box above it. What is left is what somebody scanning their list
+ * mid-turn is actually looking for: what kind of magic it is, what it costs to
+ * cast, and how far it reaches.
+ */
+export const spellSummary = (spell) =>
+  [spell?.school, spell?.castingTime, spell?.range, spellComponents(spell)]
+    .map((p) => String(p ?? '').trim())
+    .filter(Boolean)
+    .join(' · ');
+
+/**
+ * What is added to a spell's attack roll, over and above the dice.
+ *
+ * Two things can ride on it and they are asked for separately: an ability the
+ * dice themselves name, the way an attack's do, and the character's spell
+ * attack bonus, which is proficiency plus their casting ability and is what
+ * nearly every attack spell actually wants. Both are worked out here rather
+ * than stored, for the reason at the top of this file.
+ */
+export const spellToHitBonus = (sheet, spell) =>
+  specAbilityBonus(sheet, spell?.toHit) +
+  (spell?.useAttackBonus ? spellAttackBonus(sheet) || 0 : 0);
+
+/** A spell nobody has written anything into yet, at the level it was added at. */
+export const blankSpell = (level = 0) => ({
+  id: crypto.randomUUID(),
+  level,
+  name: '',
+  prepared: false,
+  school: '',
+  castingTime: '',
+  range: '',
+  area: '',
+  components: { v: false, s: false, m: false },
+  materials: '',
+  duration: '',
+  attackSave: '',
+  damageEffect: '',
+  description: '',
+  toHit: null,
+  damage: null,
+  useAttackBonus: false,
+});
+
 /**
  * What the ability a dice spec names is worth, or zero when it names none.
  *

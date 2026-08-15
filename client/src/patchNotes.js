@@ -28,6 +28,22 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'A spell on your sheet is the whole spell now, not just its name. Open one with the little arrow beside it and write down its level, school, casting time, range, area, components (with the material ones spelled out when it needs them), duration, what it asks for as an attack or a save, what it does, and the description in full. Shut again, each spell shows a short line of what kind of magic it is, what it costs to cast and how far it reaches, so you can find the one you want without opening five of them.',
+      },
+      {
+        kind: 'new',
+        text: 'Spells roll their own dice. Set a to-hit and a damage on a spell the same way you do on an attack, tick Spell attack to have your proficiency and casting ability added for you, and the 🎲 beside the name throws them: one dialog, advantage and disadvantage where they mean something, DM only if you want it quiet, and whatever global modifiers you have running ride along and can be unticked for the one cast.',
+      },
+      {
+        kind: 'new',
+        text: 'Sharing mode gives you a spell as its entry. Click a spell and what goes to the chat is its level and school, the casting time, range, area and duration on one line, its components and materials, the save or attack, the damage, and the description underneath. Show the table what you are casting instead of reading it out.',
+      },
+      {
+        kind: 'fix',
+        text: 'Spell slots save. Typing how many slots you have at a level did nothing at all before: the box went back to zero the moment you looked away, and it wiped the number you had used along with it. Both numbers stick now, and the used count can no longer run past the slots you actually have.',
+      },
+      {
+        kind: 'new',
         text: 'You can take a message back out of the chat. Right-click one of your own lines and choose Delete message, and it goes for everyone at the table straight away. The DM can do it to any message, not just their own; the menu only appears on a line you are allowed to remove. Anything posted before today has nobody\'s name attached to it in a way the server can check, so those are the DM\'s to tidy up.',
       },
       {

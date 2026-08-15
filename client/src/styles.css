@@ -3533,9 +3533,12 @@ button.token-tile:hover {
   gap: 0.8rem;
 }
 
+/* Wider columns than the list of names needed: a spell folded open is a page
+   out of a spellbook, and eight named boxes across a 15rem card would each be
+   too narrow to read what is in them. */
 .spell-levels {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
   gap: 0.7rem;
   align-items: start;
 }
@@ -3562,22 +3565,108 @@ button.token-tile:hover {
   text-align: center;
 }
 
+/* --- one spell ---
+
+   A card like a piece of armour, because it holds the same kind of thing: a
+   handful of named boxes that have to read as one entry. Shut, it is the line
+   it always was; open, the entry is underneath. */
 .spell-row {
+  background: #10131a;
+  border: 1px solid #262b38;
+  border-radius: 8px;
+  padding: 0.35rem 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.spell-row.open {
+  border-color: #35406a;
+}
+
+.spell-head {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  margin-top: 0.25rem;
 }
 
-.spell-row input[type='text'],
-.spell-row input:not([type]) {
+.spell-name {
   flex: 1;
+  min-width: 0;
   padding: 0.2rem 0.35rem;
   font-size: 0.82rem;
 }
 
-.spell-row .del {
+.spell-head .del {
   padding: 0.1rem 0.35rem;
+}
+
+/* The caret is a hinge rather than a button: it does nothing to the character,
+   so it does not dress like the things that do. */
+.spell-open {
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  background: none;
+  border-color: transparent;
+  color: #8b90a0;
+}
+
+.spell-open:hover {
+  color: #e7e9ee;
+}
+
+/* What the spell is, while it is shut. Indented to the name it belongs to. */
+.spell-meta {
+  margin: 0.15rem 0 0;
+  padding-left: 0.2rem;
+  font-size: 0.7rem;
+  color: #8b90a0;
+}
+
+.spell-detail {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid #262b38;
+}
+
+/* Two across at this width, which keeps a label and its box on one line. The
+   card grows a column when the sheet has room for it. */
+.spell-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.35rem;
+}
+
+.spell-detail input,
+.spell-detail select,
+.spell-detail textarea {
+  padding: 0.2rem 0.3rem;
+  font-size: 0.8rem;
+}
+
+.spell-comp-boxes {
+  display: flex;
+  gap: 0.7rem;
+}
+
+/* The dice, and the one tick that says what rides on them. */
+.spell-dice {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.spell-dice>.fld {
+  flex: 1 1 6rem;
+}
+
+.spell-attack-bonus {
+  flex: 1 1 9rem;
+  white-space: nowrap;
+  /* Sits on the line of the dice buttons rather than under their captions. */
+  margin-bottom: 0.9rem;
 }
 
 .add-spell {

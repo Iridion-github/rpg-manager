@@ -28,12 +28,19 @@ const MAX_LENGTH = 500;
  * talk, and is capped separately.
  *
  * 500 is a sentence somebody types, and it is the right size for one. A shared
- * block is a section of a sheet - eighteen skills, or a feature and what it
- * does - and cutting one at 500 characters would post half a feature, which is
- * worse than not posting it. This is what the browser's own preview is measured
- * against, so nothing is ever silently trimmed on the way in.
+ * block is a section of a sheet - a feature and what it does, or a spell and
+ * its whole entry - and cutting one at 500 characters would post half a
+ * feature, which is worse than not posting it. This is what the browser's own
+ * preview is measured against, so nothing is ever silently trimmed on the way
+ * in.
+ *
+ * The longest one of these can honestly be is a spell: a description the sheet
+ * stores up to 2000 characters of, with its level, school, casting time, range
+ * and components over the top. The limit is that plus room to spare, so the
+ * longest spell anybody writes down arrives whole rather than stopping in the
+ * middle of the sentence that says what it does.
  */
-const MAX_SHARE_LENGTH = 1500;
+const MAX_SHARE_LENGTH = 3000;
 const MAX_SHARE_TITLE = 120;
 
 // A coin is just a two-sided die as far as the maths is concerned.

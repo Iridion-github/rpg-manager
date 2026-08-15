@@ -945,7 +945,8 @@ A full **D&D 5e** sheet, across three pages matching the printed one:
 - **Details** - age, height, weight, eyes, skin, hair, appearance, backstory,
   allies & organizations, additional features, treasure.
 - **Spellcasting** - spellcasting class and ability, save DC and attack bonus,
-  slots per level, and the spell list from cantrips to 9th with prepared marks.
+  slots per level, and the spell list from cantrips to 9th, each spell holding
+  its whole entry (see [Spells](#spells)).
 
 **Only raw values are stored.** Ability modifiers, proficiency bonus, save and
 skill bonuses, passive Perception, initiative, **Armor Class**, spell save DC
@@ -989,6 +990,40 @@ from that sheet open on Disadvantage, labelled *(Equipped armor)* in red. A
 default, not a rule: all three answers stay one click away, because whether a
 particular attempt was hampered is the table's call.
 
+### Spells
+A spell is its **whole entry**, not a name on a line. Each one carries a level,
+a school (one of the eight), a casting time, a range, an area, its components as
+V / S / M ticks with the material ones written out beside them, a duration, what
+it asks for as an **Attack/Save**, what it deals as **Damage/Effect**, and the
+description in full.
+
+Only the school is a closed list. *1 Action* is the usual casting time and
+*1 Action, plus a Bonus Action on later turns* is a real one, so every other box
+takes whatever the book says.
+
+Rows are **folded shut** by default: twelve boxes each across twenty spells is a
+page nobody can scan, and the question being asked of a spell list is usually
+"which one" rather than "what does it do". Shut, a spell shows its name, its
+prepared tick, its dice and one grey line of school, casting time, range and
+components. The arrow opens the entry. Open is per row and per screen, and is
+never saved: it is something somebody is doing, not a fact about the character.
+
+**Dice on a spell** work exactly as they do on an attack: a to-hit and a damage,
+each picked in the same dialog and stored as a spec rather than as text. The one
+addition is the **Spell attack** tick, which adds the character's spell attack
+bonus - proficiency plus their casting ability - to the to-hit. It is a flag and
+not a number, for the same reason nothing else derived is stored: the number
+moves when they level up, and a stored one would not.
+
+Changing a spell's **level** in its entry moves it to that level's card, which
+is what a spell prepared at a higher level needs and is cheaper than retyping
+it.
+
+**Spell slots** are two numbers per level, and *used* can never run past
+*slots*: lowering the total brings the used count down with it, on both halves,
+since a level with two slots and three of them spent would print a negative
+number of slots left.
+
 ### Rolling from the sheet
 Ability names, saving throw names and skill names are **clickable**. Clicking
 one asks whether to roll it - with an **Advantage** option (2d20, keep the
@@ -997,7 +1032,9 @@ character and what was rolled, so a DM rolling for a whole table can tell them
 apart. Cancelling does nothing at all: no request, no message.
 
 Each attack has its own 🎲 button before the name, which rolls its to-hit and
-damage together.
+damage together. So does each **spell**, next to its name on the spell page: the
+same dialog, the same global modifiers riding along with a tick each, and the
+character's spell attack bonus added to the to-hit where the spell asked for it.
 
 Skill proficiency cycles none → proficient → **expertise** (double proficiency),
 which is what the two circles on the paper sheet mean. Sheets from before this

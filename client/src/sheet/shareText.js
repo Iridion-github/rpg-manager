@@ -28,7 +28,10 @@ import {
   skillBonus,
   specAbilityBonus,
   spellAttackBonus,
+  spellComponents,
+  spellLevelName,
   spellSaveDc,
+  spellToHitBonus,
 } from './rules.js';
 
 // A separator that is neither of the dashes this project has sworn off, and
@@ -264,13 +267,56 @@ export function shareSpellcasting(sheet) {
 
 const ordinal = (level) => (level === 0 ? 'Cantrip' : `Level ${level}`);
 
-/** One spell: what it is, and whether it is prepared today. */
-export const shareSpell = (sheet, spell) =>
-  block(
+/**
+ * One spell, as the whole of its entry.
+ *
+ * This is the block sharing mode exists for. "Blight, 8th level" is not what
+ * anybody asks for at a table: the question is what it does to the thing
+ * standing in the cube, and the answer is four short lines and a paragraph. So
+ * every box on the spell that has something in it gets said, grouped the way a
+ * spell is written down - what it is, what it costs, what it needs, what it
+ * does - and the ones nobody filled in leave no gap.
+ */
+export function shareSpell(sheet, spell) {
+  const components = spellComponents(spell);
+  const material = clean(spell.materials);
+  const label = (name, value) => (clean(value) ? `${name} ${clean(value)}` : '');
+  return block(
     sheet,
     clean(spell.name) || 'Spell',
-    line([ordinal(Number(spell.level) || 0), spell.prepared ? 'prepared' : ''])
+    lines([
+      line([
+        spellLevelName(spell.level),
+        clean(spell.school),
+        spell.prepared ? 'prepared' : '',
+      ]),
+      line([
+        label('Casting time', spell.castingTime),
+        label('Range', spell.range),
+        label('Area', spell.area),
+        label('Duration', spell.duration),
+      ]),
+      // The materials in brackets after the letters they explain, which is
+      // where the book puts them and the only place M means anything.
+      components || material
+        ? `Components ${[components, material && `(${material})`].filter(Boolean).join(' ')}`
+        : '',
+      // What it does rides on the dice where there are dice, the way an
+      // attack's damage type does: "Damage 12d8 necrotic" is one fact said
+      // once, and a lone "Necrotic" on a line of its own is a riddle.
+      line([clean(spell.attackSave), spell.damage ? '' : clean(spell.damageEffect)]),
+      line([
+        spell.toHit ? `To hit ${notation(spell.toHit, spellToHitBonus(sheet, spell))}` : '',
+        spell.damage
+          ? `Damage ${notation(spell.damage, specAbilityBonus(sheet, spell.damage))}${
+            clean(spell.damageEffect) ? ` ${clean(spell.damageEffect)}` : ''
+          }`
+          : '',
+      ]),
+      clean(spell.description),
+    ]) || 'Nothing written down yet.'
   );
+}
 
 /** The slots at one level, which is a fact about the level and not a spell. */
 export function shareSpellSlots(sheet, level) {
