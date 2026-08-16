@@ -2,16 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { api } from './api.js';
 import { socket } from './socket.js';
 import DiceModal from './DiceModal.jsx';
+import { formatTime } from './dateFormat.js';
 
 // Treat "within this many pixels of the bottom" as following the conversation.
 const STICK_PX = 40;
 
-const time = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? ''
-    : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
+const time = (iso) => formatTime(iso);
 
 export default function Chat({ actor, offline }) {
   const [messages, setMessages] = useState([]);

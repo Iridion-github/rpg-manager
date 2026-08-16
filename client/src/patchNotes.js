@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'change',
+        text: 'Every date in the app is now written day/month/year, and every clock time on the 24-hour clock, whatever country your browser thinks you are in. When a campaign says it was created on 08/12/2026, that is the 8th of December for everybody at the table, not the 12th of August for half of them.',
+      },
+      {
         kind: 'new',
         text: 'Your images are reachable wherever you set a picture, not just on a scene. Creating or editing a token, the DM gets a Choose from my images button beside Choose from library; on a character sheet, My images sits beside the file picker. It is the same window with the same folders, so you can upload the portrait you have just found straight into the folder you are looking at without closing anything first.',
       },

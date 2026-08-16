@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { socket } from './socket.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import Avatar from './Avatar.jsx';
+import { formatDateTime } from './dateFormat.js';
 
 /**
  * Who is at this table - everyone's view, not just the DM's.
@@ -25,10 +26,7 @@ const STATUS_HINT = {
 };
 
 function lastLogin(iso) {
-  if (!iso) return 'Never';
-  const then = new Date(iso);
-  if (Number.isNaN(then.getTime())) return 'Never';
-  return then.toLocaleString();
+  return formatDateTime(iso) || 'Never';
 }
 
 export default function Players({ campaignId, actor, isDm, offline }) {

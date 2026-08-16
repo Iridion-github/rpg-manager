@@ -10,6 +10,8 @@
  * language has a word for it.
  */
 
+import { formatDateTime } from './dateFormat.js';
+
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 
 // Largest first, so the first one that fits is the one worth saying. Seconds
@@ -47,7 +49,5 @@ export function timeAgo(iso) {
 
 /** The same moment written out in full, for a tooltip beside the short form. */
 export function exactTime(iso) {
-  if (!iso) return '';
-  const then = new Date(iso);
-  return Number.isNaN(then.getTime()) ? '' : then.toLocaleString();
+  return formatDateTime(iso);
 }

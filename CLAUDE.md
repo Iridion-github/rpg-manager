@@ -61,3 +61,18 @@ error in case of data incompatibility.
 
 Don't force the dev to restart themselves the server and app, restart it yourself 
 once you're finished with the changes of the prompt.
+
+## 5. Every date on screen reads day/month/year
+
+Never month/day/year. The table has people from more than one country at it, and
+08/12/2026 meaning two different days depending on the reader is worse than any
+amount of verbosity.
+
+Format through `client/src/dateFormat.js` (`formatDate`, `formatTime`,
+`formatDateTime`) rather than calling `toLocaleDateString()` or
+`toLocaleString()` with no arguments: with no locale the browser's own is used,
+so the same build prints a different order to different players. Times go on the
+24-hour clock for the same reason.
+
+A date written out in words (`16 August 2026`, as the patch notes page does) is
+already unambiguous and is fine where there is room for it.

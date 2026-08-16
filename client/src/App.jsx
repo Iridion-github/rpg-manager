@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, setGmPassword, setSession, setCampaign } from './api.js';
 import { socket, reauthenticate, enterCampaign } from './socket.js';
 import { clear as clearHistory } from './history.js';
+import { formatDateTime } from './dateFormat.js';
 import Tabletop from './Tabletop.jsx';
 import Account from './Account.jsx';
 import Avatar from './Avatar.jsx';
@@ -504,7 +505,7 @@ export default function App() {
           <p className="offline-banner">
             Offline - the table's server is unreachable, so this is a read-only view of
             the last data your browser cached.
-            {lastSynced && ` Last synced ${new Date(lastSynced).toLocaleString()}.`}
+            {lastSynced && ` Last synced ${formatDateTime(lastSynced)}.`}
           </p>
         )}
 

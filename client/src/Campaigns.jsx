@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import CreateCampaignModal from './CreateCampaignModal.jsx';
+import { formatDate, formatDateTime } from './dateFormat.js';
 
 /**
  * The campaign directory - the first thing you see on arriving.
@@ -13,10 +14,7 @@ import CreateCampaignModal from './CreateCampaignModal.jsx';
  * enforces that rather than trusting this list to look away.
  */
 
-const dateOnly = (iso) => {
-  const d = new Date(iso || '');
-  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString();
-};
+const dateOnly = (iso) => formatDate(iso) || '-';
 
 // Relative time reads better than a date for "is anyone still running this?" -
 // "3 days ago" answers it, "12/04/2026" makes you do the arithmetic.
@@ -236,7 +234,7 @@ export default function Campaigns({ actor, currentId, onOpen, onChanged }) {
                 <span className="campaign-date created">{dateOnly(c.createdAt)}</span>
                 <span
                   className="campaign-date activity"
-                  title={c.lastActivityAt || 'No DM has opened it yet'}
+                  title={formatDateTime(c.lastActivityAt) || 'No DM has opened it yet'}
                 >
                   {sinceNow(c.lastActivityAt)}
                 </span>
