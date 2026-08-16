@@ -49,10 +49,11 @@ export default function PinWindow({
       isTop={isTop}
       onFocus={onFocus}
       onClose={onClose}
-      // Putting it away is closing it. A pin's card folded to a title bar
-      // hovering over the map would be a second, worse version of the pin that
-      // is already down there saying the same word.
-      onMinimize={onClose}
+      // No fold button. A pin's card rolled up to a title bar would be a worse
+      // copy of the pin already sitting under it saying the same word, so the
+      // only way to put it away is to close it - and one button that does that
+      // is enough.
+      foldable={false}
       controls={<div className="spacer" />}
     >
       <div className="pin-card" style={{ background: pin.background || '#161b22' }}>

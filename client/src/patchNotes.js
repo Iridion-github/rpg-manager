@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Pins can be rearranged without opening any of them. With the pins showing, right-click one and choose Move pins: the rest of the screen greys out, your cursor becomes a hand, and you can drag any pin of yours anywhere on the scene. The view still pans with a right-drag and zooms with the wheel, Ctrl+Z and Ctrl+Shift+Z take back and put again the moves you make in there, and nothing is saved until you press Confirm movements. Cancel movements puts every pin back where it started.',
+      },
+      {
+        kind: 'new',
         text: 'You can stick pins in a map. Right-click anywhere on the board and choose Create pin: give it a title, a colour and a page to write on, where you can put text, links and pictures. It goes exactly where you clicked, whether or not the scene has a grid. Pins are hidden until somebody asks for them: press Show pins in the Tools panel, under Measuring mode, and every pin you are allowed to see appears with its title beside it. Click one to open its card, which hangs over the pin and follows it as you scroll the map; several can be open at once, and opening one is yours alone - nobody else\'s board changes because you read something.',
       },
       {

@@ -833,6 +833,44 @@ export default function Tabletop({ actor, players, offline }) {
    * effect below.
    */
   const [surfaceBox, setSurfaceBox] = useState(null);
+  /**
+   * Moving pins mode: the map given over to putting pins where they belong.
+   *
+   * Its own mode rather than "drag a pin whenever it is showing", because the
+   * ordinary press on a pin is how you *read* it, and a board where reading a
+   * note sometimes nudged it three pixels off the doorway would be a board
+   * nobody could trust. Entered from a pin's own right-click menu, left by
+   * answering the bar it puts on screen, and while it is on the rest of the app
+   * is held still - see the `pins-moving` class in the stylesheet.
+   */
+  const [movingPins, setMovingPins] = useState(false);
+  /**
+   * Where pins have been dragged *so far*, by id: `{ x, y }` in map pixels.
+   *
+   * Nothing here has been written. A pin being placed passes through every
+   * wrong spot on the way to the right one, and the rest of the table should
+   * not watch that happen over the map they are playing on - the same bargain
+   * the grid draft makes. Confirm writes them; Cancel drops them.
+   */
+  const [pinMoves, setPinMoves] = useState({});
+  /**
+   * Undo and redo, for this sitting and nothing else.
+   *
+   * Deliberately not the app's own stack (history.js). Everything in that one
+   * is a change the table has already seen, and a Ctrl+Z in here must not reach
+   * past the pin you have just dragged to take back a token move from ten
+   * minutes ago. Both stacks are dropped when the mode ends, whichever way it
+   * ends - nothing in them survives to be reversed later, because by then the
+   * moves are either saved or forgotten.
+   */
+  const [pinUndo, setPinUndo] = useState({ done: [], undone: [] });
+  // Whether the moves are being written right now, so Confirm can't be pressed
+  // twice and the bar can say what it is doing.
+  const [savingPins, setSavingPins] = useState(false);
+  // The pin drag in flight. A ref for the reason the token drag is one: the
+  // pointer handlers must see the current values rather than a render's idea
+  // of them.
+  const pinDragRef = useRef(null);
 
   const isDm = actor?.role === 'dm';
   /**
@@ -1232,6 +1270,23 @@ export default function Tabletop({ actor, players, offline }) {
     },
     [actor, isDm, offline, players]
   );
+  /**
+   * Where a pin is *this frame*: where it has been dragged to, or where it is
+   * stored. The one place that answers the question, so the head on the map,
+   * the title beside it and the card hanging over it cannot end up in three
+   * different places.
+   */
+  const pinSpot = useCallback(
+    (pin) => pinMoves[pin.id] || { x: pin.x, y: pin.y },
+    [pinMoves]
+  );
+  // The pins on this board that are yours to move. Also what decides whether
+  // Move pins is offered at all: a mode in which nothing can be dragged is a
+  // mode worth not offering.
+  const movablePins = pins.filter((pin) => canEditPin(pin));
+  // Every pin as it stands this frame, which is what the titles dodge each
+  // other by. Built once rather than per pin, like tokensNow.
+  const pinsNow = pins.map((pin) => ({ id: pin.id, ...pinSpot(pin) }));
 
   // --- the ruler ---
   /**
@@ -1850,6 +1905,21 @@ export default function Tabletop({ actor, players, offline }) {
   }, [openPins.length, zoom, selectedId, focusTick]);
 
   /**
+   * Tell the whole page that pins are being placed.
+   *
+   * On the body rather than on this component's own root, because what the
+   * class holds still is mostly *not* in this component: the campaign's tabs,
+   * the chat down the side, the music. Everything the mode leaves alive - the
+   * map, the zoom, its own bar, and the cards already open - is written as an
+   * exception in the stylesheet, so there is one list to read rather than a
+   * `disabled` scattered across four files.
+   */
+  useEffect(() => {
+    document.body.classList.toggle('pins-moving', movingPins);
+    return () => document.body.classList.remove('pins-moving');
+  }, [movingPins]);
+
+  /**
    * Where a pin is on screen, as its card's anchor.
    *
    * The point of the pin is the spot it was stuck in; the head and the title
@@ -1859,9 +1929,13 @@ export default function Tabletop({ actor, players, offline }) {
    */
   const anchorFor = (pin) => {
     if (!surfaceBox) return null;
-    const tip = surfaceBox.top + pin.y * zoom;
+    // Where it is *now*, which mid-move is where it has been dragged to: a card
+    // left hanging over the spot its pin has just left would be a card about
+    // somewhere else.
+    const spot = pinSpot(pin);
+    const tip = surfaceBox.top + spot.y * zoom;
     return {
-      x: surfaceBox.left + pin.x * zoom,
+      x: surfaceBox.left + spot.x * zoom,
       top: tip - PIN_PX - PIN_LABEL_PX,
       bottom: tip + PIN_LABEL_PX,
     };
@@ -1935,6 +2009,180 @@ export default function Tabletop({ actor, players, offline }) {
       setError(e.message);
       throw e;
     }
+  }
+
+  // --- moving pins ---
+
+  /** Give the map over to placing pins. Nothing is written until Confirm. */
+  function startMovingPins() {
+    setMenu(null);
+    setError('');
+    setPinMoves({});
+    setPinUndo({ done: [], undone: [] });
+    setMovingPins(true);
+  }
+
+  /** And take it back, forgetting whatever was staged. */
+  function stopMovingPins() {
+    pinDragRef.current = null;
+    setPinMoves({});
+    setPinUndo({ done: [], undone: [] });
+    setMovingPins(false);
+    setSavingPins(false);
+  }
+
+  /**
+   * Where the pointer is on the map, in map pixels.
+   *
+   * Unzoomed, because that is what a pin's position is stored in - the one
+   * frame of reference every client shares whatever their zoom or window size.
+   */
+  function mapPointAt(e) {
+    const surf = surfaceRef.current;
+    if (!surf) return null;
+    const rect = surf.getBoundingClientRect();
+    return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom };
+  }
+
+  function onPinDragStart(e, pin) {
+    // Left button only; the right one is still the pan, which is the whole
+    // reason it stays available in here.
+    if (!movingPins || e.button !== 0 || !canEditPin(pin)) return;
+    const at = mapPointAt(e);
+    if (!at) return;
+    e.preventDefault();
+    // The press must not also reach the map underneath, which would read it as
+    // the start of a pan or a drawing gesture.
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const from = pinSpot(pin);
+    // Where inside the head it was grabbed, so the pin doesn't jump to put its
+    // point under the cursor the moment it is picked up.
+    pinDragRef.current = {
+      id: pin.id,
+      grabX: at.x - from.x,
+      grabY: at.y - from.y,
+      from,
+      to: from,
+    };
+  }
+
+  function onPinDragMove(e) {
+    const drag = pinDragRef.current;
+    if (!drag) return;
+    const at = mapPointAt(e);
+    if (!at) return;
+    e.stopPropagation();
+    // Clamped to the picture: a pin dragged off the edge of the map is a pin
+    // nobody can reach again, since the board only scrolls as far as its own
+    // corners.
+    const to = {
+      x: Math.round(clamp(at.x - drag.grabX, 0, mapW)),
+      y: Math.round(clamp(at.y - drag.grabY, 0, mapH)),
+    };
+    drag.to = to;
+    setPinMoves((moves) => ({ ...moves, [drag.id]: to }));
+  }
+
+  /**
+   * The end of a drag, and the one thing worth remembering about it.
+   *
+   * A press that moved nothing is not an action - it leaves no entry, so a
+   * Ctrl+Z after an accidental click takes back the last real move rather than
+   * appearing to do nothing.
+   */
+  function onPinDragEnd(e) {
+    const drag = pinDragRef.current;
+    if (!drag) return;
+    pinDragRef.current = null;
+    e.stopPropagation();
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer already gone - a cancel, or the button released off-window */
+    }
+    if (drag.to.x === drag.from.x && drag.to.y === drag.from.y) return;
+    setPinUndo((stack) => ({
+      done: [...stack.done, { id: drag.id, from: drag.from, to: drag.to }],
+      // A new move is a new branch of this sitting's history, exactly as it is
+      // in the app's own stack.
+      undone: [],
+    }));
+  }
+
+  /** Take back the last move of this sitting, and put it again. */
+  function undoPinMove() {
+    const last = pinUndo.done[pinUndo.done.length - 1];
+    if (!last) return;
+    setPinMoves((moves) => ({ ...moves, [last.id]: last.from }));
+    setPinUndo((stack) => ({ done: stack.done.slice(0, -1), undone: [...stack.undone, last] }));
+  }
+
+  function redoPinMove() {
+    const next = pinUndo.undone[pinUndo.undone.length - 1];
+    if (!next) return;
+    setPinMoves((moves) => ({ ...moves, [next.id]: next.to }));
+    setPinUndo((stack) => ({ done: [...stack.done, next], undone: stack.undone.slice(0, -1) }));
+  }
+
+  /**
+   * Write the moves, and only the ones that are actually moves.
+   *
+   * One request per pin rather than one for the lot, because that is the route
+   * that exists and each pin is its own record; they go one after another so a
+   * refusal names the pin it is about. Anything that fails stays staged with
+   * the mode still open - a save that half worked must not look like one that
+   * worked, and the placing you did is not something to throw away on our own
+   * initiative.
+   */
+  async function confirmPinMoves() {
+    if (!scene || savingPins) return;
+    const moved = pins.filter((pin) => {
+      const at = pinMoves[pin.id];
+      return at && (at.x !== pin.x || at.y !== pin.y);
+    });
+    if (!moved.length) {
+      stopMovingPins();
+      return;
+    }
+    setSavingPins(true);
+    setError('');
+    const failed = [];
+    for (const pin of moved) {
+      const at = pinMoves[pin.id];
+      try {
+        // Position only. The server merges an edit onto the stored pin, so what
+        // it says, who it is shared with and what colour it is all survive
+        // being dragged across the map.
+        const updated = await api.updatePin(scene.id, pin.id, { x: at.x, y: at.y });
+        setScenes((prev) =>
+          prev.map((s) =>
+            s.id === scene.id
+              ? { ...s, pins: (s.pins || []).map((p) => (p.id === updated.id ? updated : p)) }
+              : s
+          )
+        );
+      } catch (err) {
+        failed.push({ pin, message: err.message });
+      }
+    }
+    if (!failed.length) {
+      stopMovingPins();
+      return;
+    }
+    setSavingPins(false);
+    // Keep only what did not land, so pressing Confirm again retries exactly
+    // those and the ones that saved are not written a second time.
+    const stuck = new Set(failed.map((f) => f.pin.id));
+    setPinMoves((moves) =>
+      Object.fromEntries(Object.entries(moves).filter(([id]) => stuck.has(id)))
+    );
+    setPinUndo({ done: [], undone: [] });
+    setError(
+      failed.length === 1
+        ? `“${failed[0].pin.title}” could not be moved: ${failed[0].message}`
+        : `${failed.length} pins could not be moved. ${failed[0].message}`
+    );
   }
 
   // --- panning ---
@@ -2179,11 +2427,21 @@ export default function Tabletop({ actor, players, offline }) {
       // focus has slipped off its fields.
       if (tokenForm || confirmDelete) return;
       e.preventDefault();
+      // While pins are being placed the two keys mean *this sitting* and
+      // nothing else. Reaching past it into the app's own stack would take back
+      // somebody's token move in the middle of an unrelated job, and the moves
+      // being undone here are not in that stack anyway - none of them has been
+      // written yet.
+      if (movingPins) {
+        if (e.shiftKey) redoPinMove();
+        else undoPinMove();
+        return;
+      }
       runHistory(e.shiftKey ? 'redo' : 'undo');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [runHistory, tokenForm, confirmDelete]);
+  }, [runHistory, tokenForm, confirmDelete, movingPins, pinUndo]);
 
   /**
    * Escape ends the line you're drawing, and only that.
@@ -2251,6 +2509,24 @@ export default function Tabletop({ actor, players, offline }) {
       return;
     }
     /**
+     * While pins are being placed, the menu is about this sitting and nothing
+     * else: two items, both of them about what your own hand has just done.
+     *
+     * First of all the branches, because the mode owns the map - a menu
+     * offering to delete a token, or to edit the very pin you are dragging,
+     * would be a menu describing a different mode.
+     */
+    if (movingPins) {
+      e.preventDefault();
+      setMenu({
+        clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+        clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+        moving: true,
+      });
+      return;
+    }
+
+    /**
      * While measuring, the menu is about the ruler and nothing else.
      *
      * Before the token check, because the board is inert: offering to edit a
@@ -2294,7 +2570,12 @@ export default function Tabletop({ actor, players, offline }) {
     const pinEl = e.target.closest?.('.map-pin');
     if (pinEl) {
       const pin = pins.find((p) => p.id === pinEl.dataset.pinId);
-      if (!canEditPin(pin)) return;
+      if (!pin) return;
+      // Somebody else's pin still gets a menu when you have pins of your own on
+      // this board, because Move pins is about the board rather than about the
+      // pin that was clicked. With nothing of your own to move there is nothing
+      // to offer, and the browser's own menu is better than an empty one.
+      if (!canEditPin(pin) && !movablePins.length) return;
       e.preventDefault();
       setMenu({
         clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
@@ -2769,6 +3050,9 @@ export default function Tabletop({ actor, players, offline }) {
     // board you are reading, so the press that was meant to mark a spot must
     // never turn out to have picked up the ogre standing on it.
     if (measuring) return;
+    // Nor while pins are being placed: in that mode the hand is aimed at pins,
+    // and a token dragged along the way would be a move nobody made on purpose.
+    if (movingPins) return;
     if (!canMove(token)) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -3104,7 +3388,14 @@ export default function Tabletop({ actor, players, offline }) {
   return (
     <div className="tabletop">
       <div className="scene-bar">
-        <select value={selectedId} onChange={(e) => setActiveId(e.target.value)}>
+        {/* Held still while pins are being placed, along with everything else
+            outside the map: changing scene mid-move would leave the staged
+            positions describing a board nobody is looking at. */}
+        <select
+          value={selectedId}
+          disabled={movingPins}
+          onChange={(e) => setActiveId(e.target.value)}
+        >
           {scenes.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -3144,6 +3435,7 @@ export default function Tabletop({ actor, players, offline }) {
                 id="grid-on"
                 type="checkbox"
                 checked={gridOn}
+                disabled={movingPins}
                 onChange={(e) => patchScene({ gridOn: e.target.checked })}
                 title="Show the grid and snap tokens to it"
               />
@@ -3155,13 +3447,15 @@ export default function Tabletop({ actor, players, offline }) {
                 // Held still while a drawing tool is in hand or the ruler is
                 // out: setting a grid up needs the right-drag and the wheel,
                 // and in those modes both are already spoken for.
-                disabled={drawing || measuring}
+                disabled={drawing || measuring || movingPins}
                 title={
                   drawing
                     ? 'Put the drawing tool down to retune the grid'
                     : measuring
                       ? 'Leave measuring mode to retune the grid'
-                      : 'Size, colour, thickness and opacity of the grid'
+                      : movingPins
+                        ? 'Finish moving the pins to retune the grid'
+                        : 'Size, colour, thickness and opacity of the grid'
                 }
               >
                 Grid settings
@@ -3175,7 +3469,7 @@ export default function Tabletop({ actor, players, offline }) {
                 See SceneManager.jsx. */}
             <button
               onClick={() => setManaging(true)}
-              disabled={busy}
+              disabled={busy || movingPins}
               title="Scenes, their backgrounds, and your images"
             >
               Scene Manager
@@ -3185,6 +3479,26 @@ export default function Tabletop({ actor, players, offline }) {
       </div>
 
       {error && <p className="error">{error}</p>}
+
+      {/* The bar that says the map is being rearranged, and the only two ways
+          out of it. Fixed to the top of the window rather than sitting in this
+          column: everything else on screen is greyed out behind it, and the one
+          live thing in a still page belongs where the eye goes first. */}
+      {movingPins && (
+        <div className="pins-move-bar" role="dialog" aria-label="Moving pins">
+          <strong>Moving pins</strong>
+          <span className="hint">
+            Drag your own pins where you want them. Right-drag still moves the view, the wheel
+            still zooms, and Ctrl+Z takes back the last move.
+          </span>
+          <button type="button" onClick={stopMovingPins} disabled={savingPins}>
+            Cancel movements
+          </button>
+          <button type="button" className="confirm" onClick={confirmPinMoves} disabled={savingPins}>
+            {savingPins ? 'Saving…' : 'Confirm movements'}
+          </button>
+        </div>
+      )}
 
       {/* Wraps the scroller so the tools panel can be pinned to the map's own
           top-left corner. Inside the scroller it would be pinned to the *map*
@@ -3203,7 +3517,8 @@ export default function Tabletop({ actor, players, offline }) {
           onContextMenu={onContextMenu}
         >
           <div
-            className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}`}
+            className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}${movingPins ? ' moving-pins' : ''
+              }`}
             ref={surfaceRef}
             // A pointer that leaves the map has no cell to be in, so the leg in
             // flight stops following it rather than freezing at the edge.
@@ -3424,8 +3739,12 @@ export default function Tabletop({ actor, players, offline }) {
               just aren't yours to touch for the moment. */}
             {showPins &&
               pins.map((pin) => {
-                const side = pinLabelSide(pin, pins, zoom);
+                const spot = pinSpot(pin);
+                const side = pinLabelSide({ id: pin.id, ...spot }, pinsNow, zoom);
                 const mine = canEditPin(pin);
+                // Being placed right now: the one under the hand, and the ones
+                // it is standing beside waiting their turn.
+                const dragging = pinDragRef.current?.id === pin.id;
                 return (
                   <div
                     key={pin.id}
@@ -3433,13 +3752,33 @@ export default function Tabletop({ actor, players, offline }) {
                     // element was hit rather than which pin it stands for.
                     data-pin-id={pin.id}
                     className={`map-pin${drawing || measuring ? ' inert' : ''}${openPinIds.includes(pin.id) ? ' open' : ''
-                      }`}
-                    style={{ left: pin.x * zoom, top: pin.y * zoom }}
-                    title={mine ? `${pin.title} - right-click to edit` : pin.title}
-                    onPointerDown={(e) => e.stopPropagation()}
+                      }${movingPins ? (mine ? ' draggable' : ' locked') : ''}${dragging ? ' dragging' : ''}`}
+                    style={{ left: spot.x * zoom, top: spot.y * zoom }}
+                    title={
+                      movingPins
+                        ? mine
+                          ? `Drag ${pin.title} where you want it`
+                          : `${pin.title} - only the person who stuck it in can move it`
+                        : mine
+                          ? `${pin.title} - right-click to edit`
+                          : pin.title
+                    }
+                    // In the mode a press picks the pin up. Outside it, the
+                    // press is stopped from reaching the map - which would read
+                    // it as the start of a pan - and the click below opens the
+                    // card.
+                    onPointerDown={(e) =>
+                      movingPins ? onPinDragStart(e, pin) : e.stopPropagation()
+                    }
+                    onPointerMove={movingPins ? onPinDragMove : undefined}
+                    onPointerUp={movingPins ? onPinDragEnd : undefined}
+                    onPointerCancel={movingPins ? onPinDragEnd : undefined}
+                    // No card while placing: the press is a hand on the pin, and
+                    // a note that opened every time you moved one would be a
+                    // note in the way of the next move.
                     onClick={(e) => {
                       e.stopPropagation();
-                      openPin(pin.id);
+                      if (!movingPins) openPin(pin.id);
                     }}
                   >
                     <PinIcon color={pin.color || '#e5534b'} />
@@ -3541,8 +3880,11 @@ export default function Tabletop({ actor, players, offline }) {
               </button>
             </div>
             <div className="map-tools-body">
+              {/* Every button in the panel is held still while pins are being
+                  placed. The stylesheet greys the panel too; this is what stops
+                  a keyboard reaching them behind it. */}
               {isDm && (
-                <button onClick={toggleTurnMode} disabled={busy}>
+                <button onClick={toggleTurnMode} disabled={busy || movingPins}>
                   {turnMode ? 'Exit Turn mode' : 'Enter Turn mode'}
                 </button>
               )}
@@ -3560,6 +3902,7 @@ export default function Tabletop({ actor, players, offline }) {
                   }}
                   aria-pressed={shapeWindow}
                   className={shapeWindow ? 'active' : ''}
+                  disabled={movingPins}
                 >
                   {shapeWindow ? 'Standard mode' : 'Draw mode'}
                 </button>
@@ -3576,6 +3919,7 @@ export default function Tabletop({ actor, players, offline }) {
                 }}
                 aria-pressed={measureWindow}
                 className={measureWindow ? 'active' : ''}
+                disabled={movingPins}
               >
                 {measureWindow ? 'Standard mode' : 'Measuring mode'}
               </button>
@@ -3583,7 +3927,14 @@ export default function Tabletop({ actor, players, offline }) {
                   the map, so it can be left on while you play. Under the ruler
                   because it is the one button here that changes what you can
                   see rather than what a click does. */}
-              <button onClick={togglePins} aria-pressed={showPins} className={showPins ? 'active' : ''}>
+              <button
+                onClick={togglePins}
+                aria-pressed={showPins}
+                className={showPins ? 'active' : ''}
+                // Putting the pins away in the middle of arranging them would
+                // take the map out from under the mode.
+                disabled={movingPins}
+              >
                 {showPins ? 'Hide pins' : 'Show pins'}
               </button>
             </div>
@@ -3827,7 +4178,33 @@ export default function Tabletop({ actor, players, offline }) {
 
       {menu && (
         <div className="map-menu" ref={menuRef} style={{ left: menu.clientX, top: menu.clientY }}>
-          {menu.measure ? (
+          {menu.moving ? (
+            /* The whole menu while pins are being placed. Both items are about
+               your own hand in this sitting: nothing else on the map is yours
+               to touch until the bar at the top has been answered. */
+            <>
+              <button
+                disabled={!pinUndo.done.length}
+                onClick={() => {
+                  setMenu(null);
+                  undoPinMove();
+                }}
+                title="Take back the last move (Ctrl+Z)"
+              >
+                Undo
+              </button>
+              <button
+                disabled={!pinUndo.undone.length}
+                onClick={() => {
+                  setMenu(null);
+                  redoPinMove();
+                }}
+                title="Put it again (Ctrl+Shift+Z)"
+              >
+                Redo
+              </button>
+            </>
+          ) : menu.measure ? (
             /* Three offers, narrowing to what the hand actually landed on. On a
                point you get both it and its chain, rather than only the
                smaller act: the point is the harder thing to hit, so hitting it
@@ -3850,29 +4227,45 @@ export default function Tabletop({ actor, players, offline }) {
               )}
             </>
           ) : menu.pinId ? (
-            /* Two items, and both of them are the author's. Editing opens the
-               same form the pin was written in, filled in; deleting asks first,
-               like every other delete in the app. */
+            /* Editing and deleting are the author's alone. Move pins is not:
+               it is about arranging your own pins on this board, and which pin
+               the menu happened to open on says nothing about that. */
             <>
-              <button
-                onClick={() => {
-                  if (menuPin) setPinForm({ pin: menuPin });
-                  setMenu(null);
-                }}
-              >
-                Edit pin
-              </button>
-              <button
-                className="danger"
-                onClick={() => {
-                  if (menuPin) {
-                    setConfirmDelete({ kind: 'pin', id: menuPin.id, name: menuPin.title || 'Pin' });
-                  }
-                  setMenu(null);
-                }}
-              >
-                Delete pin
-              </button>
+              {canEditPin(menuPin) && (
+                <>
+                  <button
+                    onClick={() => {
+                      if (menuPin) setPinForm({ pin: menuPin });
+                      setMenu(null);
+                    }}
+                  >
+                    Edit pin
+                  </button>
+                  <button
+                    className="danger"
+                    onClick={() => {
+                      if (menuPin) {
+                        setConfirmDelete({
+                          kind: 'pin',
+                          id: menuPin.id,
+                          name: menuPin.title || 'Pin',
+                        });
+                      }
+                      setMenu(null);
+                    }}
+                  >
+                    Delete pin
+                  </button>
+                </>
+              )}
+              {movablePins.length > 0 && (
+                <button
+                  onClick={startMovingPins}
+                  title="Drag your pins where you want them, then confirm"
+                >
+                  Move pins
+                </button>
+              )}
             </>
           ) : menu.turnTokenId ? (
             <>

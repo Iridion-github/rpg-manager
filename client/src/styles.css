@@ -6532,3 +6532,109 @@ button.token-tile:hover {
 .rich-text img.ProseMirror-selectednode {
   outline: 2px solid #58a6ff;
 }
+
+/* --- moving pins ---
+   A mode with one job, so the page is reduced to it: the map, the zoom, the
+   bar below and any pin card already open stay live, and everything else is
+   dimmed and stops answering. Written against a class on <body> because most
+   of what has to be held still - the campaign's tabs, the chat, the music - is
+   nowhere near the component that owns the mode. */
+body.pins-moving .topbar,
+body.pins-moving .sidebar,
+body.pins-moving .map-tools,
+body.pins-moving .scene-bar>*:not(.zoom),
+body.pins-moving .scene-bar>.grid-ratio {
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Every floating window except a pin's own card: the turn tracker, the drawing
+   box, the ruler, the scene bench. A card is the one thing on screen that is
+   *about* a pin, so it stays, and its own header buttons keep working.
+   Dimmed with a filter rather than with opacity, because a window whose own
+   fader has been used carries an inline opacity that a stylesheet cannot
+   outrank - and a turn tracker left bright while everything round it greyed
+   would look like the one thing still live. */
+body.pins-moving .win:not(.win-anchored) {
+  filter: grayscale(0.8) opacity(0.45);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The bar itself. Fixed to the top of the window, above the greyed page and
+   under the dialogs, so a confirmation opened from anywhere still lands in
+   front of it. */
+.pins-move-bar {
+  position: fixed;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 455;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: min(46rem, calc(100vw - 2rem));
+  padding: 0.45rem 0.7rem;
+  background: #171b24;
+  border: 1px solid #3d5480;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.pins-move-bar strong {
+  white-space: nowrap;
+}
+
+/* The sentence between the name and the buttons. First thing to go when the
+   window is narrow: the two buttons are what the bar is for. */
+.pins-move-bar .hint {
+  min-width: 0;
+  color: #9aa0b2;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+  .pins-move-bar .hint {
+    display: none;
+  }
+}
+
+.pins-move-bar button {
+  white-space: nowrap;
+}
+
+/* The one that keeps what you did, marked so it isn't confused with the one
+   that throws it away. */
+.pins-move-bar button.confirm {
+  background: #24304a;
+  border-color: #3d5480;
+  color: #e7e9ee;
+}
+
+/* A hand over the whole board, because in this mode the board is something to
+   rearrange rather than something to read. */
+body.pins-moving .surface.moving-pins {
+  cursor: grab;
+}
+
+/* Except while the right button is dragging the view, which is still a pan. */
+body.pins-moving .surface-scroll.panning {
+  cursor: grabbing;
+}
+
+body.pins-moving .map-pin.draggable {
+  cursor: grab;
+}
+
+body.pins-moving .map-pin.draggable.dragging {
+  cursor: grabbing;
+}
+
+/* Somebody else's pin: visible, in the way of nothing, and not yours to pick
+   up. The server would refuse it anyway - see canEditPin. */
+body.pins-moving .map-pin.locked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

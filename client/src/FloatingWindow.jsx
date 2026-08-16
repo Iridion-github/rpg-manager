@@ -173,13 +173,15 @@ export default function FloatingWindow({
    */
   anchor = null,
   /**
-   * What the fold button does, when folding is not what is wanted.
+   * Whether this one can be rolled up to its title bar at all.
    *
-   * A window that belongs to something on screen has a better answer than a
-   * title bar floating over the map: put it away and leave the thing it came
-   * from where it is. Given one, the button calls this instead of rolling up.
+   * A window that belongs to a thing on screen has nothing to gain by folding:
+   * a pin's card rolled up is a title bar hovering over the map saying the word
+   * that is already written under the pin below it, and the only thing left to
+   * do with it is close it - which is what the ✕ beside it does. Two buttons
+   * that do the same thing is one button too many, so it isn't drawn.
    */
-  onMinimize,
+  foldable = true,
 }) {
   const [rect, setRect] = useState(() => firstRect(storageKey, defaultSize, cascade, minSize));
   // Whether this window has ever been dragged or resized. Only then is its box
@@ -390,22 +392,27 @@ export default function FloatingWindow({
             whatever font the system hands over, at optical sizes and baselines
             that have nothing to do with each other or with the ✕ beside them -
             a square glyph in particular lands small and sitting low. Two lines
-            of SVG buy an exact size and a true centre. */}
-        <button
-          type="button"
-          className="linky win-fold"
-          onClick={onMinimize || toggleRollUp}
-          aria-label={minimized ? 'Restore' : 'Minimise'}
-          title={minimized ? 'Restore' : 'Minimise'}
-        >
-          <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-            {minimized ? (
-              <rect x="0.7" y="0.7" width="8.6" height="8.6" rx="1" />
-            ) : (
-              <line x1="0.5" y1="5" x2="9.5" y2="5" />
-            )}
-          </svg>
-        </button>
+            of SVG buy an exact size and a true centre.
+
+            Absent on a window that says it cannot fold, the same way the ✕ is
+            absent on one nobody may close. */}
+        {foldable && (
+          <button
+            type="button"
+            className="linky win-fold"
+            onClick={toggleRollUp}
+            aria-label={minimized ? 'Restore' : 'Minimise'}
+            title={minimized ? 'Restore' : 'Minimise'}
+          >
+            <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+              {minimized ? (
+                <rect x="0.7" y="0.7" width="8.6" height="8.6" rx="1" />
+              ) : (
+                <line x1="0.5" y1="5" x2="9.5" y2="5" />
+              )}
+            </svg>
+          </button>
+        )}
         {/* A window nobody may close renders no way to close it, rather than a
             button that quietly does nothing. The turn tracker is one: it stands
             until the DM ends the fight. */}
