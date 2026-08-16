@@ -27,6 +27,14 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'new',
+        text: 'You can stick pins in a map. Right-click anywhere on the board and choose Create pin: give it a title, a colour and a page to write on, where you can put text, links and pictures. It goes exactly where you clicked, whether or not the scene has a grid. Pins are hidden until somebody asks for them: press Show pins in the Tools panel, under Measuring mode, and every pin you are allowed to see appears with its title beside it. Click one to open its card, which hangs over the pin and follows it as you scroll the map; several can be open at once, and opening one is yours alone - nobody else\'s board changes because you read something.',
+      },
+      {
+        kind: 'new',
+        text: 'Every pin says who may read it, and you can change your mind at any time: private is yours alone, shared goes to the people you tick, and public is the whole table including anyone who joins later. Only the person who stuck a pin in can edit it or take it down - right-click your own pin for Edit pin and Delete pin - and a pin nobody has given you is never sent to your browser at all.',
+      },
+      {
         kind: 'change',
         text: 'Every date in the app is now written day/month/year, and every clock time on the 24-hour clock, whatever country your browser thinks you are in. When a campaign says it was created on 08/12/2026, that is the 8th of December for everybody at the table, not the 12th of August for half of them.',
       },

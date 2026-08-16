@@ -118,16 +118,87 @@ function canSeeToken(role, token) {
 }
 
 /**
- * A scene as this role may see it.
+ * Is the person who stuck this pin in the map still at this table?
+ *
+ * Asked for the same reason notes.js asks it of an author: somebody can be
+ * removed from a campaign, and a campaign can be carried to another server as a
+ * file, where every id in it names nobody. Either leaves a pin on a map that no
+ * living person may edit or take down. See canEditPin, which is where that
+ * falls to the DM.
+ */
+const pinAuthorIsHere = (campaign, pin) =>
+  Boolean(pin?.ownerId) && Boolean(campaign?.members?.[pin.ownerId]);
+
+/**
+ * Who may change a pin, or take it off the map.
+ *
+ * Its author, and nobody else - not even the DM, however widely it is shared.
+ * Sharing a pin hands over something to read; it is not a transfer of the thing
+ * itself, which is the same promise a note makes.
+ *
+ * The one exception is a pin whose author is no longer here, which would
+ * otherwise stand on the map forever. Those fall to the DM's chair, exactly as
+ * an orphaned note does, and it costs the same thing there: the private pins of
+ * somebody who leaves become the DM's. That is the honest trade for not leaving
+ * litter on a board nobody can clear.
+ */
+function canEditPin(actor, pin, campaign, role) {
+  if (!actor || !pin) return false;
+  if (pin.ownerId && pin.ownerId === actor.userId) return true;
+  return role === 'dm' && !pinAuthorIsHere(campaign, pin);
+}
+
+/**
+ * Whether a pin on a map is one this person may read.
+ *
+ * The three answers a pin can give are a note's, and they mean the same things:
+ * private is its author's alone, shared is theirs plus the people named on it,
+ * public is the whole table's. What is *not* the same is the DM, who has no
+ * override here. A pin is somewhere to write down what you have worked out, and
+ * a private one that the person running the table can read is not private in
+ * the sense anybody means when they choose the word.
+ *
+ * Asked about the actor rather than about the role for exactly that reason:
+ * role says which chair you are in, and a pin does not care about the chair.
+ *
+ * **Enforced by not sending it**, exactly as a hidden token is: a pin filtered
+ * out of the scene is a pin whose text was never in anybody else's browser.
+ */
+function canSeePin(actor, pin, campaign, role) {
+  if (!actor || !pin) return false;
+  // Whoever may change it may obviously read it - and this is also what lets an
+  // author see their own private pin, which nothing below would.
+  if (canEditPin(actor, pin, campaign, role)) return true;
+  if (pin.visibility === 'public') return true;
+  if (pin.visibility === 'shared') {
+    return Array.isArray(pin.sharedWith) && pin.sharedWith.includes(actor.userId);
+  }
+  return false;
+}
+
+/**
+ * A scene as this person may see it.
  *
  * The whole scene goes out to every member - that is what the board is drawn
- * from - so this is the one place a token can be taken back out of it. Anything
- * that isn't a scene with tokens on it passes through untouched: a delete
+ * from - so this is the one place a token or a pin can be taken back out of it.
+ * Anything that isn't a scene carrying them passes through untouched: a delete
  * announcement carries an id and nothing else.
+ *
+ * A role *and* an actor, because the two layers answer to different things. A
+ * hidden token is hidden from a chair, and the DM sees every one of them. A pin
+ * is hidden from a person, and the DM is a person like anybody else - which is
+ * why this can no longer hand the whole scene straight back to them.
  */
-function sceneAsSeenBy(role, scene) {
-  if (role === 'dm' || !scene || !Array.isArray(scene.tokens)) return scene;
-  return { ...scene, tokens: scene.tokens.filter((token) => canSeeToken(role, token)) };
+function sceneAsSeenBy(role, scene, actor, campaign) {
+  if (!scene || typeof scene !== 'object') return scene;
+  let seen = scene;
+  if (role !== 'dm' && Array.isArray(scene.tokens)) {
+    seen = { ...seen, tokens: scene.tokens.filter((token) => canSeeToken(role, token)) };
+  }
+  if (Array.isArray(scene.pins)) {
+    seen = { ...seen, pins: scene.pins.filter((pin) => canSeePin(actor, pin, campaign, role)) };
+  }
+  return seen;
 }
 
 /**
@@ -274,6 +345,8 @@ module.exports = {
   isDm,
   canMoveToken,
   canSeeToken,
+  canSeePin,
+  canEditPin,
   sceneAsSeenBy,
   canViewSheet,
   canEditSheet,

@@ -61,6 +61,31 @@ function fit(r, minW = MIN_W, minH = MIN_H) {
 // right of the last, so a second one doesn't open exactly behind the first.
 const CASCADE_STEP = 30;
 
+// The gap between an anchored window and the thing it is anchored to, so the
+// two read as one object with a hinge rather than as a card lying on a marker.
+const ANCHOR_GAP = 12;
+
+/**
+ * Where an anchored window sits: over the thing it belongs to.
+ *
+ * Centred on it and above it, dropping below when there isn't the room - the
+ * same choice a token's nameplate makes, and for the same reason: a card that
+ * hangs off the top of the screen is a card with its first line missing.
+ *
+ * The anchor carries the marker's top and bottom rather than one y, because
+ * "above" means clear of its head and "below" means clear of its point, and the
+ * two are several pixels apart.
+ */
+function placeAt(anchor, size) {
+  const w = Math.min(size.w, window.innerWidth - 16);
+  const h = Math.min(size.h, window.innerHeight - 16);
+  const x = clamp(anchor.x - w / 2, 8, Math.max(8, window.innerWidth - w - 8));
+  const above = anchor.top - ANCHOR_GAP - h;
+  const y =
+    above >= 8 ? above : clamp(anchor.bottom + ANCHOR_GAP, 8, Math.max(8, window.innerHeight - h - 8));
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+}
+
 function savedRect(storageKey) {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
@@ -135,6 +160,26 @@ export default function FloatingWindow({
   cascade = 0,
   isTop = true,
   onFocus,
+  /**
+   * Pin this window to a spot on screen instead of letting it be dragged.
+   *
+   * `{ x, top, bottom }` in viewport coordinates - the thing it belongs to. An
+   * anchored window may still be resized, and it keeps that size; what it may
+   * not do is wander off the thing it is describing. A pin's card is the one
+   * that wants this: a card about *that* doorway which has been dragged across
+   * the map is a card about nothing.
+   *
+   * Recomputed by the caller as the map moves under it, so it rides along.
+   */
+  anchor = null,
+  /**
+   * What the fold button does, when folding is not what is wanted.
+   *
+   * A window that belongs to something on screen has a better answer than a
+   * title bar floating over the map: put it away and leave the thing it came
+   * from where it is. Given one, the button calls this instead of rolling up.
+   */
+  onMinimize,
 }) {
   const [rect, setRect] = useState(() => firstRect(storageKey, defaultSize, cascade, minSize));
   // Whether this window has ever been dragged or resized. Only then is its box
@@ -159,6 +204,17 @@ export default function FloatingWindow({
 
   // The box the window has when open - right now, or once unrolled.
   const openRect = minimized ? { ...rect, ...rolledUpSize } : rect;
+
+  /**
+   * Where it actually sits this frame.
+   *
+   * An anchored window's position is not state at all: it is worked out from
+   * the thing it belongs to, on every render, which is what lets the card ride
+   * along as the map is scrolled and zoomed under it. Only its size is
+   * remembered, and only its size can be dragged.
+   */
+  const anchored = Boolean(anchor);
+  const box = anchored ? placeAt(anchor, rect) : rect;
 
   // While rolled up the window is allowed to be far smaller than a sheet needs,
   // and every clamp - dragging, a browser resize - has to agree, or the next one
@@ -209,15 +265,17 @@ export default function FloatingWindow({
   function begin(next) {
     return (e) => {
       if (e.button !== 0) return;
-      gesture.current = { px: e.clientX, py: e.clientY, from: rect };
+      gesture.current = { px: e.clientX, py: e.clientY, from: box };
       setMode(next);
       setPlaced(true);
       e.preventDefault(); // a drag must not also start selecting text
     };
   }
 
-  // Pressing a button in the header is not a request to move the window.
+  // Pressing a button in the header is not a request to move the window - and
+  // nor is anything at all when the window is anchored to something.
   const beginMove = (e) => {
+    if (anchored) return;
     if (e.target.closest('button, input, select, textarea, a')) return;
     begin('move')(e);
   };
@@ -229,11 +287,15 @@ export default function FloatingWindow({
       if (!g) return;
       const dx = e.clientX - g.px;
       const dy = e.clientY - g.py;
-      setRect(
-        mode === 'move'
-          ? fit({ ...g.from, x: g.from.x + dx, y: g.from.y + dy }, minW, minH)
-          : stretch(g.from, mode, dx, dy, minSize)
-      );
+      if (mode === 'move') {
+        setRect(fit({ ...g.from, x: g.from.x + dx, y: g.from.y + dy }, minW, minH));
+        return;
+      }
+      const stretched = stretch(g.from, mode, dx, dy, minSize);
+      // An anchored window keeps its place while being resized: pulling its
+      // west edge was a request for a wider card, not for a card somewhere
+      // else. Where it goes is worked out from the anchor either way.
+      setRect((r) => (anchored ? { ...r, w: stretched.w, h: stretched.h } : stretched));
     };
     const stop = () => {
       gesture.current = null;
@@ -247,7 +309,7 @@ export default function FloatingWindow({
       window.removeEventListener('pointerup', stop);
       window.removeEventListener('pointercancel', stop);
     };
-  }, [mode, minW, minH]);
+  }, [mode, minW, minH, anchored]);
 
   // Shrinking the browser must not leave the window stranded off screen.
   useEffect(() => {
@@ -294,13 +356,13 @@ export default function FloatingWindow({
       ref={winRef}
       className={`win${mode ? ' win-busy' : ''}${mode === 'move' ? ' win-moving' : ''}${
         minimized ? ' win-min' : ''
-      }${isTop ? ' win-top' : ''}`}
+      }${isTop ? ' win-top' : ''}${anchored ? ' win-anchored' : ''}`}
       role="dialog"
       aria-label={title}
       // Anywhere in the window, not just the header: reaching for a field in the
       // one behind should bring it forward, the same as reaching for its bar.
       onPointerDown={onFocus}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex, opacity }}
+      style={{ left: box.x, top: box.y, width: box.w, height: box.h, zIndex, opacity }}
     >
       <div ref={headRef} className="win-head" onPointerDown={beginMove}>
         <strong className="win-title">{title}</strong>
@@ -332,7 +394,7 @@ export default function FloatingWindow({
         <button
           type="button"
           className="linky win-fold"
-          onClick={toggleRollUp}
+          onClick={onMinimize || toggleRollUp}
           aria-label={minimized ? 'Restore' : 'Minimise'}
           title={minimized ? 'Restore' : 'Minimise'}
         >

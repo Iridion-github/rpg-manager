@@ -4,6 +4,7 @@ import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
 import FloatingWindow from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import SharePanel from './SharePanel.jsx';
 
 // Same reasoning as the character sheets: typing a paragraph is one save, not
 // one save per keystroke.
@@ -379,127 +380,6 @@ function flagLabel(note, players) {
   return n === 1 ? '1 person' : `${n} people`;
 }
 
-/** The same answer at length, for the panel's own summary line. */
-function shareSummary(note, players) {
-  const visibility = note.visibility || 'private';
-  if (visibility === 'public') return 'Everyone at this table';
-  if (visibility !== 'shared') return 'Nobody but you';
-  const names = (note.sharedWith || [])
-    .map((id) => players.find((p) => p.id === id))
-    .filter(Boolean)
-    .map((p) => p.name);
-  if (names.length === 0) return 'Nobody yet';
-  if (names.length <= 3) return names.join(' · ');
-  return `${names.slice(0, 2).join(' · ')} and ${names.length - 2} others`;
-}
-
-/**
- * Who else may read this note: nobody, some people, or the whole table.
- *
- * Three states rather than the switch this replaced, because "shared" turned
- * out to be two different decisions wearing one word - handing the party a
- * letter they all just read, and telling one player what their character alone
- * noticed. A switch can only do the first.
- *
- * Public is deliberately not "everyone, as a list of names": it asks the
- * campaign who its members are at the moment somebody reads it, so a player who
- * joins next month gets the handouts the table already has rather than a
- * silence nobody remembers to fix.
- *
- * Folded away by default, like the character sheets' access panel and for the
- * same reason: it is consulted when a note changes hands, against a note that
- * is read every session. The summary is on the fold, so it never has to be
- * opened to be answered.
- */
-function SharePanel({ note, players, actor, onShare }) {
-  const visibility = note.visibility || 'private';
-  const sharedWith = note.sharedWith || [];
-  // Everybody at the table except whoever is doing the sharing - the author
-  // reads their own note by definition, so a tick beside their own name would
-  // be a control that changes nothing.
-  const others = players.filter((p) => p.id !== actor?.userId);
-
-  const choose = (next) => {
-    if (next === visibility) return;
-    // The list of names is kept when the answer moves off Shared, rather than
-    // emptied: switching to Public to read something out and back again should
-    // not cost the DM the three ticks they set before.
-    onShare({ visibility: next, sharedWith });
-  };
-
-  const toggle = (id) => {
-    const next = sharedWith.includes(id)
-      ? sharedWith.filter((x) => x !== id)
-      : [...sharedWith, id];
-    onShare({ visibility: 'shared', sharedWith: next });
-  };
-
-  return (
-    <details className="share-panel">
-      <summary>
-        Who can read this - <strong>{shareSummary(note, players)}</strong>
-      </summary>
-
-      <div className="share-choices">
-        {[
-          ['private', 'Private', 'Yours alone. Nobody else at the table sees it, DM or player.'],
-          ['shared', 'Shared with…', 'Only the people you tick below.'],
-          ['public', 'Public', 'Everyone here, and anyone who joins later.'],
-        ].map(([value, label, hint]) => (
-          <label key={value} className={`share-choice${visibility === value ? ' on' : ''}`}>
-            <input
-              type="radio"
-              name={`share-${note.id}`}
-              checked={visibility === value}
-              onChange={() => choose(value)}
-            />
-            <span>
-              <strong>{label}</strong>
-              <small>{hint}</small>
-            </span>
-          </label>
-        ))}
-      </div>
-
-      {/* Only under the answer it belongs to. A list of names beside a note
-          marked Public would invite the reading that those are the only
-          people who can see it. */}
-      {visibility === 'shared' &&
-        (others.length === 0 ? (
-          <p className="hint">
-            Nobody else is at this table yet. Add players under Campaigns → Members and they will
-            appear here.
-          </p>
-        ) : (
-          <ul className="share-list">
-            {others.map((p) => (
-              <li key={p.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={sharedWith.includes(p.id)}
-                    onChange={() => toggle(p.id)}
-                  />
-                  <span>{p.name}</span>
-                </label>
-                {/* A co-DM is a person at this table like any other, and gets
-                    no more of your prep than you give them. Saying which they
-                    are is worth one word. */}
-                {p.role === 'dm' && <span className="badge role gm">DM</span>}
-              </li>
-            ))}
-          </ul>
-        ))}
-
-      <p className="hint">
-        Whoever you share it with can read it and nothing more - a note is only ever edited by the
-        person who wrote it. Take it back and it disappears from their screen at once, even if they
-        have it open.
-      </p>
-    </details>
-  );
-}
-
 /**
  * One note, read or edited - the same thing whether it's in the side pane or
  * floating in a window of its own, so both render this rather than each growing
@@ -546,7 +426,15 @@ function NoteView({
       {/* In both places, unlike Delete: sharing is the question you ask *about*
           the note you are looking at, so it belongs beside it whether that is
           in the pane or in a window of its own. */}
-      <SharePanel note={note} players={players} actor={actor} onShare={onShare} />
+      <SharePanel
+        name={`share-${note.id}`}
+        visibility={note.visibility || 'private'}
+        sharedWith={note.sharedWith || []}
+        players={players}
+        actor={actor}
+        onShare={onShare}
+        footer="Whoever you share it with can read it and nothing more - a note is only ever edited by the person who wrote it. Take it back and it disappears from their screen at once, even if they have it open."
+      />
 
       <div className="note-controls">
         <div className="spacer" />

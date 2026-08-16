@@ -25,6 +25,8 @@ const {
   isDm,
   canMoveToken,
   canSeeToken,
+  canSeePin,
+  canEditPin,
   sceneAsSeenBy,
   canViewSheet,
   canEditSheet,
@@ -281,6 +283,10 @@ function sanitizeToken(body = {}, existing = {}) {
  * would hand a player the ambush in the trees the moment it was placed, which
  * is precisely the thing the switch promises it will not do.
  *
+ * Not even the DM gets the record whole any more. A scene also carries its pins,
+ * and a pin is private from *people* rather than from chairs - so the person
+ * running the table is filtered like everybody else. See canSeePin.
+ *
  * Every announcement on this router goes through here, so there is one place
  * that has to remember - a second one would eventually be the one that forgot.
  * `extra.token` is the newly placed token some actions carry beside the scene;
@@ -288,8 +294,7 @@ function sanitizeToken(body = {}, existing = {}) {
  */
 function announce(req, action, record, extra = {}) {
   broadcastPerActor(req, 'scenes:changed', (actor, role) => {
-    if (role === 'dm') return { action, record, ...extra };
-    const payload = { action, record: sceneAsSeenBy(role, record), ...extra };
+    const payload = { action, record: sceneAsSeenBy(role, record, actor, req.campaign), ...extra };
     if (payload.token && !canSeeToken(role, payload.token)) delete payload.token;
     return payload;
   });
@@ -419,13 +424,16 @@ function tokenIn(scene, tokenId) {
 // ---- Scenes ----
 
 // Both reads answer with the board as this person may see it: a token the DM
-// has hidden is not sent, rather than sent and left out of the drawing. See
-// canSeeToken - a monster the browser was told about is a monster anybody can
-// find in the dev tools.
+// has hidden is not sent, rather than sent and left out of the drawing, and
+// neither is a pin they were not given. See canSeeToken and canSeePin - a
+// monster the browser was told about is a monster anybody can find in the dev
+// tools, and so is somebody else's secret.
 router.get('/', async (req, res, next) => {
   try {
     const scenes = await store.list(scenesOf(req));
-    res.json(scenes.map((scene) => sceneAsSeenBy(req.campaignRole, scene)));
+    res.json(
+      scenes.map((scene) => sceneAsSeenBy(req.campaignRole, scene, req.actor, req.campaign))
+    );
   } catch (err) {
     next(err);
   }
@@ -435,7 +443,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const scene = await store.get(scenesOf(req), req.params.id);
     if (!scene) return res.status(404).json({ error: 'Not found' });
-    res.json(sceneAsSeenBy(req.campaignRole, scene));
+    res.json(sceneAsSeenBy(req.campaignRole, scene, req.actor, req.campaign));
   } catch (err) {
     next(err);
   }
@@ -1039,6 +1047,317 @@ router.delete('/:id/shapes/:shapeId', requireDrawer, async (req, res, next) => {
     });
     if (!scene) return res.status(404).json({ error: 'Not found' });
     announce(req, 'shape:delete', scene);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---- Pins ----
+
+/**
+ * Pins: a note stuck in the map at a spot, with a title on it.
+ *
+ * Where a shape marks out ground, a pin holds *writing* - what the innkeeper is
+ * called, what the party worked out about the well, the text of the plaque on
+ * the statue. So it is measured in map pixels rather than cells, and it ignores
+ * the grid entirely: a pin is stuck in the picture, at the exact point somebody
+ * clicked, and retuning the grid must not slide it off the doorway it names.
+ *
+ * Its content is a rich-text document rather than a string - links and pictures
+ * are half of what anybody wants to put in one - and that document arrives from
+ * a browser, which is why sanitizeDoc below rebuilds it rather than trusting it.
+ *
+ * Who may read one is canSeePin; who may change one is canEditPin. Both live in
+ * campaigns.js beside the token rules, because the filtering happens on the way
+ * out of every scene read and not only on the routes here.
+ */
+const PIN_VISIBILITIES = new Set(['private', 'shared', 'public']);
+
+// A ceiling, not a budget, exactly like MAX_SHAPES: a scene with a hundred pins
+// on it is a scene nobody can read anyway.
+const MAX_PINS = 100;
+const MAX_SHARED_WITH = 100; // a table, not a mailing list
+const MAX_PIN_TITLE = 80;
+// The most a pin's document may weigh once rebuilt. Generous for prose - it is
+// several thousand words - and nowhere near enough to post a picture as a data
+// URL, which is deliberate: pictures are uploaded and referenced by address.
+const MAX_PIN_CONTENT = 60000;
+// And how many nodes it may be made of, which is the other way a document can
+// be enormous. Checked while walking, so a pathological doc stops being copied
+// rather than being copied and then measured.
+const MAX_PIN_NODES = 800;
+
+/**
+ * The document model, written out as the list this server keeps.
+ *
+ * These are the nodes and marks the pin editor can produce (Tiptap's StarterKit,
+ * plus images) and each one's attributes are named rather than passed through.
+ * Anything else in the incoming document is dropped: an unknown node, an unknown
+ * mark, an attribute nobody asked for. That is what makes storing a document
+ * somebody else's browser will render safe to do - the shape that comes out of
+ * here is one this file wrote, not one a client sent.
+ */
+const PIN_NODES = new Map([
+  ['doc', []],
+  ['paragraph', []],
+  ['text', []],
+  ['hardBreak', []],
+  ['horizontalRule', []],
+  ['blockquote', []],
+  ['bulletList', []],
+  ['orderedList', ['start']],
+  ['listItem', []],
+  ['heading', ['level']],
+  ['codeBlock', ['language']],
+  ['image', ['src', 'alt', 'title']],
+]);
+
+const PIN_MARKS = new Map([
+  ['bold', []],
+  ['italic', []],
+  ['underline', []],
+  ['strike', []],
+  ['code', []],
+  ['link', ['href', 'target', 'rel']],
+]);
+
+/**
+ * An address a pin may point at, or '' for one it may not.
+ *
+ * Three kinds get through: http and https, mailto, and a path on this server -
+ * which is where an uploaded picture lives. Everything else is refused, and the
+ * one that matters is `javascript:`, since a link in a document that half the
+ * table will click is exactly where somebody would put one.
+ *
+ * A protocol-relative `//host/path` is refused with it: it reads like a path and
+ * behaves like an absolute address to somewhere else.
+ */
+function safeUrl(value) {
+  const url = String(value ?? '').trim();
+  if (!url || url.length > 2000) return '';
+  if (url.startsWith('//')) return '';
+  if (url.startsWith('/')) return url;
+  return /^(https?:|mailto:)/i.test(url) ? url : '';
+}
+
+/**
+ * Rebuild a pin's document, keeping only what is in the lists above.
+ *
+ * Rebuilt rather than checked, because a check has to be exhaustive to be worth
+ * anything and a rebuild cannot let through what it does not copy. Nodes it
+ * does not know are dropped whole; a link with an address it will not have
+ * loses the link and keeps the words; an image with nowhere to point is not an
+ * image at all and goes.
+ *
+ * `budget` is shared across the whole walk rather than counted per level, so
+ * depth cannot be traded for breadth.
+ */
+function sanitizeNode(node, budget) {
+  if (!node || typeof node !== 'object') return null;
+  const attrNames = PIN_NODES.get(node.type);
+  if (!attrNames) return null;
+  if (budget.left <= 0) return null;
+  budget.left -= 1;
+
+  const out = { type: node.type };
+
+  if (node.type === 'text') {
+    const text = String(node.text ?? '');
+    if (!text) return null;
+    out.text = text;
+  }
+
+  const attrs = {};
+  for (const name of attrNames) {
+    const value = node.attrs?.[name];
+    if (value === undefined || value === null) continue;
+    if (name === 'src') {
+      const src = safeUrl(value);
+      if (!src) return null; // an image pointing nowhere is not an image
+      attrs.src = src;
+    } else if (name === 'level') {
+      attrs.level = clamp(Math.round(num(value, 1)), 1, 6);
+    } else if (name === 'start') {
+      attrs.start = clamp(Math.round(num(value, 1)), 1, 9999);
+    } else {
+      attrs[name] = String(value).slice(0, 500);
+    }
+  }
+  if (Object.keys(attrs).length) out.attrs = attrs;
+
+  const marks = [];
+  for (const mark of Array.isArray(node.marks) ? node.marks : []) {
+    const markAttrs = PIN_MARKS.get(mark?.type);
+    if (!markAttrs) continue;
+    const kept = { type: mark.type };
+    if (mark.type === 'link') {
+      const href = safeUrl(mark.attrs?.href);
+      if (!href) continue; // the words stay; the link doesn't
+      // Opened in a tab of its own, and told not to hand this page over with
+      // it. Set here rather than taken from the client so it is true of every
+      // link in every pin, including ones written by an older browser.
+      kept.attrs = { href, target: '_blank', rel: 'noopener noreferrer nofollow' };
+    }
+    marks.push(kept);
+  }
+  if (marks.length) out.marks = marks;
+
+  const content = [];
+  for (const child of Array.isArray(node.content) ? node.content : []) {
+    const kept = sanitizeNode(child, budget);
+    if (kept) content.push(kept);
+  }
+  if (content.length) out.content = content;
+
+  return out;
+}
+
+/** An empty document: what a pin with nothing written in it holds. */
+const emptyDoc = () => ({ type: 'doc', content: [{ type: 'paragraph' }] });
+
+function sanitizeDoc(value) {
+  const doc = sanitizeNode(value, { left: MAX_PIN_NODES });
+  if (!doc || doc.type !== 'doc' || !doc.content?.length) return emptyDoc();
+  if (JSON.stringify(doc).length > MAX_PIN_CONTENT) {
+    throw new HttpError(413, 'That pin is holding more than a pin can hold. Try shortening it.');
+  }
+  return doc;
+}
+
+/** Ids of people a pin is shared with - deduped, and shaped like our ids. */
+function pickSharedWith(source) {
+  if (!Array.isArray(source)) return [];
+  const out = [];
+  for (const raw of source.slice(0, MAX_SHARED_WITH)) {
+    const id = String(raw ?? '');
+    // Not checked against the campaign's members, for the reason notes.js gives
+    // at the same spot: every route here runs behind attachCampaign, so a
+    // leftover id is dead weight rather than a way in - and keeping it means
+    // somebody added back to the table gets their pins back.
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || out.includes(id)) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Everything the author of a pin decides about it.
+ *
+ * `sharedWith` is kept whatever the visibility says, exactly as a note's is: the
+ * list is a decision about people and the visibility is a decision about whether
+ * it is in force, so passing through Private must not cost somebody the names
+ * they picked.
+ */
+function sanitizePin(body = {}, existing = {}) {
+  // Map pixels, and clamped to a range no map exceeds rather than to this map's
+  // own size: a scene can be given a smaller picture afterwards, and a pin that
+  // was quietly rewritten to the new edge would be a pin that had moved.
+  const coord = (value, fallback) => Math.round(clamp(num(value, fallback), -20000, 20000));
+  return {
+    title: String(body.title ?? existing.title ?? '').trim().slice(0, MAX_PIN_TITLE) || 'Pin',
+    x: coord(body.x, existing.x ?? 0),
+    y: coord(body.y, existing.y ?? 0),
+    // The head of the pin on the map, and the paper the open one is written on.
+    color: hexOr(body.color ?? existing.color, '#e5534b'),
+    background: hexOr(body.background ?? existing.background, '#161b22'),
+    content: sanitizeDoc(body.content ?? existing.content),
+    visibility: PIN_VISIBILITIES.has(body.visibility)
+      ? body.visibility
+      : PIN_VISIBILITIES.has(existing.visibility)
+        ? existing.visibility
+        : 'private',
+    sharedWith: pickSharedWith(body.sharedWith ?? existing.sharedWith),
+  };
+}
+
+// Sticking a pin in the map is for the people playing, like drawing on it. A
+// spectator reads the board.
+function requirePinner(req, res, next) {
+  if (req.campaignRole === 'dm' || req.campaignRole === 'player') return next();
+  return res.status(403).json({ error: 'Only the people playing at this table can add pins.' });
+}
+
+/**
+ * Find a pin - and answer 404 for one this person may not read.
+ *
+ * Deliberately the same answer for "no such pin" and "not yours to see": a 403
+ * on a private pin would confirm that something is stuck in the map at that
+ * spot, which is precisely what the setting is for.
+ */
+function pinIn(req, scene, pinId) {
+  const pin = (scene.pins || []).find((p) => p.id === pinId);
+  if (!pin || !canSeePin(req.actor, pin, req.campaign, req.campaignRole)) {
+    throw new HttpError(404, 'Pin not found');
+  }
+  return pin;
+}
+
+function requireOwnPin(req, pin) {
+  if (!canEditPin(req.actor, pin, req.campaign, req.campaignRole)) {
+    throw new HttpError(403, 'Only the person who made a pin can change it.');
+  }
+}
+
+router.post('/:id/pins', requirePinner, async (req, res, next) => {
+  try {
+    const pin = {
+      id: crypto.randomUUID(),
+      ...sanitizePin(req.body),
+      // Read off the session, never off the request: whose pin this is decides
+      // both who may edit it and who may read a private one, so it is not
+      // something the caller gets to claim.
+      ownerId: req.actor?.userId || null,
+      createdAt: new Date().toISOString(),
+    };
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const pins = current.pins || [];
+      if (pins.length >= MAX_PINS) {
+        throw new HttpError(409, 'This scene is holding as many pins as it can. Clear a few first.');
+      }
+      return { ...current, pins: [...pins, pin] };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'pin:add', scene);
+    res.status(201).json(pin);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:id/pins/:pinId', requirePinner, async (req, res, next) => {
+  try {
+    let updated = null;
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = pinIn(req, current, req.params.pinId);
+      requireOwnPin(req, existing);
+      // The id, the hand that stuck it in and when are not fields of the edit.
+      updated = {
+        ...existing,
+        ...sanitizePin(req.body, existing),
+        id: existing.id,
+        ownerId: existing.ownerId ?? null,
+        createdAt: existing.createdAt ?? null,
+      };
+      return { ...current, pins: current.pins.map((p) => (p.id === updated.id ? updated : p)) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'pin:update', scene);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/:id/pins/:pinId', requirePinner, async (req, res, next) => {
+  try {
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      const existing = pinIn(req, current, req.params.pinId);
+      requireOwnPin(req, existing);
+      return { ...current, pins: current.pins.filter((p) => p.id !== existing.id) };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'pin:delete', scene);
     res.status(204).end();
   } catch (err) {
     next(err);

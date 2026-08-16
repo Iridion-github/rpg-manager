@@ -153,7 +153,7 @@ router.put('/:id', async (req, res, next) => {
       if (scene) {
         broadcastPerActor(req, 'scenes:changed', (actor, role) => ({
           action: 'token:update',
-          record: sceneAsSeenBy(role, scene),
+          record: sceneAsSeenBy(role, scene, actor, req.campaign),
         }));
       }
     }

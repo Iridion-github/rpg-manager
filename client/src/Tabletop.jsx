@@ -11,6 +11,9 @@ import PasteTokenModal from './PasteTokenModal.jsx';
 import SceneManager from './SceneManager.jsx';
 import ShapeTools from './ShapeTools.jsx';
 import MeasureTools from './MeasureTools.jsx';
+import PinIcon from './PinIcon.jsx';
+import PinModal from './PinModal.jsx';
+import PinWindow from './PinWindow.jsx';
 import GridSettings from './GridSettings.jsx';
 import {
   cellCentre,
@@ -170,6 +173,46 @@ function plateSide(token, pos, others, minRow, maxRow) {
   return taken(pos.y + size) ? 'above' : 'below';
 }
 
+/**
+ * How much screen a pin takes up, and how much room its title needs.
+ *
+ * Screen pixels rather than map ones, because a pin does not scale with the
+ * board: it is a marker *on* the picture, like a nameplate, and a pin that
+ * shrank to nothing as you zoomed out would be a pin you could no longer find.
+ * These four numbers are the same ones the stylesheet draws with, and they are
+ * here because the code that decides which side the title goes on has to know
+ * how much room the title takes.
+ */
+const PIN_PX = 30; // the head and its point, tip to top
+const PIN_LABEL_PX = 20; // the title above or below it
+// How near two pins have to be, side to side, for one's title to be in the
+// other's way. Wider than a pin, because a title is wider than a pin.
+const PIN_CLEAR_PX = 90;
+
+/**
+ * Which side of its pin the title sits on.
+ *
+ * Above by default, for the reason a nameplate is above its token: a caption
+ * that wandered as the board filled up would be a caption nobody could find
+ * twice. It moves for the two reasons a nameplate moves - the edge of the
+ * board, and something else already there - and here the something else is
+ * another pin's own head, which a title landing on top of would hide.
+ *
+ * Measured in screen pixels at the current zoom, since that is what both the
+ * pin and the title are sized in.
+ */
+function pinLabelSide(pin, others, zoom) {
+  const top = pin.y * zoom - (PIN_PX + PIN_LABEL_PX);
+  if (top < 0) return 'below';
+  const covered = others.some((other) => {
+    if (other.id === pin.id) return false;
+    if (Math.abs(other.x - pin.x) * zoom > PIN_CLEAR_PX) return false;
+    const above = (pin.y - other.y) * zoom;
+    return above > 0 && above < PIN_PX + PIN_LABEL_PX;
+  });
+  return covered ? 'below' : 'above';
+}
+
 // How near a right-click has to land, in cells, to be about a measurement
 // rather than about the bare map - and, inside that, to be about one of its
 // points rather than the line between two. The point radius is the smaller
@@ -195,6 +238,20 @@ const TURNS_OPACITY_KEY = 'rpg:turns-opacity';
 // every time the map moves.
 const TURNS_MIN = { w: 190, h: 120 };
 
+
+/**
+ * Pin cards sit in their own band, below the popped-out notes (402-440) and the
+ * character sheets (40 up).
+ *
+ * A band each rather than one shared range, for the reason Notes.jsx gives at
+ * the same spot: neither component can see the other's windows, so a shared
+ * range would let two of them hold the same z with no way to bring the one
+ * behind forward. Everything here stays under the map's right-click menu (450)
+ * and the dialogs (500), so choosing Edit pin never opens a form behind the
+ * card it was chosen on.
+ */
+const PIN_Z_BASE = 300;
+const PIN_Z_CEILING = 340;
 
 // Zoom bounds shared by the slider and the wheel, so the two can't disagree.
 const ZOOM_MIN = 0.4;
@@ -226,12 +283,12 @@ const PING_MS = 2400;
 // Roughly the menu's own size, used only to stop it opening past the edge of
 // the window. Approximate on purpose - measuring it properly means rendering it
 // somewhere invisible first, for a few pixels nobody will ever notice. Sized
-// for the longest of the three menus, which is the map's own: six items and a
-// rule, once there is something on the bench to spawn. The shorter ones open a
-// little further from the bottom edge than they strictly need to, which nobody
-// has ever complained about.
+// for the longest of the four menus, which is the map's own: seven items and a
+// rule, once there is something on the bench to spawn and a pin to be made. The
+// shorter ones open a little further from the bottom edge than they strictly
+// need to, which nobody has ever complained about.
 const MENU_W = 140;
-const MENU_H = 182;
+const MENU_H = 206;
 
 /**
  * One shape on the board: a fill, an outline, and its name if it was given one.
@@ -739,6 +796,44 @@ export default function Tabletop({ actor, players, offline }) {
   // set from somebody replaces the last one they sent rather than joining it.
   const [remoteMeasures, setRemoteMeasures] = useState({});
 
+  // --- pins ---
+  /**
+   * Whether pins are on screen at all.
+   *
+   * Off by default and off again next time the map is opened, exactly like the
+   * drawing box and the ruler: a pin is something you go and look at, and a
+   * board wearing every note anybody has ever stuck in it is a board you cannot
+   * see. This is not a mode in the sense those two are - it takes nothing away
+   * from the map, and you can play with the pins showing.
+   */
+  const [showPins, setShowPins] = useState(false);
+  /**
+   * Which pins *this person* has opened, oldest first.
+   *
+   * Local, and deliberately not shared with anybody. Opening a pin is reading
+   * it, and reading is not a move: somebody else opening the same pin changes
+   * nothing on your screen, which is exactly unlike a token. The order is the
+   * order they were last reached for, which is what paints them in a sensible
+   * stack.
+   */
+  const [openPinIds, setOpenPinIds] = useState([]);
+  // The pin form: `{ at }` for a new pin at that point on the map, or `{ pin }`
+  // for one being changed. Held here rather than in the modal for the reason
+  // the token form is - the menu that decided it is closed by the time the
+  // form opens, so the choice has to outlive it.
+  const [pinForm, setPinForm] = useState(null);
+  /**
+   * Where the map's own top-left corner is on screen, or null.
+   *
+   * An open pin's card hangs over its pin, and a pin is at a point on a picture
+   * that scrolls and zooms under the window. So the card's anchor has to be
+   * worked out in viewport coordinates, which means knowing where the picture
+   * currently is - measured, because scrolling moves it without changing
+   * anything React knows about. Only measured while a card is open; see the
+   * effect below.
+   */
+  const [surfaceBox, setSurfaceBox] = useState(null);
+
   const isDm = actor?.role === 'dm';
   /**
    * The scene on screen, which is not merely "the one whose id is selected".
@@ -845,6 +940,11 @@ export default function Tabletop({ actor, players, offline }) {
     // what you're doing, not about which board you're looking at.
     setSelectedShapeId(null);
     setSketch(null);
+    // Same for an open pin's card, which is anchored to a spot on a map that is
+    // no longer on screen. Whether pins are *shown* is like the tool in your
+    // hand and stays as you left it.
+    setOpenPinIds([]);
+    setPinForm(null);
   }, [selectedId]);
 
   // Pings outlive the component if nobody stops them: each one is a pending
@@ -1101,6 +1201,37 @@ export default function Tabletop({ actor, players, offline }) {
   // offers it can name a real number. Declared below canEditShape rather than
   // beside the list it filters, because that's the order it can be read in.
   const clearableShapes = shapes.filter((s) => canEditShape(s));
+
+  // --- pins ---
+  // Sticking one in is for the people playing, like drawing: a spectator reads
+  // the board. What may be done to one afterwards is a different question, and
+  // a stricter one - see canEditPin.
+  const canPin = !offline && (isDm || actor?.role === 'player');
+  /**
+   * Every pin on this board that this browser was told about.
+   *
+   * Which is not every pin on it. A pin nobody has given you is filtered out by
+   * the server on the way into the scene, so there is nothing here to hide and
+   * nothing to be found by opening the dev tools. See canSeePin on the server.
+   */
+  const pins = scene?.pins || [];
+  /**
+   * Yours if you stuck it in, and nobody else's - not even the DM's.
+   *
+   * The one exception is a pin whose author has left the table, which the DM
+   * inherits so that it can be taken down; the server keeps the same rule and
+   * has the last word (canEditPin in campaigns.js). Here it only decides which
+   * items a right-click offers.
+   */
+  const canEditPin = useCallback(
+    (pin) => {
+      if (!pin || offline) return false;
+      if (pin.ownerId && pin.ownerId === actor?.userId) return true;
+      const authorHere = Boolean(pin.ownerId) && players.some((p) => p.id === pin.ownerId);
+      return isDm && !authorHere;
+    },
+    [actor, isDm, offline, players]
+  );
 
   // --- the ruler ---
   /**
@@ -1672,6 +1803,140 @@ export default function Tabletop({ actor, players, offline }) {
     }
   }
 
+  // --- pins ---
+
+  /**
+   * The cards on screen right now, in the order they were reached for.
+   *
+   * Resolved from the live scene rather than kept as records: a pin can be
+   * changed by its author or taken back from you while you are reading it, and
+   * an id that no longer resolves is a card that closes itself. That is the
+   * whole of "unsharing takes effect at once" on this screen.
+   */
+  const openPins = openPinIds.map((id) => pins.find((p) => p.id === id)).filter(Boolean);
+
+  /**
+   * Keep track of where the map is on screen while any card is open.
+   *
+   * Scrolling the board moves the picture without changing a thing React knows
+   * about, so the card over a pin would stay where it was while the pin slid
+   * away underneath. Measured on every scroll, and only while there is a card
+   * to place: the listener is not worth having on a map nobody has opened a pin
+   * on. Compared before it is stored, so a scroll that moved nothing - the map
+   * is already against its edge - is not a render.
+   */
+  useLayoutEffect(() => {
+    if (!openPins.length) {
+      setSurfaceBox(null);
+      return undefined;
+    }
+    const measure = () => {
+      const el = surfaceRef.current;
+      if (!el) return;
+      const { left, top } = el.getBoundingClientRect();
+      setSurfaceBox((prev) => (prev && prev.left === left && prev.top === top ? prev : { left, top }));
+    };
+    measure();
+    const scroller = scrollRef.current;
+    scroller?.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      scroller?.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+    };
+    // The zoom and the tick are in here because both move the picture under the
+    // cards without a scroll event: one resizes the surface, the other is what
+    // a focus pull bumps once it has scrolled somewhere new.
+  }, [openPins.length, zoom, selectedId, focusTick]);
+
+  /**
+   * Where a pin is on screen, as its card's anchor.
+   *
+   * The point of the pin is the spot it was stuck in; the head and the title
+   * stand above it. So the card is told to clear `top` when there is room above
+   * and `bottom` when there isn't, and both allow for the title, which sits on
+   * whichever side the head does not need.
+   */
+  const anchorFor = (pin) => {
+    if (!surfaceBox) return null;
+    const tip = surfaceBox.top + pin.y * zoom;
+    return {
+      x: surfaceBox.left + pin.x * zoom,
+      top: tip - PIN_PX - PIN_LABEL_PX,
+      bottom: tip + PIN_LABEL_PX,
+    };
+  };
+
+  /**
+   * Open a pin, or bring an already-open one to the front.
+   *
+   * The card in front is left alone rather than re-listed, because this is also
+   * what a press anywhere inside a card calls: resizing one would otherwise
+   * rewrite the list on every pointer event of the drag.
+   */
+  function openPin(id) {
+    setOpenPinIds((ids) => (ids[ids.length - 1] === id ? ids : [...ids.filter((x) => x !== id), id]));
+  }
+
+  const closePin = (id) => setOpenPinIds((ids) => ids.filter((x) => x !== id));
+
+  /**
+   * Show the pins, or put them away.
+   *
+   * Hiding them closes every card with them. A card floating over a board with
+   * no pin under it would be a note about a place nothing marks any more.
+   */
+  function togglePins() {
+    setShowPins((on) => {
+      if (on) setOpenPinIds([]);
+      return !on;
+    });
+  }
+
+  /**
+   * Stick a new pin in, or save the changes to one.
+   *
+   * Not wrapped in guard(): the form is open and an error belongs in front of
+   * whoever is still looking at it, which is what throwing does. Creating one
+   * turns the pins on, since a pin somebody has just written and cannot see
+   * would look exactly like a pin that failed to save.
+   */
+  async function submitPin(data) {
+    if (!scene) return;
+    if (pinForm?.pin) {
+      const updated = await api.updatePin(scene.id, pinForm.pin.id, data);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id
+            ? { ...s, pins: (s.pins || []).map((p) => (p.id === updated.id ? updated : p)) }
+            : s
+        )
+      );
+      return;
+    }
+    const created = await api.addPin(scene.id, data);
+    setScenes((prev) =>
+      prev.map((s) => (s.id === scene.id ? { ...s, pins: [...(s.pins || []), created] } : s))
+    );
+    setShowPins(true);
+  }
+
+  async function removePin(pinId) {
+    setError('');
+    try {
+      await api.deletePin(scene.id, pinId);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id ? { ...s, pins: (s.pins || []).filter((p) => p.id !== pinId) } : s
+        )
+      );
+      closePin(pinId);
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
+
   // --- panning ---
   // Right-drag anywhere on the map moves your view, so you don't have to reach
   // for the scrollbars. Tokens are excluded: a right-click on one keeps its
@@ -2021,6 +2286,24 @@ export default function Tabletop({ actor, players, offline }) {
       return;
     }
 
+    // A pin gets a menu about *that pin*, and only for the person whose pin it
+    // is: sharing one hands over something to read, and a menu offering to edit
+    // or delete somebody else's note would be a menu of things you may not do.
+    // Before the token check, because a pin is drawn over the board and is what
+    // the hand was aiming at when it landed on one.
+    const pinEl = e.target.closest?.('.map-pin');
+    if (pinEl) {
+      const pin = pins.find((p) => p.id === pinEl.dataset.pinId);
+      if (!canEditPin(pin)) return;
+      e.preventDefault();
+      setMenu({
+        clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+        clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+        pinId: pin.id,
+      });
+      return;
+    }
+
     // A token gets a menu about *that token* rather than about the map under
     // it. The DM gets one on any token; a player gets one on their own, where
     // there is plenty on it for them - editing it, its initiative, and taking
@@ -2204,6 +2487,9 @@ export default function Tabletop({ actor, players, offline }) {
   // Resolved from the live scene rather than captured when the menu opened, so
   // an edit can't be applied to a token someone deleted in the meantime.
   const menuToken = menu?.tokenId ? scene?.tokens.find((t) => t.id === menu.tokenId) : null;
+  // And the pin a menu was opened on, read the same way and for the same
+  // reason: it can be taken down while its menu is sitting there.
+  const menuPin = menu?.pinId ? pins.find((p) => p.id === menu.pinId) : null;
 
   // The same for the hovered one: a tooltip left open while its token takes
   // damage should show the new number, not the one it opened on. A tooltip is
@@ -2798,6 +3084,12 @@ export default function Tabletop({ actor, players, offline }) {
       confirmLabel: 'Delete token',
       run: () => removeToken(confirmDelete.id),
     },
+    pin: {
+      description:
+        'This takes the pin off the map for everyone it was shared with, and what is written on it goes with it. It cannot be undone.',
+      confirmLabel: 'Delete pin',
+      run: () => removePin(confirmDelete.id),
+    },
     shapes: {
       title: `Delete ${clearableShapes.length} shape${clearableShapes.length === 1 ? '' : 's'}?`,
       description: isDm
@@ -3120,6 +3412,42 @@ export default function Tabletop({ actor, players, offline }) {
               );
             })}
 
+            {/* The pins, over the tokens: a pin is stuck in the map in front of
+              everything standing on it, and one hidden behind an ogre would be
+              a pin nobody could click. Only while they are being shown, and
+              only the ones this browser was told about - the rest were filtered
+              out by the server and are not here to draw.
+
+              Inert while drawing or measuring, like the board itself: those two
+              modes take the map over, and a press meant for a shape must not
+              turn out to have opened somebody's note. They stay visible; they
+              just aren't yours to touch for the moment. */}
+            {showPins &&
+              pins.map((pin) => {
+                const side = pinLabelSide(pin, pins, zoom);
+                const mine = canEditPin(pin);
+                return (
+                  <div
+                    key={pin.id}
+                    // Read back by the right-click handler, which knows which
+                    // element was hit rather than which pin it stands for.
+                    data-pin-id={pin.id}
+                    className={`map-pin${drawing || measuring ? ' inert' : ''}${openPinIds.includes(pin.id) ? ' open' : ''
+                      }`}
+                    style={{ left: pin.x * zoom, top: pin.y * zoom }}
+                    title={mine ? `${pin.title} - right-click to edit` : pin.title}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPin(pin.id);
+                    }}
+                  >
+                    <PinIcon color={pin.color || '#e5534b'} />
+                    <span className={`map-pin-label ${side}`}>{pin.title}</span>
+                  </div>
+                );
+              })}
+
             {/* The ruler, over everything.
 
               Above the tokens rather than under them, unlike the drawing layer:
@@ -3250,6 +3578,13 @@ export default function Tabletop({ actor, players, offline }) {
                 className={measureWindow ? 'active' : ''}
               >
                 {measureWindow ? 'Standard mode' : 'Measuring mode'}
+              </button>
+              {/* Everybody's too, and not a mode: it takes nothing away from
+                  the map, so it can be left on while you play. Under the ruler
+                  because it is the one button here that changes what you can
+                  see rather than what a click does. */}
+              <button onClick={togglePins} aria-pressed={showPins} className={showPins ? 'active' : ''}>
+                {showPins ? 'Hide pins' : 'Show pins'}
               </button>
             </div>
           </div>
@@ -3514,6 +3849,31 @@ export default function Tabletop({ actor, players, offline }) {
                 </button>
               )}
             </>
+          ) : menu.pinId ? (
+            /* Two items, and both of them are the author's. Editing opens the
+               same form the pin was written in, filled in; deleting asks first,
+               like every other delete in the app. */
+            <>
+              <button
+                onClick={() => {
+                  if (menuPin) setPinForm({ pin: menuPin });
+                  setMenu(null);
+                }}
+              >
+                Edit pin
+              </button>
+              <button
+                className="danger"
+                onClick={() => {
+                  if (menuPin) {
+                    setConfirmDelete({ kind: 'pin', id: menuPin.id, name: menuPin.title || 'Pin' });
+                  }
+                  setMenu(null);
+                }}
+              >
+                Delete pin
+              </button>
+            </>
           ) : menu.turnTokenId ? (
             <>
               <button onClick={focusFromTurnList}>Focus</button>
@@ -3586,6 +3946,20 @@ export default function Tabletop({ actor, players, offline }) {
                 </button>
               )}
               {isDm && <button onClick={openTokenModal}>Create token</button>}
+              {/* Everybody's, like drawing on the map: writing down what your
+                  character worked out is the same kind of act as marking where
+                  a spell landed. It goes at the exact point that was clicked,
+                  grid or no grid - a pin names a doorway, not a square. */}
+              {canPin && (
+                <button
+                  onClick={() => {
+                    setPinForm({ at: { x: Math.round(menu.mx), y: Math.round(menu.my) } });
+                    setMenu(null);
+                  }}
+                >
+                  Create pin
+                </button>
+              )}
               {/* Below the line: not things to do to the map, but things to do
                   to what you have already done to it. Everyone has these - a
                   player who has moved a token has something to take back - and
@@ -3679,6 +4053,42 @@ export default function Tabletop({ actor, players, offline }) {
           onClose={() => setTokenForm(null)}
         />
       )}
+
+      {pinForm && (
+        <PinModal
+          pin={pinForm.pin}
+          at={pinForm.at}
+          // Who there is to share it with: this table's members, the same list
+          // the handouts share against.
+          players={players}
+          actor={actor}
+          onSubmit={submitPin}
+          onClose={() => setPinForm(null)}
+        />
+      )}
+
+      {/* One card per opened pin, painted in the order they were last reached
+          for - the same arrangement the notes and the sheets use. Each hangs
+          over its own pin and rides the map as it scrolls; a pin whose card
+          cannot be placed yet, because the map has not been measured, simply
+          waits for the frame after. */}
+      {openPins.map((pin, i) => {
+        const anchor = anchorFor(pin);
+        if (!anchor) return null;
+        return (
+          <PinWindow
+            key={pin.id}
+            pin={pin}
+            anchor={anchor}
+            players={players}
+            actor={actor}
+            zIndex={Math.min(PIN_Z_BASE + i, PIN_Z_CEILING)}
+            isTop={i === openPins.length - 1}
+            onFocus={() => openPin(pin.id)}
+            onClose={() => closePin(pin.id)}
+          />
+        );
+      })}
 
       {/* Tokens are made from the map's own right-click menu now - see the
           `Create token` item - so there is no panel here any more. */}

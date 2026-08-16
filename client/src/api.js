@@ -325,6 +325,15 @@ export const api = {
   // it removed, so they can be put back.
   clearShapes: (sceneId) => del(table(`/scenes/${sceneId}/shapes`)),
 
+  /* --- pins: notes stuck in the map ---
+     Anyone playing may add one, and only its author may change or remove it -
+     the server decides whose is whose from the session, so there is no owner to
+     pass here. Who may *read* one is decided on the way out of every scene, not
+     here: a pin you were not given is a pin your browser is never sent. */
+  addPin: (sceneId, data) => post(table(`/scenes/${sceneId}/pins`), data),
+  updatePin: (sceneId, pinId, data) => put(table(`/scenes/${sceneId}/pins/${pinId}`), data),
+  deletePin: (sceneId, pinId) => del(table(`/scenes/${sceneId}/pins/${pinId}`)),
+
   setTurnMode: (sceneId, on) => put(table(`/scenes/${sceneId}/turn`), { on }),
   nextTurn: (sceneId) => put(table(`/scenes/${sceneId}/turn/next`), {}),
   giveTurn: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/turn/current`), { tokenId }),

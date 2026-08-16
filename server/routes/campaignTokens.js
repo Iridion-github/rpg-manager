@@ -127,7 +127,7 @@ function sanitizeLook(body = {}, existing = {}) {
 function announceScene(req, action, scene) {
   broadcastPerActor(req, 'scenes:changed', (actor, role) => ({
     action,
-    record: sceneAsSeenBy(role, scene),
+    record: sceneAsSeenBy(role, scene, actor, req.campaign),
   }));
 }
 
