@@ -1471,6 +1471,52 @@ router.delete('/:id/pins/:pinId', requirePinner, async (req, res, next) => {
   }
 });
 
+// ---- The table's scene ----
+
+/**
+ * Which scene the players are looking at.
+ *
+ * The DM has a picker and everybody else does not, which is the point: the
+ * board is a thing the table looks at together, and a player who could wander
+ * off to the map of the next dungeon would be reading the DM's prep. So one
+ * scene is *the* scene, and that is the one every player's tabletop shows.
+ *
+ * Stored as a flag on the scene rather than as a pointer on the campaign, and
+ * the trade is worth writing down: a pointer would be one field to set, but it
+ * would live in a record this router does not own and would have to be kept in
+ * step when a scene is deleted. The flag lives with the thing it is about and
+ * disappears with it - and "exactly one" is enforced here, by clearing the
+ * others in the same request.
+ *
+ * Nothing is broadcast beyond the scenes themselves: a client works out where
+ * the table is looking from the flag, the same way it works out everything else
+ * about a scene.
+ */
+router.put('/:id/selected', requireDm, async (req, res, next) => {
+  try {
+    const scenes = await store.list(scenesOf(req));
+    if (!scenes.some((s) => s.id === req.params.id)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const changed = [];
+    for (const scene of scenes) {
+      const should = scene.id === req.params.id;
+      // Only what actually moves. A campaign of thirty scenes is one write and
+      // one broadcast, not thirty of each.
+      if ((scene.selected === true) === should) continue;
+      const updated = await store.mutate(scenesOf(req), scene.id, (current) => ({
+        ...current,
+        selected: should,
+      }));
+      if (updated) changed.push(updated);
+    }
+    for (const scene of changed) announce(req, 'update', scene);
+    res.json({ selectedId: req.params.id });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---- Fog of war ----
 
 /**

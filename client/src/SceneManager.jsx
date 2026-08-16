@@ -31,6 +31,11 @@ export default function SceneManager({
   onCreate,
   onDelete,
   onUse,
+  // Make this the scene every player is looking at. Its own act, and its own
+  // button: which scene the DM is working on and which one the table is being
+  // shown are two different questions, and joining them would mean never being
+  // able to prepare the next map without showing it first.
+  onShowToTable,
   onClose,
 }) {
   // The name as it is being typed. Committed on blur, exactly as the bar did:
@@ -40,6 +45,12 @@ export default function SceneManager({
   useEffect(() => {
     setName(scene?.name ?? '');
   }, [scene?.id, scene?.name]);
+  // Whether the "show this to everybody" question is on screen. Asked because
+  // the answer lands on every player's board at once, mid-session, and a button
+  // that did that on one click is a button somebody brushes past.
+  const [asking, setAsking] = useState(false);
+  useEffect(() => setAsking(false), [scene?.id]);
+  const isTableScene = scene?.selected === true;
 
   useEffect(() => {
     const onKey = (e) => {
@@ -80,6 +91,14 @@ export default function SceneManager({
                     onClick={() => onSelect(s.id)}
                   >
                     <span className="sm-scene-name">{s.name || 'Untitled scene'}</span>
+                    {/* Which one the table is on. Worth a mark in the list as
+                        well as a button on the right: this is the question you
+                        open the manager with. */}
+                    {s.selected && (
+                      <span className="sm-shown" title="The players are looking at this one">
+                        ●
+                      </span>
+                    )}
                     <small>{(s.tokens || []).length || ''}</small>
                   </button>
                 </li>
@@ -104,6 +123,18 @@ export default function SceneManager({
               </label>
               <button
                 type="button"
+                disabled={!scene || busy || isTableScene}
+                onClick={() => setAsking(true)}
+                title={
+                  isTableScene
+                    ? 'The players are already looking at this scene'
+                    : 'Show this scene to everybody at the table'
+                }
+              >
+                {isTableScene ? 'Selected scene' : 'Set as Selected Scene'}
+              </button>
+              <button
+                type="button"
                 className="del"
                 disabled={!scene || busy}
                 onClick={() => onDelete(scene)}
@@ -111,6 +142,34 @@ export default function SceneManager({
                 Delete scene
               </button>
             </div>
+
+            {/* Asked here rather than in a dialog of its own: what it is about
+                is the scene named directly above it, and a second backdrop over
+                this one is a stack nobody enjoys. */}
+            {asking && (
+              <div className="sm-confirm">
+                <p>
+                  <strong>Show “{scene?.name || 'this scene'}” to the table?</strong> Every player’s
+                  board changes to it at once, whatever they were looking at. You can keep
+                  working on any scene you like afterwards - this only decides what they see.
+                </p>
+                <div className="modal-actions">
+                  <button type="button" className="linky" onClick={() => setAsking(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setAsking(false);
+                      onShowToTable(scene);
+                    }}
+                  >
+                    Set as Selected Scene
+                  </button>
+                </div>
+              </div>
+            )}
 
             <p className="hint sm-hint">
               Pick a picture below and it becomes this scene's board for everyone at the table.

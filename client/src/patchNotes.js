@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'change',
+        text: 'The table looks at one scene, and the DM decides which. Players no longer have a scene picker at the top of the tabletop - they see the scene the DM has set, and it changes under them the moment the DM sets another. The DM keeps their picker, and it still only moves their own screen, so the next map can be built while everybody else is on this one. To hand a scene to the table, open the Scene Manager, pick it, and press Set as Selected Scene; it asks first, and the one the players are on is marked with a green dot in the list.',
+      },
+      {
+        kind: 'change',
         text: 'A token can stand on several scenes at once. Right-click a map, choose Place Token, and the list now offers every creature you can place - including ones already out on another map - with a note saying where else they are. What arrives is the same token and not a copy: rename it, repaint it, wound it or hand it to somebody on any of those maps and every other map agrees at once. Remove from table still takes it off the one map you are looking at, and it only goes back to the waiting list once it is standing nowhere. Delete now says which maps it will empty. To have two of one creature on the same map, copy it as before.',
       },
       {

@@ -345,6 +345,15 @@ export const api = {
    */
   setFog: (sceneId, fog) => put(table(`/scenes/${sceneId}/fog`), fog),
 
+  /**
+   * Make this the scene the table is looking at. The DM's alone.
+   *
+   * Exactly one scene per campaign carries the flag, and this route is what
+   * keeps that true - it clears whichever one had it. Players have no scene
+   * picker; this is how their board changes.
+   */
+  selectScene: (sceneId) => put(table(`/scenes/${sceneId}/selected`), {}),
+
   setTurnMode: (sceneId, on) => put(table(`/scenes/${sceneId}/turn`), { on }),
   nextTurn: (sceneId) => put(table(`/scenes/${sceneId}/turn/next`), {}),
   giveTurn: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/turn/current`), { tokenId }),

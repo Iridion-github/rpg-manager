@@ -890,15 +890,31 @@ export default function Tabletop({ actor, players, offline }) {
 
   const isDm = actor?.role === 'dm';
   /**
+   * The scene the table is looking at: the one the DM has set for everybody.
+   *
+   * Null on a campaign where nobody has set one - every scene made before this
+   * existed - and the first scene stands in, which is what those tables were
+   * already seeing.
+   */
+  const tableScene = scenes.find((s) => s.selected) || null;
+  /**
    * The scene on screen, which is not merely "the one whose id is selected".
    *
-   * A selection can stop resolving - you deleted that scene, or another DM did.
-   * Falling back to the first scene means an id pointing at nothing costs you a
-   * selection rather than the whole view: the alternative is rendering the
-   * empty state while scenes plainly exist, and since the scene picker lives
-   * below that branch there'd be no way back.
+   * Two different questions, depending on who is asking. A player is shown the
+   * table's scene and has no way to ask for another: the board is a thing the
+   * table looks at together, and somebody who could wander off to the map of
+   * the next dungeon would be reading the DM's prep. The DM has a picker, and it
+   * is theirs alone - it moves their own screen and nobody else's, which is what
+   * lets them set the next scene up while the table is still on this one.
+   *
+   * A DM's selection can stop resolving - they deleted that scene, or another DM
+   * did. Falling back means an id pointing at nothing costs a selection rather
+   * than the whole view: the alternative is rendering the empty state while
+   * scenes plainly exist, and since the picker lives below that branch there'd
+   * be no way back.
    */
-  const rawScene = scenes.find((s) => s.id === activeId) || scenes[0] || null;
+  const rawScene =
+    (isDm ? scenes.find((s) => s.id === activeId) : null) || tableScene || scenes[0] || null;
   // Everything downstream - the picker, the draft, the wheel handler - follows
   // what's actually shown, so the id and the view can't disagree.
   const selectedId = rawScene?.id || '';
@@ -918,7 +934,13 @@ export default function Tabletop({ actor, players, offline }) {
     try {
       const data = await api.listScenes();
       setScenes(data);
-      setActiveId((cur) => (data.some((s) => s.id === cur) ? cur : data[0]?.id || ''));
+      // Where the DM's own picker starts: on the scene the table is looking at,
+      // which is where they are looking too until they say otherwise.
+      setActiveId((cur) =>
+        data.some((s) => s.id === cur)
+          ? cur
+          : data.find((s) => s.selected)?.id || data[0]?.id || ''
+      );
     } catch (e) {
       // Offline is handled by the shell; don't shout about it here.
       if (!offline) setError(e.message);
@@ -3442,6 +3464,24 @@ export default function Tabletop({ actor, players, offline }) {
   // nothing to put back beyond letting the scene speak for itself again.
   const cancelGridSettings = () => setGridDraft(null);
 
+  /**
+   * Put this scene in front of the table.
+   *
+   * One scene carries the flag and the server clears whichever had it, so this
+   * is one call and not two. Every player's board follows at once - they have no
+   * picker of their own - while the DM's own view stays where it is: setting the
+   * table's scene is not the same act as looking at it, and a DM who has just
+   * revealed the next map is usually still working on the one after.
+   */
+  function showSceneToTable(target) {
+    const chosen = target || scene;
+    if (!chosen) return;
+    guard(async () => {
+      await api.selectScene(chosen.id);
+      setScenes((prev) => prev.map((s) => ({ ...s, selected: s.id === chosen.id })));
+    });
+  }
+
   async function saveGridSettings() {
     if (!gridDraft || !scene) return;
     const before = pick(sceneGrid, GRID_FIELDS);
@@ -3612,20 +3652,28 @@ export default function Tabletop({ actor, players, offline }) {
   return (
     <div className="tabletop">
       <div className="scene-bar">
-        {/* Held still while pins are being placed, along with everything else
+        {/* The DM's alone, and not merely disabled for everybody else: a picker
+            a player cannot use is a list of the scenes they are not being shown,
+            which is half of what the DM has not told them yet. They see the
+            scene the table is on and no way to ask for another.
+
+            Held still while pins are being placed, along with everything else
             outside the map: changing scene mid-move would leave the staged
             positions describing a board nobody is looking at. */}
-        <select
-          value={selectedId}
-          disabled={movingPins}
-          onChange={(e) => setActiveId(e.target.value)}
-        >
-          {scenes.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        {isDm && (
+          <select
+            value={selectedId}
+            disabled={movingPins}
+            onChange={(e) => setActiveId(e.target.value)}
+          >
+            {scenes.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+                {s.selected ? ' · shown to players' : ''}
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* Zoom is a plain label again. It used to be a button that pointed
             the wheel at this bar rather than at the grid gauge beside it; the
@@ -4233,6 +4281,7 @@ export default function Tabletop({ actor, players, offline }) {
           maps={maps}
           busy={busy}
           onSelect={setActiveId}
+          onShowToTable={showSceneToTable}
           onRename={(name) => name !== scene.name && patchScene({ name })}
           onCreate={newScene}
           onDelete={(doomed) =>

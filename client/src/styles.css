@@ -5451,9 +5451,13 @@ button.token-tile:hover {
   min-width: 0;
 }
 
-.sm-scene-head .del {
+/* The two buttons beside the name: hand it to the table, and throw it away.
+   Neither shrinks - a button whose label wraps to two lines pushes the field
+   beside it out of line with them. */
+.sm-scene-head button {
   flex: none;
   margin-bottom: 0.05rem;
+  white-space: nowrap;
 }
 
 .sm-hint {
@@ -6826,4 +6830,31 @@ body.fog-pov .map-tools {
 .spawn-elsewhere {
   color: #8b90a0;
   font-style: italic;
+}
+
+/* --- the table's scene ---
+   Which one the players are looking at, marked in the manager's list. A dot
+   rather than a word: the list is a column of names and a badge on one of them
+   would be the widest thing in it. */
+.sm-shown {
+  color: #3fb950;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* The question asked before every player's board changes under them. Inside the
+   manager, like the fog's own confirmation, because what it is about is named
+   directly above it. */
+.sm-confirm {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem;
+  border: 1px solid #3d5480;
+  border-radius: 6px;
+  background: #171e2b;
+  font-size: 0.85rem;
+}
+
+.sm-confirm p {
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
 }
