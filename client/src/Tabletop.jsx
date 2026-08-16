@@ -4149,6 +4149,31 @@ export default function Tabletop({ actor, players, offline }) {
           </div>
         </div>
 
+        {/* Whose eyes the DM has borrowed, and the way back out.
+            Over the board, at the top and centred on it - not on the window,
+            which would put it over the chat down the side. What it says is
+            about the map underneath it, so that is what it is measured
+            against. */}
+        {povToken && (
+          <div className="fog-pov-bar" role="dialog" aria-label="Point of view">
+            <span className="hint">You are seeing the board as</span>
+            <span className="fog-pov-token">
+              <span
+                className="fog-swatch"
+                style={{
+                  background: povToken.imageUrl
+                    ? `center / cover no-repeat url(${JSON.stringify(povToken.imageUrl)})`
+                    : povToken.color,
+                }}
+              />
+              <strong>{povToken.label || 'Token'}</strong>
+            </span>
+            <button type="button" onClick={exitPov} title="Escape does this too">
+              Exit POV
+            </button>
+          </div>
+        )}
+
         {/* Floats over the map rather than taking a strip of it. Everyone gets
             the panel; what's inside it is another question, and for now the
             only answer is the DM's. */}
@@ -4772,30 +4797,6 @@ export default function Tabletop({ actor, players, offline }) {
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />
-      )}
-
-      {/* Whose eyes the DM has borrowed, and the way back out. Top right rather
-          than top centre, where the pin-moving bar sits: the two can never be
-          on screen together, but a reader who has met one should not have to
-          check which of them this is. */}
-      {povToken && (
-        <div className="fog-pov-bar" role="dialog" aria-label="Point of view">
-          <span className="hint">You are seeing the board as</span>
-          <span className="fog-pov-token">
-            <span
-              className="fog-swatch"
-              style={{
-                background: povToken.imageUrl
-                  ? `center / cover no-repeat url(${JSON.stringify(povToken.imageUrl)})`
-                  : povToken.color,
-              }}
-            />
-            <strong>{povToken.label || 'Token'}</strong>
-          </span>
-          <button type="button" onClick={exitPov} title="Escape does this too">
-            Exit POV
-          </button>
-        </div>
       )}
 
       {fogWindow && isDm && (

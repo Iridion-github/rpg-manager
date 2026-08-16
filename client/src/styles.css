@@ -6796,10 +6796,18 @@ body.pins-moving .map-pin.locked {
 
 /* --- a borrowed point of view --- */
 .fog-pov-bar {
-  position: fixed;
+  /* Pinned to the board rather than to the window: it describes what the map
+     underneath it is showing, and a bar measured against the viewport ends up
+     over the chat column, which has nothing to do with it. `.map-area` is the
+     positioned ancestor - the tools panel hangs off the same corner system. */
+  position: absolute;
   top: 0.6rem;
-  right: 0.6rem;
-  z-index: 455;
+  left: 50%;
+  transform: translateX(-50%);
+  /* The band the tools panel is in: over the map and its tokens, under the
+     right-click menu and any floating window. */
+  z-index: 6;
+  max-width: calc(100% - 1.2rem);
   display: flex;
   align-items: center;
   gap: 0.6rem;
