@@ -514,6 +514,7 @@ export default function CharacterSheets({
             key={sheet.id}
             title={sheet.name || 'Unnamed'}
             storageKey={`rpg:sheet-window:${sheet.id}`}
+          fallbackKey="rpg:sheet-window"
             zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
             cascade={i}
             isTop={i === openSheets.length - 1}

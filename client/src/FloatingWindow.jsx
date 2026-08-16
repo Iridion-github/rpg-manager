@@ -98,15 +98,31 @@ function savedRect(storageKey) {
 
 const hasSavedRect = (storageKey) => Boolean(storageKey && savedRect(storageKey));
 
-// Where it opens: where you last left it, or centred the first time - offset by
-// its place in the stack, since windows that have never been moved would
-// otherwise all land on the same spot and look like one window.
-function firstRect(storageKey, size, cascade, min) {
+/**
+ * Where it opens, in the order the answers are worth having.
+ *
+ * 1. Where *this* window was last left. A character you always keep in the
+ *    corner opens back in that corner, whatever else is on screen.
+ * 2. Where the last window *of this kind* was left, stepped by its place in
+ *    the stack. This is what a sheet you have never opened before does, and it
+ *    is the difference between "the sheets live over here" and every new one
+ *    landing in the middle of the map. `fallbackKey` is what says two windows
+ *    are the same kind.
+ * 3. Centred, for the first window of a kind this browser has ever opened.
+ *
+ * The step exists in the last two because windows that have never been placed
+ * would otherwise land on the same spot and look like one window.
+ */
+function firstRect(storageKey, fallbackKey, size, cascade, min) {
   const saved = storageKey && savedRect(storageKey);
   if (saved) return fit(saved, min.w, min.h);
+  const step = cascade * CASCADE_STEP;
+  const last = fallbackKey && savedRect(fallbackKey);
+  if (last) {
+    return fit({ ...last, x: last.x + step, y: last.y + step }, min.w, min.h);
+  }
   const w = Math.min(size.w, window.innerWidth);
   const h = Math.min(size.h, window.innerHeight);
-  const step = cascade * CASCADE_STEP;
   return fit(
     {
       w,
@@ -143,6 +159,17 @@ export default function FloatingWindow({
   children,
   onClose,
   storageKey,
+  /**
+   * What kind of window this is, for the windows that are one per record.
+   *
+   * A sheet remembers its own box under its own key, which is what makes three
+   * characters laid out side by side come back side by side. A sheet you have
+   * never opened has no such key and used to land in the middle of the screen -
+   * so "where I keep my sheets" was a thing this remembered for every character
+   * except the next one. This is that memory: the last place a window of this
+   * kind was left, used when the window itself has nothing of its own to say.
+   */
+  fallbackKey,
   defaultSize = { w: 1040, h: 760 },
   // How small this one may be pulled. The default suits a character sheet; a
   // window holding a short list can ask for far less and still be usable.
@@ -183,7 +210,9 @@ export default function FloatingWindow({
    */
   foldable = true,
 }) {
-  const [rect, setRect] = useState(() => firstRect(storageKey, defaultSize, cascade, minSize));
+  const [rect, setRect] = useState(() =>
+    firstRect(storageKey, fallbackKey, defaultSize, cascade, minSize)
+  );
   // Whether this window has ever been dragged or resized. Only then is its box
   // a preference worth remembering: saving the opening position too would make
   // every window "already placed", and a cascade of untouched windows would
@@ -327,13 +356,17 @@ export default function FloatingWindow({
   useEffect(() => {
     if (!storageKey || mode || !placed) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(openRect));
+      const box = JSON.stringify(openRect);
+      localStorage.setItem(storageKey, box);
+      // And as the last place a window of this kind was left, which is where
+      // the next one that has never been opened will appear.
+      if (fallbackKey) localStorage.setItem(fallbackKey, box);
     } catch {
       // Private mode, or a full quota. Losing the position is not worth a throw.
     }
     // Depends on the numbers, not on openRect: that object is rebuilt every
     // render, and as a dependency it would rewrite the entry on each one.
-  }, [storageKey, mode, placed, openRect.x, openRect.y, openRect.w, openRect.h]);
+  }, [storageKey, fallbackKey, mode, placed, openRect.x, openRect.y, openRect.w, openRect.h]);
 
   useEffect(() => {
     const onKey = (e) => {

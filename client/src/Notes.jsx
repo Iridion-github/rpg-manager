@@ -310,6 +310,7 @@ export default function Notes({
           key={note.id}
           title={note.title || 'Untitled note'}
           storageKey={`rpg:note-window:${note.id}`}
+          fallbackKey="rpg:note-window"
           zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
           cascade={i}
           isTop={i === openWindows.length - 1}

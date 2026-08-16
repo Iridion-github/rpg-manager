@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'change',
+        text: 'Windows you have never opened before now appear where you keep that kind of window. A character sheet or a note you drag into a corner already came back to that corner; the next sheet or note you open for the first time landed in the middle of the screen instead, which meant tidying it away every time. It now opens where the last one of its kind was left. Ones you have placed yourself are unaffected - they still come back exactly where you put them.',
+      },
+      {
+        kind: 'change',
         text: 'The zoom slider goes twice as far out. At the far end of it the map is now half the width and height it used to be there, so a large scene fits on screen in one piece instead of running off the edges. The near end is unchanged.',
       },
       {
