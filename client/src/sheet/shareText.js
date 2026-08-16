@@ -44,9 +44,19 @@ const clean = (v) => String(v ?? '').trim();
 const line = (parts) => parts.filter((p) => clean(p)).join(DOT);
 const lines = (parts) => parts.filter((p) => clean(p)).join('\n');
 
-const block = (sheet, section, text) => ({
+/**
+ * One thing off the sheet, ready to be said in the chat.
+ *
+ * `media` is the picture on the row, where the row has one - an attack, a piece
+ * of kit, a suit of armour. Carried here rather than looked up when the message
+ * is drawn, for the reason a roll carries its own: by the time anybody reads the
+ * line, the row it came from may have been edited or deleted, and what was
+ * shown is a fact about the moment it was shared.
+ */
+const block = (sheet, section, text, media = '') => ({
   title: characterRollLabel(sheet?.name, section),
   text: clean(text),
+  ...(media ? { media } : {}),
 });
 
 /**
@@ -157,7 +167,7 @@ function attackText(sheet, attack) {
 }
 
 export const shareAttack = (sheet, attack) =>
-  block(sheet, clean(attack.name) || 'Attack', attackText(sheet, attack));
+  block(sheet, clean(attack.name) || 'Attack', attackText(sheet, attack), attack.media);
 
 /** What is riding along on every roll: Bless, Rage, a magic weapon. */
 const effectText = (e) => {
@@ -193,7 +203,8 @@ export const shareArmorPiece = (sheet, row) =>
       row.type,
       row.equipped ? 'worn' : 'not worn',
       row.stealthDisadvantage ? 'stealth disadvantage' : '',
-    ])
+    ]),
+    row.media
   );
 
 export function shareCurrency(sheet) {
@@ -215,7 +226,8 @@ export const shareInventoryItem = (sheet, row) =>
       // Said as "each", because that is what the column means and what the
       // total at the top of the section is worked out from.
       written(row.weight) ? `${row.weight} each` : '',
-    ]) || 'Nothing else written down.'
+    ]) || 'Nothing else written down.',
+    row.media
   );
 
 export const shareFeature = (sheet, row) =>

@@ -27,6 +27,30 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'change',
+        text: 'The character sheet is laid out to fill its width. Personality traits, Ideals, Bonds, Flaws and Notes have moved to the Details tab, where the rest of the prose about a character already lived - they are not things anybody reaches for mid-turn. What is left on the Character tab is spread across its three columns instead of piling into two: abilities, saves and skills down the first, the fight down the second, and what the character can do and carry - features, armour, inventory and coin - down the third. Nothing was renamed and nothing was lost; everything is where the tab it belongs to would put it.',
+      },
+      {
+        kind: 'change',
+        text: 'Attacks & spellcasting is a block per attack instead of a row per attack, laid out like Other proficiencies and Features & traits below it. Same fields, more room - and the button that throws the attack is a pair of crossed swords now rather than a die, which is still what the Dice button in the chat uses.',
+      },
+      {
+        kind: 'change',
+        text: 'Enter Sharing mode has moved to the top of the character sheet window, to the left of Export. It sits with the other things you do to the whole sheet rather than at the end of the row of pages, and it stays put while you move between Character, Details and Spellcasting. Two sheets open at once each have their own: pointing at one no longer locks the other.',
+      },
+      {
+        kind: 'change',
+        text: 'Showing something to the table brings its picture with it. In sharing mode, clicking an attack, an item or a piece of armour that has one puts the picture in the chat under the words - and the preview that asks before you send shows exactly what the table will get. Everything else on the sheet is unchanged: a line with no picture is the line it always was.',
+      },
+      {
+        kind: 'new',
+        text: 'Inventory and Equipped Armor carry pictures too. Each row has more room and a small frame under it: choose a file, paste one you have copied, or take one from your images. Stills only here - a bag of kit where every third line is animating to itself is a list nobody can read down - so PNG, JPEG and WEBP are offered and a GIF is refused with a reason. The thumbnail stays small on the sheet, and the picture travels with the character through Export and Import like everything else on it.',
+      },
+      {
+        kind: 'new',
+        text: 'An attack can carry a picture. Under each one is a small frame: choose a file, paste one you have copied, or - if you are the DM - take one from your images. A still or an animated GIF both work, and it stays a thumbnail on the sheet. When you throw that attack, the picture appears in the chat beside the result, once per throw, so the table sees the swing as well as the number.',
+      },
+      {
         kind: 'new',
         text: 'A character can be saved to a file and read back. At the top of an open sheet, beside Delete character, are Export and Import. Export downloads the whole character as a .json file - abilities, kit, spells, notes, the lot - named after them. Import asks for such a file, tells you which character it found in it, and only then offers Confirm Import, with a yellow warning that the sheet in front of you is about to be replaced. Nothing is sent until you confirm, and who the character is shared with is decided by the sheet you import into rather than by the file, so importing can never hand a character to somebody it was not shared with.',
       },

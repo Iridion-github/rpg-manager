@@ -226,7 +226,9 @@ export const api = {
   // A block read off a character sheet, with its own heading. Longer than a
   // typed line is allowed to be, and drawn as a block in the log - see the
   // share route in server/routes/chat.js.
-  shareToChat: ({ title, text }) => post(table('/chat/share'), { title, text }),
+  // `media` is the picture on the row being shown, when it has one - an attack,
+  // a piece of kit, a suit of armour. The chat draws it under the words.
+  shareToChat: ({ title, text, media }) => post(table('/chat/share'), { title, text, media }),
   // `extras` are named things riding along on this one roll - a sheet's global
   // modifiers - each some dice, some flat bonus, or both. The server rolls them
   // with it and folds them into the same total, so an extra d4 is part of the
@@ -234,11 +236,16 @@ export const api = {
   // `advantage` and `disadvantage` are the two ways a d20 is thrown twice. Both
   // at once is not an error and not refused: the game says they cancel, and the
   // server reads them that way.
-  rollDice: ({ count, sides, modifier, advantage, disadvantage, label, secret, extras }) =>
+  // `media` is the picture on the attack this roll came from, if it has one:
+  // the chat line shows it beside the result. Sent with the throw rather than
+  // looked up when the line is read, because by then the attack may have been
+  // edited or deleted and what was thrown is a fact about the moment.
+  rollDice: ({ count, sides, modifier, advantage, disadvantage, label, secret, extras, media }) =>
     post(table('/chat/roll'), {
       count,
       sides,
       modifier,
+      media,
       advantage,
       disadvantage,
       label,

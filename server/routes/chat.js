@@ -17,6 +17,7 @@ const crypto = require('node:crypto');
 const store = require('../store');
 const { broadcast, broadcastPerActor } = require('../realtime');
 const { scoped } = require('../campaigns');
+const { pictureUrl } = require('../pictures');
 
 const COLLECTION = 'chat';
 const LOG_ID = 'log';
@@ -289,12 +290,19 @@ router.post('/share', async (req, res, next) => {
     const title = String(req.body?.title ?? '').trim().slice(0, MAX_SHARE_TITLE);
     const text = String(req.body?.text ?? '').trim().slice(0, MAX_SHARE_LENGTH);
     if (!text) return res.status(400).json({ error: 'Nothing to send.' });
+    // The picture on the row being shown, if it had one. Held to an address on
+    // this server for the reason pictures.js gives: every person at the table
+    // will have their browser fetch it.
+    const media = pictureUrl(req.body?.media);
 
     const message = {
       id: crypto.randomUUID(),
       kind: 'sheet',
       title,
       text,
+      // Only carried when there is one, so a shared line keeps the shape it has
+      // always had - including in a browser holding an older cached log.
+      ...(media ? { media } : {}),
       author: speaker.author,
       role: speaker.role,
       authorId: speaker.authorId,
@@ -355,6 +363,12 @@ router.post('/roll', async (req, res, next) => {
     // the DM can't check.
     const secret = Boolean(req.body?.secret);
 
+    // What the roll is a picture of. The sheet sends it with the throw rather
+    // than the chat looking it up: by the time anybody reads the line, the
+    // attack it came from may have been edited or deleted, and what was thrown
+    // is a fact about the moment it was thrown.
+    const media = pictureUrl(req.body?.media);
+
     // Rolled here with the roll they belong to, so they land in one total and
     // one line. Never on a coin flip, which has no total to add to.
     const extras = sides === COIN ? [] : pickExtras(req.body?.extras).map((extra) => ({
@@ -391,6 +405,10 @@ router.post('/roll', async (req, res, next) => {
       // Carried only when there are any, so an ordinary roll keeps the shape it
       // has always had - including in a browser holding an older cached log.
       ...(extras.length ? { extras } : {}),
+      // The picture on the attack this roll came from, if it has one. Held to
+      // an address on this server for the reason pictures.js gives: every
+      // person at the table will have their browser fetch it.
+      ...(media ? { media } : {}),
     };
     const message = {
       id: crypto.randomUUID(),

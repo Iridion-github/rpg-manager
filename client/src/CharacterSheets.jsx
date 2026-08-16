@@ -67,6 +67,22 @@ export default function CharacterSheets({
   // the dialog is opened from a window's own header and answers about that one.
   const [importId, setImportId] = useState('');
   /**
+   * The sheets currently in sharing mode, by id.
+   *
+   * Up here rather than inside the sheet because the button that turns it on is
+   * in the window's header, which this component draws, while what the mode
+   * *does* is all inside the sheet. Per sheet rather than one flag: two windows
+   * are two sheets, and pointing at one of them is no reason to lock the other.
+   */
+  const [sharingIds, setSharingIds] = useState(() => new Set());
+  const toggleSharing = (id) =>
+    setSharingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  /**
    * This campaign's tokens, so a character can be pointed at one.
    *
    * The server sends only the tokens this person may move, which is exactly the
@@ -144,7 +160,18 @@ export default function CharacterSheets({
       // Private mode, or a full quota. It still fades; it just won't remember.
     }
   }
-  const closeSheet = (id) => setOpenIds((prev) => prev.filter((x) => x !== id));
+  const closeSheet = (id) => {
+    setOpenIds((prev) => prev.filter((x) => x !== id));
+    // A mode belongs to a window on screen. Closing one and opening it again
+    // should hand back a sheet you can edit, not one still waiting to be
+    // pointed at.
+    setSharingIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
 
   const markSaving = (id, busy) =>
     setSavingIds((prev) => {
@@ -560,6 +587,22 @@ export default function CharacterSheets({
                 {savingIds.has(sheet.id) && <span className="badge saving">saving…</span>}
                 {readOnly && <span className="badge role anon">read-only</span>}
                 <div className="spacer" />
+                {/* What the sheet is *for* right now, at the head of the three
+                    things you can do to the whole of it. Its label is the way
+                    out, because while the mode is on the sheet is already
+                    saying so. */}
+                <button
+                  className={`share-mode-toggle${sharingIds.has(sheet.id) ? ' on' : ''}`}
+                  aria-pressed={sharingIds.has(sheet.id)}
+                  onClick={() => toggleSharing(sheet.id)}
+                  title={
+                    sharingIds.has(sheet.id)
+                      ? 'Go back to reading and editing the sheet'
+                      : 'Click any part of the sheet to show it to the table'
+                  }
+                >
+                  {sharingIds.has(sheet.id) ? 'Exit Sharing mode' : 'Enter Sharing mode'}
+                </button>
                 {/* The character as a file, and back again. Export is offered
                     to anybody who can read the sheet - it is their character
                     too, and a copy of it takes nothing from anyone. Import
@@ -675,6 +718,7 @@ export default function CharacterSheets({
               sheet={sheet}
               onChange={queueSave}
               readOnly={readOnly}
+              sharing={sharingIds.has(sheet.id)}
               // Whether the portrait may be picked out of this campaign's own
               // images. The cloud is the DM's, so a player editing their own
               // character is offered the two roads in they always had.

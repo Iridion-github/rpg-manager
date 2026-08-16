@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Num, Select } from './fields.jsx';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
+import MediaField from './MediaField.jsx';
 import Shareable from './Shareable.jsx';
 import {
   ARMOR_DEFAULTS,
@@ -36,6 +37,9 @@ export default function EquippedArmor({
   sharing = false,
   onPick = null,
   shareRow = null,
+  // Whether this campaign's own images are offered when picking a picture for
+  // a piece of armour. The DM's folders, so the DM's option.
+  canCloud = false,
 }) {
   // Same reasoning as the attack rows: one click, and a sheet has no undo.
   const [confirmId, setConfirmId] = useState('');
@@ -170,6 +174,17 @@ export default function EquippedArmor({
               />
               Stealth disadvantage
             </label>
+
+            {/* What it looks like. A still, like the inventory's: a suit of
+                plate is not a thing that moves. */}
+            <MediaField
+              url={a.media || ''}
+              alt={a.name || 'Armor'}
+              readOnly={readOnly}
+              canCloud={canCloud}
+              hint="what it looks like"
+              onChange={(url) => setField(a.id, 'media', url)}
+            />
           </li>
           </Shareable>
         ))}

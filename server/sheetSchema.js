@@ -177,6 +177,8 @@ function pickArmor(source) {
       dexCap: DEX_CAPS.has(String(a.dexCap)) ? String(a.dexCap) : 'limitless',
       stealthDisadvantage: Boolean(a.stealthDisadvantage),
       equipped: Boolean(a.equipped),
+      // What the piece looks like, on the same terms as the kit below it.
+      media: pictureUrl(a.media),
     };
   });
 
@@ -347,6 +349,11 @@ const pickInventory = (source) =>
       quantity: optional(row.quantity, { lo: 0, hi: 99999, whole: true }),
       title: itemText(row.title, 120),
       weight: optional(row.weight, { lo: 0, hi: 99999 }),
+      // What it looks like. Empty on every row written before this existed,
+      // which is a thing nobody has illustrated rather than one missing its
+      // picture. Held to an address on this server, like every other picture
+      // the app stores; see pictures.js.
+      media: pictureUrl(row.media),
     }),
     (value) => rowsFromLines(value)
   );
@@ -401,6 +408,12 @@ function pickAttacks(source) {
     toHit: pickDice(a.toHit, TO_HIT_DICE) || legacyToHit(a.bonus),
     damage: pickDice(a.damage, DAMAGE_DICE) || legacyDamage(a.damage),
     damageType: text(a.damageType ?? legacyDamageType(a.damage) ?? a.notes, '', 60),
+    // A picture of the attack landing - a still or an animation - shown small
+    // beside it on the sheet and in the chat line when it is thrown. Empty on
+    // every attack written before this existed, which is an attack with no
+    // picture rather than one missing its picture. Held to an address on this
+    // server, like every other picture the app stores; see pictures.js.
+    media: pictureUrl(a.media),
   }));
 }
 

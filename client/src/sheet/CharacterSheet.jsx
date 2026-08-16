@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, Num, Area, Select, Stat } from './fields.jsx';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
 import DiceModal from '../DiceModal.jsx';
@@ -13,6 +13,7 @@ import EquippedArmor from './EquippedArmor.jsx';
 import ItemList from './ItemList.jsx';
 import SpellRow from './SpellRow.jsx';
 import Shareable, { SharePreviewModal, shareProps } from './Shareable.jsx';
+import MediaField from './MediaField.jsx';
 import {
   shareAbility,
   shareAcModifiers,
@@ -146,7 +147,21 @@ const FEATURE_FIELDS = [
   },
 ];
 
-export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = false }) {
+export default function CharacterSheet({
+  sheet,
+  onChange,
+  readOnly,
+  canCloud = false,
+  /**
+   * Sharing mode, owned by whoever is drawing the window around this.
+   *
+   * It used to be this component's own state, with the toggle at the end of the
+   * page row. The button now sits in the window's header beside Export and
+   * Delete - which is a different component - so the flag has to live where
+   * both of them can see it. Nothing else about the mode moved.
+   */
+  sharing = false,
+}) {
   const [page, setPage] = useState('main');
   // A roll waiting to be confirmed: { title, rolls, allowAdvantage }.
   const [confirming, setConfirming] = useState(null);
@@ -158,12 +173,20 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
    * would be forty of them and the sheet is crowded enough. While it is on,
    * every part worth quoting lights up and takes the click, and nothing on the
    * sheet can be edited or rolled - see `locked` below, and Shareable.jsx.
+   *
+   * The flag comes from above; what is here is everything the mode *does*.
    */
-  const [sharing, setSharing] = useState(false);
   // The block waiting to be confirmed: { title, text }.
   const [preview, setPreview] = useState(null);
   const [sendingShare, setSendingShare] = useState(false);
   const [shareError, setShareError] = useState('');
+
+  // Leaving the mode drops whatever was waiting to be sent. The button that
+  // does the leaving is in the window header now, so this is what makes sure a
+  // preview cannot outlive the mode that opened it.
+  useEffect(() => {
+    if (!sharing) setPreview(null);
+  }, [sharing]);
 
   const set = (path) => (value) => onChange(setIn(sheet, path, value));
   const pb = proficiencyBonus(sheet.level);
@@ -262,6 +285,9 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
       title: attack.name || 'Attack',
       allowAdvantage: Boolean(attack.toHit),
       rolls,
+      // What this attack looks like when it lands, sent with the throw so the
+      // chat can show it. On the first line only - see runRolls.
+      media: attack.media || '',
     });
   };
 
@@ -315,7 +341,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
   // on how many rolls happened to be in the batch; `secret` applies to all of
   // them, since half a hidden attack is not hidden.
   async function runRolls({ swing, secret, skipped }) {
-    for (const r of confirming.rolls) {
+    for (const [i, r] of confirming.rolls.entries()) {
       // The ability's modifier is added into the roll's own here, where one
       // number is what is wanted. `ability` itself is dropped rather than sent:
       // it is a question about a character, and the roller knows nothing about
@@ -335,6 +361,10 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
         // per roll, so turning Bless off for this attack turns it off on both
         // halves of it - it is one spell, not two.
         extras: (r.extras || []).filter((x) => !skipped?.has(x.id)),
+        // The picture goes on the first line of the throw and no other. An
+        // attack that rolls to hit and then for damage is one swing, and an
+        // animation playing twice in a row in the log is one too many.
+        media: i === 0 ? confirming.media || '' : '',
       });
     }
   }
@@ -351,26 +381,9 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
             {label}
           </button>
         ))}
-        <div className="spacer" />
-        {/* The pages are where you are; this is what the sheet is *for* right
-            now, so it sits at the other end of the same row rather than in the
-            middle of them. Its label is the way out, because while the mode is
-            on the whole sheet is already saying it is on. */}
-        <button
-          className={`share-mode-toggle${sharing ? ' on' : ''}`}
-          aria-pressed={sharing}
-          onClick={() => {
-            setSharing((on) => !on);
-            setPreview(null);
-          }}
-          title={
-            sharing
-              ? 'Go back to reading and editing the sheet'
-              : 'Click any part of the sheet to show it to the table'
-          }
-        >
-          {sharing ? 'Exit Sharing mode' : 'Enter Sharing mode'}
-        </button>
+        {/* The row is the pages and nothing else now. The mode's own button is
+            in the window's header, beside Export and Delete: it is a thing you
+            do to the whole sheet rather than a place in it. */}
       </nav>
 
       {sharing && (
@@ -471,6 +484,7 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
           askAttack={askAttack}
           sharing={sharing}
           onPick={setPreview}
+          canCloud={canCloud && !locked}
         />
       )}
       {page === 'details' && (
@@ -521,7 +535,21 @@ export default function CharacterSheet({ sheet, onChange, readOnly, canCloud = f
   );
 }
 
-function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sharing, onPick }) {
+function MainPage({
+  sheet,
+  set,
+  onChange,
+  readOnly,
+  pb,
+  askCheck,
+  askAttack,
+  sharing,
+  onPick,
+  // Whether this campaign's own images are offered when picking an attack's
+  // picture. The cloud is the DM's, so a player gets the two roads in they
+  // always had: a file, or whatever they have copied.
+  canCloud,
+}) {
   // Every region on this page takes the same two props, so they are bundled
   // once rather than spelled out forty times.
   const share = (payload) => ({ sharing, share: payload, onPick });
@@ -842,35 +870,29 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sha
           </Shareable>
         </div>
 
-        <div className="box">
-          <h4>Attacks & spellcasting</h4>
-          <table className="attacks">
-            {/* Fixed layout so Name takes whatever the narrow columns don't. */}
-            <colgroup>
-              <col className="col-roll" />
-              <col />
-              <col className="col-dice" />
-              <col className="col-dice" />
-              <col className="col-type" />
-              <col className="col-del" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th />
-                <th>Name</th>
-                <th>To hit</th>
-                <th>Damage</th>
-                <th>Type</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {/* A row cannot be wrapped in a div without breaking the table,
-                  so each one wears the sharing behaviour instead of being put
-                  inside it. Same click, same class. */}
-              {attacks.map((a) => (
-                <tr key={a.id} {...shareProps(share(shareAttack(sheet, a)))}>
-                  <td>
+        <div className="box item-box attacks-box">
+          <div className="item-box-head">
+            <h4>Attacks & spellcasting</h4>
+          </div>
+
+          {/* A block each, laid out like the proficiencies and features below:
+              a table gave every attack one line, and one line has room for a
+              name, two dice and nothing else. What an attack actually wants
+              beside it is what it looks like when it lands.
+
+              The wrapper is Shareable rather than the row, which a table would
+              not allow - one of the small freedoms of leaving the table
+              behind. */}
+          <ul className="item-list">
+            {attacks.map((a) => (
+              <Shareable
+                key={a.id}
+                sharing={sharing}
+                share={shareAttack(sheet, a)}
+                onPick={onPick}
+              >
+                <li className="item-row attack-row">
+                  <div className="item-head">
                     <button
                       type="button"
                       className="roll-btn"
@@ -882,49 +904,63 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sha
                       disabled={!a.toHit && !a.damage}
                       onClick={() => askAttack(a)}
                     >
-                      🎲
+                      {/* A sword rather than a die: what this throws is an
+                          attack, and the die is what the chat's own roller
+                          uses for dice that are nobody's attack in particular.
+                          With the emoji selector on it, so it is drawn as the
+                          crossed swords the app's own header uses rather than
+                          as a thin monochrome glyph. */}
+                      ⚔️
                     </button>
-                  </td>
-                  <td>
-                    <input
-                      value={a.name}
-                      disabled={readOnly}
-                      onChange={(e) => setAttack(a.id, 'name', e.target.value)}
-                    />
-                  </td>
-                  {/* Both dice cells read as their notation once chosen. */}
-                  <td>
-                    <button
-                      type="button"
-                      className={`dice-cell${a.toHit ? ' set' : ''}`}
-                      disabled={readOnly}
-                      onClick={() => setPicking({ id: a.id, field: 'toHit' })}
-                    >
-                      {/* The ability's own contribution shown as its own term,
-                          so the cell reads the way the dialog that set it did
-                          and the way the roll will. */}
-                      {notation(a.toHit, specAbilityBonus(sheet, a.toHit)) || 'Set…'}
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className={`dice-cell${a.damage ? ' set' : ''}`}
-                      disabled={readOnly}
-                      onClick={() => setPicking({ id: a.id, field: 'damage' })}
-                    >
-                      {notation(a.damage, specAbilityBonus(sheet, a.damage)) || 'Set…'}
-                    </button>
-                  </td>
-                  <td>
-                    <input
-                      value={a.damageType || ''}
-                      placeholder="fire"
-                      disabled={readOnly}
-                      onChange={(e) => setAttack(a.id, 'damageType', e.target.value)}
-                    />
-                  </td>
-                  <td>
+
+                    <label className="fld item-field grow">
+                      <input
+                        value={a.name}
+                        placeholder="Longsword"
+                        disabled={readOnly}
+                        onChange={(e) => setAttack(a.id, 'name', e.target.value)}
+                      />
+                      <span>Name</span>
+                    </label>
+
+                    {/* Both dice cells read as their notation once chosen - the
+                        ability's own contribution shown as its own term, so the
+                        cell reads the way the dialog that set it did and the
+                        way the roll will. */}
+                    <label className="fld item-field attack-dice">
+                      <button
+                        type="button"
+                        className={`dice-cell${a.toHit ? ' set' : ''}`}
+                        disabled={readOnly}
+                        onClick={() => setPicking({ id: a.id, field: 'toHit' })}
+                      >
+                        {notation(a.toHit, specAbilityBonus(sheet, a.toHit)) || 'Set…'}
+                      </button>
+                      <span>To hit</span>
+                    </label>
+
+                    <label className="fld item-field attack-dice">
+                      <button
+                        type="button"
+                        className={`dice-cell${a.damage ? ' set' : ''}`}
+                        disabled={readOnly}
+                        onClick={() => setPicking({ id: a.id, field: 'damage' })}
+                      >
+                        {notation(a.damage, specAbilityBonus(sheet, a.damage)) || 'Set…'}
+                      </button>
+                      <span>Damage</span>
+                    </label>
+
+                    <label className="fld item-field attack-type">
+                      <input
+                        value={a.damageType || ''}
+                        placeholder="fire"
+                        disabled={readOnly}
+                        onChange={(e) => setAttack(a.id, 'damageType', e.target.value)}
+                      />
+                      <span>Type</span>
+                    </label>
+
                     {!readOnly && (
                       <button
                         className="del"
@@ -934,18 +970,26 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sha
                         ✕
                       </button>
                     )}
-                  </td>
-                </tr>
-              ))}
-              {attacks.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="empty">
-                    No attacks yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </div>
+
+                  {/* What it looks like when it lands. Kept to a thumbnail on
+                      the sheet however big the file is: this is a sheet, and
+                      the picture's place to be seen is the chat line the throw
+                      writes. */}
+                  <MediaField
+                    url={a.media || ''}
+                    alt={a.name ? `${a.name} in action` : 'Attack'}
+                    readOnly={readOnly}
+                    canCloud={canCloud}
+                    animation
+                    hint="shown in the chat when this is thrown"
+                    onChange={(url) => setAttack(a.id, 'media', url)}
+                  />
+                </li>
+              </Shareable>
+            ))}
+            {attacks.length === 0 && <li className="empty">No attacks yet.</li>}
+          </ul>
           {!readOnly && <button onClick={addAttack}>+ Attack</button>}
 
           {/* Under the attacks rather than beside them, because it is about all
@@ -1019,6 +1063,62 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sha
           )}
         </div>
 
+      </div>
+
+      {/* ---- column three: what the character can do, and what they carry ----
+
+          The roleplay boxes used to live here - personality, ideals, bonds,
+          flaws and the notes - and they have gone to the Details tab, where the
+          rest of the prose about a character already was. What is left of this
+          page is what somebody reaches for mid-turn, and it is spread across
+          three columns of roughly one height rather than two long ones and a
+          short one. */}
+      <div className="sheet-col">
+        <ItemList
+          title="Features & traits"
+          items={featureRows(sheet)}
+          onChange={set('featuresAndTraits')}
+          readOnly={readOnly}
+          addLabel="+ Feature"
+          emptyLabel="No features written down yet."
+          noun="this feature"
+          fields={FEATURE_FIELDS}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareFeature(sheet, row)}
+        />
+        <EquippedArmor
+          armor={sheet.armor || []}
+          onChange={(armor) => onChange({ ...sheet, armor })}
+          readOnly={readOnly}
+          total={armorClass(sheet)}
+          breakdown={armorClassBreakdown(sheet)}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareArmorPiece(sheet, row)}
+          canCloud={canCloud}
+        />
+
+        {/* Still stored as `equipment`: the heading changed, and nobody's kit
+            should go missing over a word. */}
+        <ItemList
+          title="Inventory"
+          items={inventoryRows(sheet)}
+          onChange={set('equipment')}
+          readOnly={readOnly}
+          addLabel="+ Item"
+          emptyLabel="Carrying nothing yet."
+          noun="this item"
+          fields={INVENTORY_FIELDS}
+          // A picture of the thing, under each row. Stills only: a bag of kit
+          // where every third line is playing an animation to itself is a list
+          // nobody can read down.
+          media={{ hint: 'what it looks like', canCloud }}
+          summary={<CarriedWeight sheet={sheet} />}
+          sharing={sharing}
+          onPick={onPick}
+          shareRow={(row) => shareInventoryItem(sheet, row)}
+        />
         <Shareable {...share(shareCurrency(sheet))}>
           <div className="box">
             <h4>Currency</h4>
@@ -1036,69 +1136,6 @@ function MainPage({ sheet, set, onChange, readOnly, pb, askCheck, askAttack, sha
           </div>
         </Shareable>
 
-        <EquippedArmor
-          armor={sheet.armor || []}
-          onChange={(armor) => onChange({ ...sheet, armor })}
-          readOnly={readOnly}
-          total={armorClass(sheet)}
-          breakdown={armorClassBreakdown(sheet)}
-          sharing={sharing}
-          onPick={onPick}
-          shareRow={(row) => shareArmorPiece(sheet, row)}
-        />
-
-        {/* Still stored as `equipment`: the heading changed, and nobody's kit
-            should go missing over a word. */}
-        <ItemList
-          title="Inventory"
-          items={inventoryRows(sheet)}
-          onChange={set('equipment')}
-          readOnly={readOnly}
-          addLabel="+ Item"
-          emptyLabel="Carrying nothing yet."
-          noun="this item"
-          fields={INVENTORY_FIELDS}
-          summary={<CarriedWeight sheet={sheet} />}
-          sharing={sharing}
-          onPick={onPick}
-          shareRow={(row) => shareInventoryItem(sheet, row)}
-        />
-      </div>
-
-      {/* ---- column three: roleplay ---- */}
-      <div className="sheet-col">
-        {[
-          ['Personality traits', 'personalityTraits', 3],
-          ['Ideals', 'ideals', 3],
-          ['Bonds', 'bonds', 3],
-          ['Flaws', 'flaws', 3],
-        ].map(([label, key, rows]) => (
-          <Shareable key={key} {...share(shareProse(sheet, label, sheet[key]))}>
-            <Area
-              label={label}
-              value={sheet[key]}
-              onChange={set(key)}
-              readOnly={readOnly}
-              rows={rows}
-            />
-          </Shareable>
-        ))}
-        <ItemList
-          title="Features & traits"
-          items={featureRows(sheet)}
-          onChange={set('featuresAndTraits')}
-          readOnly={readOnly}
-          addLabel="+ Feature"
-          emptyLabel="No features written down yet."
-          noun="this feature"
-          fields={FEATURE_FIELDS}
-          sharing={sharing}
-          onPick={onPick}
-          shareRow={(row) => shareFeature(sheet, row)}
-        />
-        <Shareable {...share(shareProse(sheet, 'Notes', sheet.notes))}>
-          <Area label="Notes" value={sheet.notes} onChange={set('notes')} readOnly={readOnly} rows={5} />
-        </Shareable>
       </div>
 
       {confirmAttack && (
@@ -1133,6 +1170,7 @@ function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {
 
   return (
     <div className="sheet-grid two">
+      {/* ---- who they are ---- */}
       <div className="sheet-col">
         <Shareable {...share(shareAppearance(sheet))}>
           <div className="box">
@@ -1151,12 +1189,25 @@ function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {
           </div>
         </Shareable>
         {prose('Character appearance', 'appearanceNotes', 6)}
-        {prose('Allies & organizations', 'alliesAndOrganizations', 6)}
+        {/* The four that used to sit down the right of the Character tab. They
+            are prose about a person rather than anything anybody reaches for
+            mid-turn, which is what this page is, and moving them here gave the
+            other one back a whole column. */}
+        {prose('Personality traits', 'personalityTraits', 4)}
+        {prose('Ideals', 'ideals', 4)}
+        {prose('Bonds', 'bonds', 4)}
+        {prose('Flaws', 'flaws', 4)}
       </div>
+
+      {/* ---- and what has happened to them ---- */}
       <div className="sheet-col">
         {prose('Character backstory', 'backstory', 12)}
+        {prose('Allies & organizations', 'alliesAndOrganizations', 6)}
         {prose('Additional features & traits', 'additionalFeatures', 8)}
         {prose('Treasure', 'treasure', 6)}
+        {/* Last, and deliberately: a scratch pad is where you put what has no
+            box of its own, so it belongs after every box that has one. */}
+        {prose('Notes', 'notes', 6)}
       </div>
     </div>
   );

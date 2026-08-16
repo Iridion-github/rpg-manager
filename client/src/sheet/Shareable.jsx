@@ -98,6 +98,10 @@ export function SharePreviewModal({ share, busy, error, onCancel, onSend }) {
         <div className="chat-excerpt share-preview">
           <strong>{share.title}</strong>
           <p>{share.text}</p>
+          {/* The picture on the row, drawn the size the chat will draw it: the
+              preview is the message rather than a description of it, and a
+              picture left out of it would be a surprise in the log. */}
+          {share.media && <img className="excerpt-media" src={share.media} alt="" />}
         </div>
 
         {error && <p className="error">{error}</p>}

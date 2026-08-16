@@ -190,7 +190,7 @@ export default function Chat({ actor, offline }) {
             {m.kind === 'roll' && m.roll ? (
               <RollResult roll={m.roll} />
             ) : m.kind === 'sheet' ? (
-              <SheetExcerpt title={m.title} text={m.text} />
+              <SheetExcerpt title={m.title} text={m.text} media={m.media} />
             ) : (
               <p>{m.text}</p>
             )}
@@ -258,11 +258,15 @@ export default function Chat({ actor, offline }) {
  * it was written with are kept (the CSS preserves them), because they are the
  * formatting.
  */
-function SheetExcerpt({ title, text }) {
+function SheetExcerpt({ title, text, media }) {
   return (
     <div className="chat-excerpt">
       {title && <strong>{title}</strong>}
       <p>{text}</p>
+      {/* What the thing looks like, when the row it came off had a picture.
+          Capped like a roll's, and for the same reason: the log is read past,
+          and one shared item must not cost a screen of scrolling. */}
+      {media && <img className="excerpt-media" src={media} alt={title || 'Shared'} />}
     </div>
   );
 }
@@ -353,6 +357,13 @@ function RollResult({ roll }) {
         ))}
       </span>
       <span className="roll-total">= {total}</span>
+      {/* What the attack looks like when it lands. Held to a thumbnail's worth
+          of the column: the chat is a log to be read past, and a picture that
+          pushed three lines of it off the screen would be a picture nobody
+          thanked you for. Absent from every roll but an attack's. */}
+      {roll.media && (
+        <img className="roll-media" src={roll.media} alt={label ? `${label} in action` : 'Attack'} />
+      )}
     </div>
   );
 }

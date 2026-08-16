@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
+import MediaField from './MediaField.jsx';
 import Shareable from './Shareable.jsx';
 
 const uid = () => crypto.randomUUID();
@@ -47,6 +48,15 @@ export default function ItemList({
   sharing = false,
   onPick = null,
   shareRow = null,
+  /**
+   * Whether a row may carry a picture, and how it is offered.
+   *
+   * `{ hint, canCloud }` turns the strip on; leaving it out is a list of words,
+   * which is what the proficiencies and the features are. Only the inventory
+   * asks for it so far - a rope is a thing you can be shown, where "Common,
+   * Dwarvish" is not.
+   */
+  media = null,
 }) {
   // Same reasoning as the armour and attack rows: one click, and a sheet has
   // no undo. The dialog names the row so that a column of identical ✕ buttons
@@ -123,6 +133,17 @@ export default function ItemList({
                 <span>{f.label}</span>
               </label>
             ))}
+
+            {media && (
+              <MediaField
+                url={item.media || ''}
+                alt={item.title || 'Item'}
+                readOnly={readOnly}
+                canCloud={media.canCloud}
+                hint={media.hint}
+                onChange={(url) => setField(item.id, 'media', url)}
+              />
+            )}
           </li>
           </Shareable>
         ))}
