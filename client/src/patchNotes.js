@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'change',
+        text: 'The zoom slider goes twice as far out. At the far end of it the map is now half the width and height it used to be there, so a large scene fits on screen in one piece instead of running off the edges. The near end is unchanged.',
+      },
+      {
+        kind: 'change',
         text: 'The table looks at one scene, and the DM decides which. Players no longer have a scene picker at the top of the tabletop - they see the scene the DM has set, and it changes under them the moment the DM sets another. The DM keeps their picker, and it still only moves their own screen, so the next map can be built while everybody else is on this one. To hand a scene to the table, open the Scene Manager, pick it, and press Set as Selected Scene; it asks first, and the one the players are on is marked with a green dot in the list.',
       },
       {

@@ -255,8 +255,20 @@ const TURNS_MIN = { w: 190, h: 120 };
 const PIN_Z_BASE = 300;
 const PIN_Z_CEILING = 340;
 
-// Zoom bounds shared by the slider and the wheel, so the two can't disagree.
-const ZOOM_MIN = 0.4;
+/**
+ * Zoom bounds, shared by the slider and the wheel so the two can't disagree.
+ *
+ * The floor is 0.2 rather than the 0.4 it was: at 0.4 a large map still ran off
+ * the screen, and the thing anybody actually wants from the far end of the
+ * slider is the whole board at once - where the party is in the dungeon rather
+ * than what is written on the door. Halving it halves the map's width and height
+ * again, which is a quarter of the area and enough to hold any map this app can
+ * be given.
+ *
+ * The ceiling is left where it is. Past 2 the picture is bigger than the picture
+ * has detail for, and every map goes soft.
+ */
+const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
 // Grid bounds, shared by its slider and the wheel for the same reason.
