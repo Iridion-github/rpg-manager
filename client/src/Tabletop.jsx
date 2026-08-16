@@ -14,6 +14,8 @@ import MeasureTools from './MeasureTools.jsx';
 import PinIcon from './PinIcon.jsx';
 import PinModal from './PinModal.jsx';
 import PinWindow from './PinWindow.jsx';
+import FogSettings from './FogSettings.jsx';
+import { discsFor, fogOf, litCellsFor, maskOf, maskOfRects } from './fog.js';
 import GridSettings from './GridSettings.jsx';
 import {
   cellCentre,
@@ -872,6 +874,20 @@ export default function Tabletop({ actor, players, offline }) {
   // of them.
   const pinDragRef = useRef(null);
 
+  // --- fog of war ---
+  // Whether the fog window is open. The DM's, and it says nothing about whether
+  // the fog is *on*: the window is where that is decided, and it can be read
+  // and edited with the lights either way.
+  const [fogWindow, setFogWindow] = useState(false);
+  /**
+   * The token whose eyes the DM is borrowing, or null.
+   *
+   * Local to this screen and sent nowhere: looking through somebody's eyes
+   * changes nothing about the board, and the table has no business knowing the
+   * DM is checking what the wizard can see from the doorway.
+   */
+  const [povTokenId, setPovTokenId] = useState(null);
+
   const isDm = actor?.role === 'dm';
   /**
    * The scene on screen, which is not merely "the one whose id is selected".
@@ -983,6 +999,8 @@ export default function Tabletop({ actor, players, offline }) {
     // hand and stays as you left it.
     setOpenPinIds([]);
     setPinForm(null);
+    // Borrowed eyes belong to a creature on the board you have just left.
+    setPovTokenId(null);
   }, [selectedId]);
 
   // Pings outlive the component if nobody stops them: each one is a pending
@@ -1220,10 +1238,18 @@ export default function Tabletop({ actor, players, offline }) {
    * a *new* shape out of the map.
    */
   const drawing = canDraw && shapeWindow;
-  // What could be put on the board right now. A token already standing on a
-  // scene - this one or another - is not a thing you can place; it is a thing
-  // you can go and look at.
-  const placeable = roster.filter((t) => !t.sceneId);
+  /**
+   * What could be put on *this* board right now.
+   *
+   * Everything in the cast except what is already standing here. A creature can
+   * be on several maps at once - the innkeeper in the square and in the tavern -
+   * so standing somewhere else is no reason not to offer it; standing here is,
+   * because a second figure of one creature on one map is two things the board
+   * cannot tell apart. That is what copying is for.
+   */
+  const placeable = roster.filter(
+    (t) => !(t.scenes || []).some((where) => where.id === selectedId)
+  );
   const shapes = scene?.shapes || [];
   const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
   // Yours if you drew it, anyone's if you're the DM - the rule the server keeps.
@@ -1287,6 +1313,71 @@ export default function Tabletop({ actor, players, offline }) {
   // Every pin as it stands this frame, which is what the titles dodge each
   // other by. Built once rather than per pin, like tokensNow.
   const pinsNow = pins.map((pin) => ({ id: pin.id, ...pinSpot(pin) }));
+
+  // --- fog of war ---
+  const fog = fogOf(scene);
+  const fogActive = fog.on === true;
+  // The creature whose sight the DM is borrowing. Read from the live scene, so
+  // a POV of a token somebody has just taken off the board falls away rather
+  // than leaving the screen dark around a creature that isn't there.
+  const povToken = povTokenId ? (scene?.tokens || []).find((t) => t.id === povTokenId) : null;
+  /**
+   * Whose eyes this screen is looking through, or null for "no fog here".
+   *
+   * Three answers. Borrowed eyes while the DM is in a token's point of view;
+   * none at all for the DM otherwise, whose own board is never dimmed - they
+   * are running the fight and need to see the room they are describing; and
+   * your own creatures for everybody else, all of them at once, since a player
+   * with a familiar out scouting sees through both.
+   *
+   * A player with nothing on the board gets an empty list, which is not the
+   * same as null: it means the lights are out and they have no lantern.
+   */
+  const fogEyes = !fogActive
+    ? null
+    : povToken
+      ? [povToken]
+      : isDm
+        ? null
+        : (scene?.tokens || []).filter((t) => t.ownerId && t.ownerId === actor?.userId);
+  /**
+   * The two patches of light, as they stand this frame - ready to be worn by a
+   * layer that covers everything else.
+   *
+   * Each band is one of three things. `null` is somebody who sees without limit:
+   * no layer at all. An empty object is a layer with no mask, which covers the
+   * board entirely - what somebody with nothing on it sees. Anything else is the
+   * mask that cuts the light out of it.
+   *
+   * Shaped by the board rather than by the geometry: with a grid, sight is read
+   * off the grid like everything else on it, and what a table wants to know is
+   * whether it can see *that square*. Without one there are no squares to round
+   * to and the circle is the honest answer. See litCellsFor.
+   *
+   * Positions come from tokensNow rather than from the stored tokens, so the
+   * light travels with your own drag instead of waiting for the drop - which is
+   * what makes walking into a dark room feel like walking rather than
+   * teleporting.
+   */
+  const fogLight = (() => {
+    if (!fogEyes) return null;
+    const positions = Object.fromEntries(tokensNow.map((t) => [t.id, { x: t.x, y: t.y }]));
+    const geometry = { cellPx, offXPx, offYPx, positions };
+    const lit = (band) => {
+      if (!gridOn) {
+        const discs = discsFor(fogEyes, band, geometry);
+        return discs === null ? null : maskOf(discs) || {};
+      }
+      const cells = litCellsFor(fogEyes, band, {
+        ...geometry,
+        // The board's own first and last squares, so a creature standing at the
+        // edge doesn't light a mile of nothing beyond it.
+        bounds: { minCol, maxCol, minRow, maxRow },
+      });
+      return cells === null ? null : maskOfRects(cells, mapW * zoom, mapH * zoom) || {};
+    };
+    return { clear: lit('clear'), dim: lit('dim') };
+  })();
 
   // --- the ruler ---
   /**
@@ -2185,6 +2276,106 @@ export default function Tabletop({ actor, players, offline }) {
     );
   }
 
+  // --- fog of war ---
+
+  /**
+   * Change the scene's fog: the unit, the scale, or whether the lights are out.
+   *
+   * Applied here and written at once, because every one of these is a single
+   * decision rather than something dragged: there is no half-typed state of
+   * "the lights are off". A failure puts the board back the way the server has
+   * it rather than leaving this browser believing something the table doesn't.
+   */
+  async function saveFog(changes) {
+    if (!scene) return;
+    const next = { ...fog, ...changes };
+    setScenes((prev) => prev.map((s) => (s.id === scene.id ? { ...s, fog: next } : s)));
+    setError('');
+    try {
+      const saved = await api.setFog(scene.id, next);
+      setScenes((prev) => prev.map((s) => (s.id === scene.id ? { ...s, fog: saved } : s)));
+    } catch (e) {
+      setError(e.message);
+      refresh();
+    }
+  }
+
+  /** How far one creature can see. Stored on the token, in cells. */
+  async function saveVision(tokenId, changes) {
+    if (!scene) return;
+    setError('');
+    try {
+      const updated = await api.updateToken(scene.id, tokenId, changes);
+      setScenes((prev) =>
+        prev.map((s) =>
+          s.id === scene.id
+            ? { ...s, tokens: s.tokens.map((t) => (t.id === updated.id ? updated : t)) }
+            : s
+        )
+      );
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  /**
+   * Look through a creature's eyes, and stop.
+   *
+   * Nothing is sent either way. What this changes is which tokens *this* screen
+   * draws the darkness from, and the answer to that question is nobody else's
+   * business - see fogEyes.
+   */
+  function enterPov(tokenId) {
+    setMenu(null);
+    setPovTokenId(tokenId);
+  }
+
+  const exitPov = useCallback(() => setPovTokenId(null), []);
+
+  /**
+   * A point of view outlives nothing.
+   *
+   * The lights coming back on, the creature leaving the board, a change of
+   * scene: each of them leaves a borrowed pair of eyes describing a board that
+   * is no longer there, so each of them gives them back.
+   */
+  useEffect(() => {
+    if (!povTokenId) return;
+    if (!fogActive || !povToken) setPovTokenId(null);
+  }, [povTokenId, povToken, fogActive]);
+
+  /**
+   * Escape gives the eyes back, before it does anything else.
+   *
+   * Capture phase for the same reason the ruler's Escape is: the windows on
+   * screen listen for the key too, and a bubbling handler would find one of
+   * them already closed. Leaving a point of view is the more urgent of the two
+   * - it is a whole mode - so it goes first and stops the event where it is.
+   */
+  useEffect(() => {
+    if (!povTokenId) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || isTyping(e.target)) return;
+      e.stopPropagation();
+      e.preventDefault();
+      exitPov();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [povTokenId, exitPov]);
+
+  /**
+   * Tell the page that the DM is looking through somebody else's eyes.
+   *
+   * The same device the pin-moving mode uses, and for the same reason: what has
+   * to be held still - the tools panel - is drawn by this component, but saying
+   * so in one class keeps the rule in the stylesheet where the greying is.
+   */
+  useEffect(() => {
+    document.body.classList.toggle('fog-pov', Boolean(povTokenId));
+    return () => document.body.classList.remove('fog-pov');
+  }, [povTokenId]);
+
   // --- panning ---
   // Right-drag anywhere on the map moves your view, so you don't have to reach
   // for the scrollbars. Tokens are excluded: a right-click on one keeps its
@@ -2593,6 +2784,8 @@ export default function Tabletop({ actor, players, offline }) {
     const el = e.target.closest?.('.token');
     if (el) {
       const token = scene?.tokens.find((t) => t.id === el.dataset.tokenId);
+      // In a borrowed point of view, only that creature has a menu.
+      if (povTokenId && token?.id !== povTokenId) return;
       if (offline || !(isDm || canMove(token))) return;
       e.preventDefault();
       setMenu({
@@ -2829,9 +3022,13 @@ export default function Tabletop({ actor, players, offline }) {
   const copyCount = useMemo(() => {
     if (!clipboard) return 0;
     const root = clipboard.copyOf || clipboard.id;
-    const placed = scenes.flatMap((s) => s.tokens || []);
-    const benched = roster.filter((t) => !t.sceneId);
-    return [...placed, ...benched].filter((t) => t.copyOf === root).length;
+    // Once each: a creature standing on three maps is one member of the family,
+    // and counting its figures would name the next paste "(Copy 4)" for a table
+    // holding two goblins.
+    const byId = new Map();
+    for (const token of scenes.flatMap((s) => s.tokens || [])) byId.set(token.id, token);
+    for (const token of roster) if (!byId.has(token.id)) byId.set(token.id, token);
+    return [...byId.values()].filter((t) => t.copyOf === root).length;
   }, [clipboard, scenes, roster]);
 
   // What the next paste will be called: the original's name, and how many of
@@ -3053,6 +3250,10 @@ export default function Tabletop({ actor, players, offline }) {
     // Nor while pins are being placed: in that mode the hand is aimed at pins,
     // and a token dragged along the way would be a move nobody made on purpose.
     if (movingPins) return;
+    // In somebody else's point of view the only creature that answers is the
+    // one whose eyes are borrowed. Everything else on that board is scenery you
+    // are looking at from where it stands.
+    if (povTokenId && token.id !== povTokenId) return;
     if (!canMove(token)) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -3364,7 +3565,30 @@ export default function Tabletop({ actor, players, offline }) {
       run: () => removeScene(confirmDelete.id),
     },
     token: {
-      description: 'This takes the token off the map for everyone at the table.',
+      /**
+       * Deleting is deleting the creature, not the figure in front of you.
+       *
+       * One token can stand on several maps at once now, so the sentence names
+       * the others when there are any: taking the innkeeper off the town square
+       * with this would take it out of the tavern as well, and that is worth
+       * knowing before rather than after. Remove from table is the reversible
+       * one, and it only ever touches this map.
+       */
+      description: (() => {
+        // This object is built on every render, dialog or no dialog, so the
+        // question it is about may not have been asked yet.
+        if (!confirmDelete) return '';
+        const elsewhere = (
+          roster.find((t) => t.id === confirmDelete.id)?.scenes || []
+        ).filter((where) => where.id !== selectedId);
+        if (!elsewhere.length) return 'This takes the token off the map for everyone at the table.';
+        const names = elsewhere.map((where) => where.name);
+        const list =
+          names.length === 1
+            ? names[0]
+            : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        return `This deletes the creature everywhere it stands, which is this map and ${list}. To take it off this one only, choose Remove from table instead.`;
+      })(),
       confirmLabel: 'Delete token',
       run: () => removeToken(confirmDelete.id),
     },
@@ -3787,6 +4011,22 @@ export default function Tabletop({ actor, players, offline }) {
                 );
               })}
 
+            {/* The dark, over everything on the board.
+
+              Two layers, and the order matters. Underneath, the grey: it
+              covers everything outside the sharp circle and drains the colour
+              from what shows through it, which is what "you can make it out,
+              but only just" looks like. On top, the black: it covers everything
+              outside the wider circle, and being opaque it hides the grey
+              wherever both apply.
+
+              So a pixel is normal inside the first circle, grey between the
+              two, and black beyond - out of two layers and no arithmetic about
+              rings. Neither takes the pointer: what you cannot see you cannot
+              click, and the tokens under here were never sent to you anyway. */}
+            {fogLight?.clear && <div className="fog-layer fog-dim" style={fogLight.clear} />}
+            {fogLight?.dim && <div className="fog-layer fog-dark" style={fogLight.dim} />}
+
             {/* The ruler, over everything.
 
               Above the tokens rather than under them, unlike the drawing layer:
@@ -3884,7 +4124,7 @@ export default function Tabletop({ actor, players, offline }) {
                   placed. The stylesheet greys the panel too; this is what stops
                   a keyboard reaching them behind it. */}
               {isDm && (
-                <button onClick={toggleTurnMode} disabled={busy || movingPins}>
+                <button onClick={toggleTurnMode} disabled={busy || movingPins || Boolean(povTokenId)}>
                   {turnMode ? 'Exit Turn mode' : 'Enter Turn mode'}
                 </button>
               )}
@@ -3902,7 +4142,7 @@ export default function Tabletop({ actor, players, offline }) {
                   }}
                   aria-pressed={shapeWindow}
                   className={shapeWindow ? 'active' : ''}
-                  disabled={movingPins}
+                  disabled={movingPins || Boolean(povTokenId)}
                 >
                   {shapeWindow ? 'Standard mode' : 'Draw mode'}
                 </button>
@@ -3919,7 +4159,7 @@ export default function Tabletop({ actor, players, offline }) {
                 }}
                 aria-pressed={measureWindow}
                 className={measureWindow ? 'active' : ''}
-                disabled={movingPins}
+                disabled={movingPins || Boolean(povTokenId)}
               >
                 {measureWindow ? 'Standard mode' : 'Measuring mode'}
               </button>
@@ -3933,10 +4173,24 @@ export default function Tabletop({ actor, players, offline }) {
                 className={showPins ? 'active' : ''}
                 // Putting the pins away in the middle of arranging them would
                 // take the map out from under the mode.
-                disabled={movingPins}
+                disabled={movingPins || Boolean(povTokenId)}
               >
                 {showPins ? 'Hide pins' : 'Show pins'}
               </button>
+              {/* The DM's alone. Everything behind it - who sees how far, and
+                  whether the lights are out - is a decision about what the rest
+                  of the table is allowed to know. */}
+              {isDm && (
+                <button
+                  onClick={() => setFogWindow(true)}
+                  aria-pressed={fogActive}
+                  className={fogActive ? 'active' : ''}
+                  disabled={offline || movingPins || Boolean(povTokenId)}
+                  title="Who sees how far, and whether the lights are out"
+                >
+                  Fog of War{fogActive ? ' (on)' : ''}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -4293,6 +4547,18 @@ export default function Tabletop({ actor, players, offline }) {
               <button onClick={copyToken} title="Then right-click the map to paste a copy">
                 Copy token
               </button>
+              {/* Only with the lights out, and only for the person who put them
+                  out: this is how the DM checks what a creature can actually
+                  see from where it is standing, which is the question fog
+                  raises and nothing else on this menu answers. */}
+              {isDm && fogActive && !povTokenId && (
+                <button
+                  onClick={() => enterPov(menu.tokenId)}
+                  title="See the board as this creature sees it"
+                >
+                  Fog of War POV
+                </button>
+              )}
               {/* Above Delete and worded plainly, because these two look alike
                   and one of them can't be undone. This is the reversible one. */}
               <button onClick={benchToken}>Remove from table</button>
@@ -4444,6 +4710,45 @@ export default function Tabletop({ actor, players, offline }) {
           canCloud={isDm}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
+        />
+      )}
+
+      {/* Whose eyes the DM has borrowed, and the way back out. Top right rather
+          than top centre, where the pin-moving bar sits: the two can never be
+          on screen together, but a reader who has met one should not have to
+          check which of them this is. */}
+      {povToken && (
+        <div className="fog-pov-bar" role="dialog" aria-label="Point of view">
+          <span className="hint">You are seeing the board as</span>
+          <span className="fog-pov-token">
+            <span
+              className="fog-swatch"
+              style={{
+                background: povToken.imageUrl
+                  ? `center / cover no-repeat url(${JSON.stringify(povToken.imageUrl)})`
+                  : povToken.color,
+              }}
+            />
+            <strong>{povToken.label || 'Token'}</strong>
+          </span>
+          <button type="button" onClick={exitPov} title="Escape does this too">
+            Exit POV
+          </button>
+        </div>
+      )}
+
+      {fogWindow && isDm && (
+        <FogSettings
+          fog={fog}
+          // Every creature on this board, the DM's hidden ones included: a
+          // monster nobody can see still has eyes, and its point of view is
+          // exactly what the DM will want to check.
+          tokens={scene.tokens}
+          players={players}
+          onFog={saveFog}
+          onVision={saveVision}
+          onClose={() => setFogWindow(false)}
+          offline={offline}
         />
       )}
 

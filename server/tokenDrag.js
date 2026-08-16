@@ -24,6 +24,7 @@
 
 const store = require('./store');
 const { scoped, roleIn, canMoveToken, CAMPAIGNS } = require('./campaigns');
+const { fogOn, reaches } = require('./fog');
 
 const SCENES = 'scenes';
 
@@ -46,6 +47,41 @@ const inBounds = (v) => Number.isFinite(v) && v >= -500 && v <= 500;
 // running it when the token is one the players were never sent.
 const ghostRoom = (drag) =>
   drag.hidden ? dmRoomFor(drag.campaignId) : roomFor(drag.campaignId);
+
+/**
+ * Everybody's tokens on this scene, by whose they are.
+ *
+ * Only the ones with an owner: a monster has no eyes to lend anybody, and a
+ * token nobody owns can watch nothing. Read once at the start of a drag.
+ */
+function eyesIn(scene) {
+  const eyes = new Map();
+  for (const token of scene.tokens || []) {
+    if (!token.ownerId) continue;
+    const mine = eyes.get(token.ownerId) || [];
+    mine.push(token);
+    eyes.set(token.ownerId, mine);
+  }
+  return eyes;
+}
+
+/**
+ * Whether this connection may watch that ghost move.
+ *
+ * The DM watches everything. A player watches their own token wherever it goes,
+ * and anybody else's only while it is within sight of one of theirs. Somebody
+ * with nothing on the board watches nothing, which is the same answer the scene
+ * itself gives them.
+ */
+function canWatch(other, drag, ghost) {
+  if (other.data.campaignRole === 'dm') return true;
+  const userId = other.data.actor?.userId;
+  if (!userId) return false;
+  if (drag.ownerId && drag.ownerId === userId) return true;
+  const mine = drag.eyes?.get(userId) || [];
+  const at = { x: ghost.x, y: ghost.y, size: drag.size };
+  return mine.some((eye) => reaches(eye, at));
+}
 
 function registerTokenDrag(io) {
   io.on('connection', (socket) => {
@@ -73,7 +109,27 @@ function registerTokenDrag(io) {
         // them should cost a disk read. A token hidden mid-drag keeps showing
         // its ghost until the drag ends, which is a fraction of a second and
         // the price of not re-reading the scene per frame.
-        socket.data.drag = { campaignId, sceneId, tokenId, hidden: token.visible === false };
+        /**
+         * And, on a board played in the dark, whose sight the ghost has to
+         * pass before it may be shown.
+         *
+         * The eyes are read once, here, with the scene already in hand: they
+         * are the *watchers'* tokens, which are standing still while somebody
+         * else drags. The dragged token is what moves, so the test is redone
+         * per frame against a position that changes - which is what lets a
+         * monster walk into somebody's torchlight and appear as it arrives.
+         */
+        const dark = fogOn(scene);
+        socket.data.drag = {
+          campaignId,
+          sceneId,
+          tokenId,
+          hidden: token.visible === false,
+          dark,
+          size: token.size || 1,
+          ownerId: token.ownerId || null,
+          eyes: dark ? eyesIn(scene) : null,
+        };
         ack?.({ ok: true });
       } catch (err) {
         ack?.({ ok: false, error: 'Could not start drag' });
@@ -86,16 +142,34 @@ function registerTokenDrag(io) {
       // client from shoving other people's tokens around.
       if (!drag) return;
       if (!inBounds(Number(x)) || !inBounds(Number(y))) return;
-      // To everyone at *this table* except the dragger, who is already
-      // rendering their own pointer - or, for a token the players cannot see,
-      // to the other people running the table and nobody else.
-      socket.to(ghostRoom(drag)).emit('token:dragging', {
+      const ghost = {
         sceneId: drag.sceneId,
         tokenId: drag.tokenId,
         x: Number(x),
         y: Number(y),
         by: socket.data.actor?.name || '',
-      });
+      };
+      /**
+       * In the dark the room is the wrong unit: who may watch a token move is
+       * a question about where *they* are standing, and the answer differs
+       * from one player to the next. So the frame is offered to each socket in
+       * turn and most of them are told nothing.
+       *
+       * A hidden token is still settled by the room above this - it is hidden
+       * from everyone whatever the fog says - and this only runs when it isn't.
+       */
+      if (drag.dark && !drag.hidden) {
+        for (const other of io.of('/').sockets.values()) {
+          if (other === socket) continue; // the dragger renders their own pointer
+          if (other.data.campaignId !== drag.campaignId) continue;
+          if (canWatch(other, drag, ghost)) other.emit('token:dragging', ghost);
+        }
+        return;
+      }
+      // To everyone at *this table* except the dragger, who is already
+      // rendering their own pointer - or, for a token the players cannot see,
+      // to the other people running the table and nobody else.
+      socket.to(ghostRoom(drag)).emit('token:dragging', ghost);
     });
 
     const endDrag = () => {

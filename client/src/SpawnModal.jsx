@@ -33,13 +33,16 @@ export default function SpawnModal({ bench, owners, onPick, onClose }) {
 
         {bench.length === 0 ? (
           <p className="hint">
-            Nothing is waiting off the table. A token gets here by being taken off one -
-            right-click it and choose <strong>Remove from table</strong>, which keeps it for
-            later rather than deleting it.
+            Nothing left to place here. Every token you can place is already standing on this
+            scene - to have two of one creature on one map, right-click it and choose{' '}
+            <strong>Copy token</strong> instead.
           </p>
         ) : (
           <>
-            <p className="hint">It goes where you right-clicked.</p>
+            <p className="hint">
+              It goes where you right-clicked. A creature already standing on another map comes
+              here as well, rather than instead: it is the same token in both places.
+            </p>
             <ul className="spawn-list">
               {bench.map((t) => (
                 <li key={t.id}>
@@ -56,6 +59,14 @@ export default function SpawnModal({ bench, owners, onPick, onClose }) {
                     <span className="spawn-who">
                       <strong>{t.label}</strong>
                       {nameOf(t.ownerId) && <small>{nameOf(t.ownerId)}'s</small>}
+                      {/* Already out somewhere else. Worth saying, because what
+                          arrives here is that same creature and not a second
+                          one: wound it here and it is wounded there. */}
+                      {(t.scenes || []).length > 0 && (
+                        <small className="spawn-elsewhere">
+                          also on {t.scenes.map((w) => w.name).join(', ')}
+                        </small>
+                      )}
                     </span>
                   </button>
                 </li>

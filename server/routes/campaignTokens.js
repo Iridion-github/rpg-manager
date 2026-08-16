@@ -40,7 +40,7 @@ const {
   isDm,
 } = require('../campaigns');
 const sheetLink = require('../sheetLink');
-const { locateToken } = require('../tokenCopies');
+const { locateToken, patchEverywhere, removeEverywhere } = require('../tokenCopies');
 
 const router = express.Router({ mergeParams: true });
 
@@ -131,21 +131,48 @@ function announceScene(req, action, scene) {
   }));
 }
 
-/** Every token in the campaign, with the scene it stands on if it stands on one. */
+/**
+ * Write a patch onto every figure of one creature, and tell the tables looking
+ * at them. The other half of patchEverywhere: the writing is arithmetic, the
+ * announcing needs the request.
+ */
+async function announceEverywhere(req, tokenId, patch) {
+  const touched = await patchEverywhere(req.campaignId, tokenId, patch);
+  for (const sceneId of touched) {
+    const scene = await store.get(scenesOf(req), sceneId);
+    if (scene) announceScene(req, 'token:update', scene);
+  }
+  return touched;
+}
+
+/**
+ * Every token in the campaign, once each, with everywhere it is standing.
+ *
+ * Once each because a token can stand on several maps at a time now, and this
+ * is a cast list: the innkeeper is one entry that happens to be in two places,
+ * not two innkeepers. `scenes` is that list; `sceneId` and `sceneName` are the
+ * first of them, kept because "is it placed at all, and where do I look first"
+ * is what most of the callers actually ask.
+ */
 async function everyToken(req) {
   const scenes = await store.list(scenesOf(req));
-  const placed = [];
+  const byId = new Map();
   for (const scene of scenes) {
+    const where = { id: scene.id, name: scene.name || 'Untitled scene' };
     for (const token of scene.tokens || []) {
-      placed.push({ ...token, sceneId: scene.id, sceneName: scene.name || 'Untitled scene' });
+      const seen = byId.get(token.id);
+      if (seen) seen.scenes.push(where);
+      else byId.set(token.id, { ...token, scenes: [where] });
     }
   }
-  const benched = (await store.list(benchOf(req))).map((t) => ({
-    ...t,
-    sceneId: null,
-    sceneName: null,
+  for (const token of await store.list(benchOf(req))) {
+    if (!byId.has(token.id)) byId.set(token.id, { ...token, scenes: [] });
+  }
+  return [...byId.values()].map((token) => ({
+    ...token,
+    sceneId: token.scenes[0]?.id || null,
+    sceneName: token.scenes[0]?.name || null,
   }));
-  return [...placed, ...benched];
 }
 
 /**
@@ -260,20 +287,29 @@ router.put('/:tokenId', requireUser, async (req, res, next) => {
       : {};
     const patch = { ...sanitizeLook(req.body, found.token), ...dmOnly };
 
-    if (found.where === 'bench') {
+    // Everywhere it stands, and the bench if that is where it is waiting. One
+    // creature has one name and one face however many maps it is on.
+    const touched = await patchEverywhere(req.campaignId, req.params.tokenId, patch);
+
+    if (!touched.length) {
       const updated = { ...found.token, ...patch };
-      await store.put(benchOf(req), updated);
       broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: updated.id } });
-      return res.json({ ...updated, sceneId: null, sceneName: null });
+      return res.json({ ...updated, scenes: [], sceneId: null, sceneName: null });
     }
 
-    const scene = await store.mutate(scenesOf(req), found.sceneId, (current) => ({
-      ...current,
-      tokens: current.tokens.map((t) => (t.id === req.params.tokenId ? { ...t, ...patch } : t)),
-    }));
-    announceScene(req, 'token:update', scene);
-    const updated = scene.tokens.find((t) => t.id === req.params.tokenId);
-    res.json({ ...updated, sceneId: scene.id, sceneName: scene.name });
+    let updated = null;
+    for (const sceneId of touched) {
+      const scene = await store.get(scenesOf(req), sceneId);
+      if (!scene) continue;
+      announceScene(req, 'token:update', scene);
+      if (!updated) {
+        updated = { ...scene.tokens.find((t) => t.id === req.params.tokenId) };
+        updated.scenes = [{ id: scene.id, name: scene.name || 'Untitled scene' }];
+        updated.sceneId = scene.id;
+        updated.sceneName = scene.name;
+      }
+    }
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -310,6 +346,10 @@ router.put('/:tokenId/sheet', requireUser, async (req, res, next) => {
 
     if (!sheetId) {
       const patch = await sheetLink.unlink(req.campaignId, found);
+      // And on every other map this creature is standing on: one figure holding
+      // a character and another that has let go would be two answers to whose
+      // hit points these are.
+      await announceEverywhere(req, found.token.id, patch);
       broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: found.token.id } });
       return res.json({ ...found.token, ...patch });
     }
@@ -325,6 +365,9 @@ router.put('/:tokenId/sheet', requireUser, async (req, res, next) => {
     }
 
     const { patch, scenes } = await sheetLink.link(req.campaignId, found, sheet);
+    // The same coupling on every map it stands on. sheetLink writes the one
+    // placement it was handed; the others are this creature too.
+    await announceEverywhere(req, found.token.id, patch);
     // A roster nudge rather than a scene update: the token may be on the bench,
     // and the tab that cares is listening for this either way.
     broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: found.token.id } });
@@ -350,18 +393,18 @@ router.delete('/:tokenId', requireUser, async (req, res, next) => {
       throw new HttpError(403, 'You can only delete your own token.');
     }
 
-    if (found.where === 'bench') {
-      await store.remove(benchOf(req), req.params.tokenId);
+    // Off every map it stands on, and off the bench: a creature deleted from
+    // the cast list has to be gone from the campaign, not from one of the three
+    // places it happened to be.
+    const touched = await removeEverywhere(req.campaignId, req.params.tokenId);
+    if (!touched.length) {
       broadcast(req, 'scenes:changed', { action: 'token:roster', record: { id: req.params.tokenId } });
       return res.status(204).end();
     }
-
-    const scene = await store.mutate(scenesOf(req), found.sceneId, (current) => ({
-      ...current,
-      tokens: current.tokens.filter((t) => t.id !== req.params.tokenId),
-      turnTokenId: current.turnTokenId === req.params.tokenId ? null : current.turnTokenId,
-    }));
-    announceScene(req, 'token:delete', scene);
+    for (const sceneId of touched) {
+      const scene = await store.get(scenesOf(req), sceneId);
+      if (scene) announceScene(req, 'token:delete', scene);
+    }
     res.status(204).end();
   } catch (err) {
     next(err);

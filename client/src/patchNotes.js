@@ -27,6 +27,18 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'change',
+        text: 'A token can stand on several scenes at once. Right-click a map, choose Place Token, and the list now offers every creature you can place - including ones already out on another map - with a note saying where else they are. What arrives is the same token and not a copy: rename it, repaint it, wound it or hand it to somebody on any of those maps and every other map agrees at once. Remove from table still takes it off the one map you are looking at, and it only goes back to the waiting list once it is standing nowhere. Delete now says which maps it will empty. To have two of one creature on the same map, copy it as before.',
+      },
+      {
+        kind: 'new',
+        text: 'Fog of war. The DM gets a Fog of War button in the Tools panel: it opens a window listing every creature on the scene with two distances each - how far it sees clearly, and how far it sees at all - written in cells, feet or metres at whatever scale the map is drawn to. Everything in that window saves as you type it, so it can be closed and come back exactly as you left it, and a creature with both boxes empty sees everything, which is what every row starts as. Press Activate Fog of War and the lights go out for the table.',
+      },
+      {
+        kind: 'new',
+        text: 'With the fog on, a player sees the map only where their own creatures can: normal out to the first distance, drained of colour and dimmed out to the second, and black past that. On a scene with a grid the lit area is whole squares, so what you can see is something the table can point at rather than a circle cutting three of them in half; without a grid there are no squares to round to and it stays a circle. Creatures standing in the light appear; everything else is not merely painted over but never sent to their browser at all, so there is nothing to find by poking about in it. Your own token is always visible, and the light travels with it as you drag. The board the DM sees is never dimmed - to check what somebody can actually see from where they are standing, right-click their token and choose Fog of War POV, which borrows that creature\'s eyes until you press Exit POV or Escape.',
+      },
+      {
         kind: 'new',
         text: 'Pins can be rearranged without opening any of them. With the pins showing, right-click one and choose Move pins: the rest of the screen greys out, your cursor becomes a hand, and you can drag any pin of yours anywhere on the scene. The view still pans with a right-drag and zooms with the wheel, Ctrl+Z and Ctrl+Shift+Z take back and put again the moves you make in there, and nothing is saved until you press Confirm movements. Cancel movements puts every pin back where it started.',
       },

@@ -6638,3 +6638,192 @@ body.pins-moving .map-pin.locked {
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+/* --- fog of war ---
+   Two layers over the board, and between them they say how well a thing can be
+   made out: the grey covers everything outside the sharp circle, the black
+   everything outside the wide one, and the black being opaque means only one of
+   them is ever seen at a pixel. Both are inside the surface, so they scroll and
+   zoom with the map they are darkening, and both sit above the tokens and the
+   pins - what you cannot see, you cannot see. */
+.fog-layer {
+  position: absolute;
+  inset: 0;
+  /* Above the pins (7) and everything under them; below the ruler, which is
+     your own instrument rather than part of the world. */
+  z-index: 8;
+  pointer-events: none;
+}
+
+/* The near dark: what shows through is drained of colour and dimmed, which is
+   what "you can make it out" looks like without inventing detail that isn't
+   there. backdrop-filter rather than a grey wash, so the map underneath really
+   does lose its colour instead of being painted over with a colour of its own. */
+.fog-dim {
+  /* Deliberately no contrast() in here. Lowering contrast pulls every value
+     towards mid grey, which *lightens* a dark map instead of dimming it - a
+     night scene came out with a pale halo around the edge of sight. Drain the
+     colour, take the light down, and lay a thin grey over the top so the band
+     reads as a wash on a bright map as well as on a dark one. */
+  background: rgba(122, 128, 140, 0.12);
+  backdrop-filter: grayscale(1) brightness(0.42);
+  -webkit-backdrop-filter: grayscale(1) brightness(0.42);
+}
+
+/* And the dark proper. Not pure black: a fraction of light left in it keeps the
+   board's own edge visible, so the map still reads as a map you are standing in
+   rather than as a browser that has failed to paint. */
+.fog-dark {
+  background: #05070b;
+}
+
+/* --- the fog window --- */
+.modal.fog-modal {
+  width: min(46rem, 100%);
+  max-height: min(80vh, 46rem);
+  overflow: auto;
+}
+
+/* What the numbers are written in, and what a square is worth. */
+.fog-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+  align-items: end;
+}
+
+.fog-scale label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #9aa0b2;
+}
+
+.fog-scale input {
+  width: 5rem;
+}
+
+.fog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.fog-table th {
+  text-align: left;
+  padding: 0.3rem 0.4rem;
+  color: #9aa0b2;
+  font-weight: 600;
+  border-bottom: 1px solid #2b3242;
+  white-space: nowrap;
+}
+
+.fog-table td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid #1d2534;
+  vertical-align: middle;
+}
+
+.fog-table input {
+  width: 4.5rem;
+  box-sizing: border-box;
+}
+
+/* The unit after each box, quietly: three columns of "ft" should not be the
+   loudest thing in the table. */
+.fog-table td small {
+  margin-left: 0.3rem;
+  color: #8b90a0;
+}
+
+.fog-token {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* A token's face at the size of a bullet point, so a list of six guards can be
+   told apart without reading it. */
+.fog-swatch {
+  width: 1.4rem;
+  height: 1.4rem;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+}
+
+.fog-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.fog-name small {
+  color: #8b90a0;
+  font-size: 0.72rem;
+}
+
+.fog-actions {
+  align-items: center;
+}
+
+.fog-state {
+  color: #d29922;
+  font-size: 0.8rem;
+}
+
+/* The question asked before the lights go back on. Inside the window rather
+   than in a dialog of its own: what it is about is on screen behind it, and a
+   second backdrop over the first is a stack nobody enjoys. */
+.fog-confirm {
+  margin-top: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid #6d3b3b;
+  border-radius: 6px;
+  background: #241a1a;
+  font-size: 0.85rem;
+}
+
+.fog-confirm p {
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+
+/* --- a borrowed point of view --- */
+.fog-pov-bar {
+  position: fixed;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 455;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background: #171b24;
+  border: 1px solid #3d5480;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.fog-pov-token {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* While the DM is looking through somebody else's eyes the tools are not
+   theirs to use: everything in that panel is about the board as it is, and
+   this is a view of the board as it is seen. */
+body.fog-pov .map-tools {
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Where a token already is, in the place-a-token list. Quieter than the owner's
+   name above it: it qualifies the row rather than identifying it. */
+.spawn-elsewhere {
+  color: #8b90a0;
+  font-style: italic;
+}

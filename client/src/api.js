@@ -334,6 +334,17 @@ export const api = {
   updatePin: (sceneId, pinId, data) => put(table(`/scenes/${sceneId}/pins/${pinId}`), data),
   deletePin: (sceneId, pinId) => del(table(`/scenes/${sceneId}/pins/${pinId}`)),
 
+  /**
+   * Whether this scene is played in the dark, and how its distances are
+   * written. The DM's alone.
+   *
+   * A route of its own rather than fields on the scene edit, because the scene
+   * edit overwrites everything it carries: a client saving a name change would
+   * otherwise turn the lights back on. How far each creature can see is not
+   * here at all - that lives on the token, and goes through updateToken.
+   */
+  setFog: (sceneId, fog) => put(table(`/scenes/${sceneId}/fog`), fog),
+
   setTurnMode: (sceneId, on) => put(table(`/scenes/${sceneId}/turn`), { on }),
   nextTurn: (sceneId) => put(table(`/scenes/${sceneId}/turn/next`), {}),
   giveTurn: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/turn/current`), { tokenId }),

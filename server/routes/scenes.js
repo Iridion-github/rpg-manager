@@ -31,8 +31,17 @@ const {
   canViewSheet,
   canEditSheet,
 } = require('../campaigns');
+const { sanitizeFog, fogOn, tokensSeenThroughFog } = require('../fog');
 const sheetLink = require('../sheetLink');
-const { rootIdOf, locateToken, countCopies, copyLabelFor } = require('../tokenCopies');
+const {
+  rootIdOf,
+  locateToken,
+  placementsOf,
+  patchEverywhere,
+  removeEverywhere,
+  countCopies,
+  copyLabelFor,
+} = require('../tokenCopies');
 
 const COLLECTION = 'scenes';
 const router = express.Router({ mergeParams: true });
@@ -81,6 +90,9 @@ function sanitizeScene(body = {}) {
     // grid, and they should keep it.
     gridOn: body.gridOn !== false,
     ...gridLook(body),
+    // Fog is deliberately *not* here. Everything in this function is overwritten
+    // by any PUT of the scene, and a client that had never heard of fog would
+    // turn it off by saving a name change. It has a route of its own below.
     width: clamp(Math.round(num(body.width, 0) || fallbackW), 32, 12000),
     height: clamp(Math.round(num(body.height, 0) || fallbackH), 32, 12000),
   };
@@ -268,6 +280,16 @@ function sanitizeToken(body = {}, existing = {}) {
     y: num(y, 0),
     size: clamp(num(size, 1), 0.5, 10),
     ownerId: ownerId ? String(ownerId) : null,
+    /**
+     * How far this creature can see, in cells, or null for "not said".
+     *
+     * On the token rather than on the scene because sight belongs to the
+     * creature: bench a character with darkvision, place it on another map, and
+     * it still has darkvision. Written and read in whatever unit the scene is
+     * set to; the conversion happens in the browser, so what is stored is one
+     * number that means the same thing on every map. See fog.js.
+     */
+    ...sightOf(body, existing),
     sheetId: sheetId ? String(sheetId) : null,
     copyOf: copyOf ? String(copyOf) : null,
     copyIndex: copyIndex === null ? null : num(copyIndex, null),
@@ -407,10 +429,17 @@ function firstFreeCell(scene, size, ignoreId) {
  * player who walks into an invisible dragon learns that something is there and
  * nothing else about it.
  */
-function refuseOverlap(scene, candidate, ignoreId, role) {
+function refuseOverlap(scene, candidate, ignoreId, role, actor) {
   const blocker = blockerFor(scene, candidate, ignoreId);
   if (!blocker) return;
-  const named = canSeeToken(role, blocker) ? blocker.label : '';
+  // The same reasoning applies twice over in the dark: a player who walks into
+  // something they cannot see learns that something is there, and nothing else
+  // about it. Naming it would hand back through a refusal exactly what the fog
+  // is keeping out of their browser.
+  const seen =
+    canSeeToken(role, blocker) &&
+    (role === 'dm' || !fogOn(scene) || tokensSeenThroughFog(scene, actor).includes(blocker));
+  const named = seen ? blocker.label : '';
   throw new HttpError(409, `${named || 'Something'} is already there.`);
 }
 
@@ -560,10 +589,20 @@ router.put('/:id/tokens/:tokenId', requireUser, async (req, res, next) => {
       const updated = {
         ...existing,
         ...asked,
-        ...(dm ? {} : { ownerId: existing.ownerId ?? null, visible: existing.visible !== false }),
+        ...(dm
+          ? {}
+          : {
+            ownerId: existing.ownerId ?? null,
+            visible: existing.visible !== false,
+            // How far a creature can see decides what the rest of the table is
+            // allowed to know about the board. Its owner does not get to widen
+            // it by editing their own token.
+            visionClear: existing.visionClear ?? null,
+            visionDim: existing.visionDim ?? null,
+          }),
       };
       // Growing a token can push it into a neighbour just as moving it can.
-      refuseOverlap(current, updated, updated.id, req.campaignRole);
+      refuseOverlap(current, updated, updated.id, req.campaignRole, req.actor);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === updated.id ? updated : t)),
@@ -589,14 +628,26 @@ router.put('/:id/tokens/:tokenId', requireUser, async (req, res, next) => {
     }
 
     /**
-     * The character's other figures moved with it.
+     * The same creature, on the other maps it is standing on.
      *
-     * A character can stand on more than one map, or twice on one, and a wound
-     * lands on all of them. Announcing this scene from the copy above would be
-     * announcing it as it was *before* a sibling on the same map was updated -
-     * so where that happened, it is read again.
+     * Everything but where it stands: a token on the town square and in the
+     * tavern is one innkeeper, so renaming or wounding it here has to reach
+     * both. Done after the write above rather than inside it, because each
+     * scene is its own record and its own transaction.
      */
-    const alsoMoved = moved?.scenes || [];
+    const alsoHere = await patchEverywhere(req.campaignId, req.params.tokenId, updated, {
+      exceptSceneId: req.params.id,
+    });
+
+    /**
+     * And the character's *other figures* - different tokens holding the same
+     * sheet - which move with it for a different reason.
+     *
+     * A wound lands on all of them. Announcing this scene from the copy above
+     * would be announcing it as it was *before* a sibling on the same map was
+     * updated - so where that happened, it is read again.
+     */
+    const alsoMoved = [...new Set([...(moved?.scenes || []), ...alsoHere])];
     const here = alsoMoved.includes(req.params.id)
       ? (await store.get(scenesOf(req), req.params.id)) || scene
       : scene;
@@ -676,7 +727,7 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
         throw new HttpError(403, 'You can only move your own token.');
       }
       const moved = { ...existing, x: num(req.body?.x, existing.x), y: num(req.body?.y, existing.y) };
-      refuseOverlap(current, moved, moved.id, req.campaignRole);
+      refuseOverlap(current, moved, moved.id, req.campaignRole, req.actor);
       return {
         ...current,
         tokens: current.tokens.map((t) => (t.id === moved.id ? moved : t)),
@@ -695,15 +746,21 @@ router.put('/:id/tokens/:tokenId/position', async (req, res, next) => {
 /**
  * Off the table, but not gone.
  *
- * A token lives in exactly one place at a time: in a scene's `tokens`, or in
- * the campaign's bench. Moving between the two keeps its id, which is what lets
- * a character keep its sheet link, its place in an undo entry and its identity
- * across a change of map. Two copies with one id - a "placed" flag on a token
- * that also sits in a scene - would be the same thing said twice, and the two
- * would eventually disagree.
+ * A token is *standing* on however many scenes it has been placed on, and it is
+ * on the bench when it is standing on none of them. One creature, one id, one
+ * set of everything it is - and a position per map, because where it stands is
+ * the only fact about it that is different from one map to the next.
  *
- * The bench is campaign-level on purpose. A token taken off a map has to be
- * placeable on a *different* map, and it has to survive the deletion of the
+ * That is a change from what this used to promise, which was one place at a
+ * time. The reason is prep: the innkeeper belongs on the town map *and* in the
+ * tavern, and a recurring NPC that had to be taken off one map to appear on the
+ * other was a token you ended up copying, which left the table with two of them
+ * to keep in step by hand. Every write about a token now reaches all of its
+ * placements (see fanOut), so there is still exactly one answer to what a
+ * creature is called, what it looks like and how hurt it is.
+ *
+ * The bench is campaign-level on purpose. A token taken off its last map has to
+ * be placeable on a *different* one, and it has to survive the deletion of the
  * scene it came from, which a scene-shaped home could not promise.
  *
  * Who may move a token between the two is exactly who may move it about on the
@@ -737,16 +794,38 @@ router.put('/:id/tokens/:tokenId/bench', async (req, res, next) => {
     // and keeping it would mean a token that remembers where it used to stand
     // on a scene that may not exist by the time it comes back.
     const { x, y, ...rest } = taken;
-    await store.put(benchOf(req), { ...rest, benchedAt: new Date().toISOString() });
+    /**
+     * The bench is where a token goes when it is standing nowhere.
+     *
+     * A creature that is also on two other maps has not left the table, so it
+     * gets no bench entry - one would put it in the "waiting to be placed" list
+     * while it is plainly in play, and placing it from there would be placing
+     * something that is already out.
+     */
+    const { placements } = await placementsOf(req.campaignId, taken.id);
+    const stillOut = placements.length > 0;
+    if (!stillOut) {
+      await store.put(benchOf(req), { ...rest, benchedAt: new Date().toISOString() });
+    }
     announce(req, 'token:benched', scene);
-    res.json({ benched: rest });
+    res.json({ benched: rest, stillOn: placements.map((p) => p.sceneId) });
   } catch (err) {
     next(err);
   }
 });
 
 /**
- * Back onto a table, at the spot that was right-clicked.
+ * Onto this table, at the spot that was right-clicked.
+ *
+ * From the bench, or from another map it is already standing on: the same
+ * creature can be on the town square and in the tavern at once, and placing it
+ * a second time is how it gets there. What arrives is the same token, id and
+ * all - not a copy - so renaming it or wounding it anywhere reaches every map
+ * it is on. Copying is the other thing, and it has its own route below.
+ *
+ * The one refusal is placing it where it already is. A second figure of one
+ * creature on one map would be two things the board cannot tell apart and the
+ * app cannot address separately, which is exactly what a copy is for.
  *
  * Takes the same courtesy `POST /tokens` does with an occupied cell: slide to
  * the first free one rather than refuse. Somebody placing a character is
@@ -754,14 +833,22 @@ router.put('/:id/tokens/:tokenId/bench', async (req, res, next) => {
  */
 router.post('/:id/tokens/from-bench', async (req, res, next) => {
   try {
-    const benched = await store.get(benchOf(req), String(req.body?.tokenId || ''));
-    if (!benched) return res.status(404).json({ error: 'That token is not on the bench.' });
-    if (!canMoveToken(req.actor, req.campaignRole, benched)) {
+    const tokenId = String(req.body?.tokenId || '');
+    const { bench, placements } = await placementsOf(req.campaignId, tokenId);
+    const source = bench || placements[0];
+    if (!source) return res.status(404).json({ error: 'No such token in this campaign.' });
+    if (!canMoveToken(req.actor, req.campaignRole, source.token)) {
       throw new HttpError(403, 'You can only place a token that belongs to you.');
+    }
+    if (placements.some((p) => p.sceneId === req.params.id)) {
+      throw new HttpError(
+        409,
+        `${source.token.label || 'That token'} is already standing on this scene. Copy it instead to have two.`
+      );
     }
 
     const wanted = {
-      ...benched,
+      ...source.token,
       x: num(req.body?.x, 0),
       y: num(req.body?.y, 0),
     };
@@ -778,11 +865,12 @@ router.post('/:id/tokens/from-bench', async (req, res, next) => {
     });
     if (!scene) return res.status(404).json({ error: 'Not found' });
 
-    // Only once it is standing somewhere. A crash between the two leaves a
-    // token on the bench and on the table, which is a duplicate you can delete
-    // - the other order loses it entirely.
-    await store.remove(benchOf(req), benched.id);
-    const placed = scene.tokens.find((t) => t.id === benched.id);
+    // Only once it is standing somewhere, and only if it was waiting: a token
+    // taken from another map was never on the bench to leave. A crash between
+    // the two leaves a token on the bench and on the table, which is a
+    // duplicate you can delete - the other order loses it entirely.
+    if (bench) await store.remove(benchOf(req), tokenId);
+    const placed = scene.tokens.find((t) => t.id === tokenId);
     announce(req, 'token:add', scene, { token: placed });
     res.status(201).json(placed);
   } catch (err) {
@@ -924,6 +1012,25 @@ function sanitizeShape(body = {}, existing = {}) {
     strokeWidth: clamp(Math.round(num(body.strokeWidth, existing.strokeWidth ?? 2)), 0, 12),
     label: String(body.label ?? existing.label ?? '').slice(0, 40),
   };
+}
+
+/**
+ * A token's two sight distances, kept as they are unless the caller says
+ * otherwise.
+ *
+ * `undefined` means the request was not about sight at all - most token edits
+ * aren't - and leaves what is stored alone. `null` is a field the DM has
+ * cleared, which is a real answer: it means "no limit on this band".
+ */
+function sightOf(body = {}, existing = {}) {
+  const field = (key) => {
+    if (!(key in body)) return existing[key] ?? null;
+    const value = body[key];
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? clamp(n, 0, 500) : null;
+  };
+  return { visionClear: field('visionClear'), visionDim: field('visionDim') };
 }
 
 /**
@@ -1364,6 +1471,35 @@ router.delete('/:id/pins/:pinId', requirePinner, async (req, res, next) => {
   }
 });
 
+// ---- Fog of war ----
+
+/**
+ * Whether this board is played in the dark, and how its distances are written.
+ *
+ * A route of its own rather than three fields on the scene edit, for the reason
+ * given where sanitizeScene would have carried them: everything in that function
+ * is overwritten by any PUT of the scene, so a client saving a name change would
+ * quietly turn the lights back on. This one touches nothing but the fog.
+ *
+ * Arming it changes what every other person at the table is *sent* - see
+ * tokensSeenThroughFog - so the announcement that follows is what makes the
+ * monsters vanish from their screens, live, without anybody reloading.
+ */
+router.put('/:id/fog', requireDm, async (req, res, next) => {
+  try {
+    let fog = null;
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      fog = sanitizeFog(req.body, current);
+      return { ...current, fog };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    announce(req, 'fog:update', scene);
+    res.json(fog);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---- Turn mode ----
 
 /**
@@ -1484,14 +1620,23 @@ router.put('/:id/turn/next', requireDm, async (req, res, next) => {
   }
 });
 
+/**
+ * Destroy a creature: every figure of it, on every map, and the bench entry.
+ *
+ * Not "take this figure off this map" - that is what the bench route does, and
+ * it is the reversible one. This is the DM's delete, and once a creature can
+ * stand on three scenes at once, deleting it on one of them and leaving the
+ * others standing would be a cast list you could not clear.
+ */
 router.delete('/:id/tokens/:tokenId', requireDm, async (req, res, next) => {
   try {
-    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
-      tokenIn(current, req.params.tokenId); // 404 if it isn't there
-      return { ...current, tokens: current.tokens.filter((t) => t.id !== req.params.tokenId) };
-    });
-    if (!scene) return res.status(404).json({ error: 'Not found' });
-    announce(req, 'token:remove', scene, { tokenId: req.params.tokenId });
+    const { placements } = await placementsOf(req.campaignId, req.params.tokenId);
+    if (!placements.length) return res.status(404).json({ error: 'Token not found' });
+    const touched = await removeEverywhere(req.campaignId, req.params.tokenId);
+    for (const sceneId of touched) {
+      const scene = await store.get(scenesOf(req), sceneId);
+      if (scene) announce(req, 'token:delete', scene);
+    }
     res.status(204).end();
   } catch (err) {
     next(err);

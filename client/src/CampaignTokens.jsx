@@ -28,6 +28,25 @@ import SheetTokenLink from './SheetTokenLink.jsx';
  * points in step from then on. That is the point of coupling, and it is why it
  * is a control of its own rather than a field in the form.
  */
+/**
+ * The scenes something is standing on, written out.
+ *
+ * Two names get "and" between them and three or more get commas, because this
+ * is a sentence in a row of a table rather than a list: "on Molo and the Bridge"
+ * reads, and "on Molo, the Bridge" reads as a mistake.
+ */
+function listOf(names) {
+  if (names.length <= 1) return names[0] || '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** Where a token is, for the line under its name. */
+function whereItStands(token) {
+  const names = (token.scenes || []).map((w) => w.name);
+  if (!names.length) return 'not placed';
+  return `on ${listOf(names)}`;
+}
+
 export default function CampaignTokens({ actor, players, isDm, offline }) {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
@@ -199,9 +218,10 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
                 />
                 <span className="cast-who">
                   <strong>{t.label}</strong>
-                  {/* Where it is. Not visible on the map from this tab, and the
-                      one fact about a figure that this screen alone answers. */}
-                  <small>{t.sceneId ? `on ${t.sceneName}` : 'not placed'}</small>
+                  {/* Where it is - all of it. A creature can stand on more than
+                      one map at a time, and this tab is the only screen that
+                      answers where. Not visible on the map from here either. */}
+                  <small>{whereItStands(t)}</small>
                 </span>
               </span>
 
@@ -295,8 +315,10 @@ export default function CampaignTokens({ actor, players, isDm, offline }) {
         <ConfirmDeleteModal
           name={doomed.label}
           description={
-            doomed.sceneId
-              ? `This deletes the token for good, and takes it off ${doomed.sceneName}. To keep it for later, take it off the table from the map instead.`
+            (doomed.scenes || []).length
+              ? `This deletes the token for good, and takes it off ${listOf(
+                (doomed.scenes || []).map((w) => w.name)
+              )}. To keep it for later, take it off the table from the map instead.`
               : 'This deletes the token for good. To keep it for later, leave it here - it costs nothing to keep.'
           }
           confirmLabel="Delete token"

@@ -24,6 +24,9 @@
  */
 
 const store = require('./store');
+// The sight rules live apart from here, like the ruler's arithmetic does: they
+// are geometry, and geometry is the part worth being able to check on its own.
+const { fogOn, tokensSeenThroughFog } = require('./fog');
 
 const CAMPAIGNS = 'campaigns';
 
@@ -193,7 +196,15 @@ function sceneAsSeenBy(role, scene, actor, campaign) {
   if (!scene || typeof scene !== 'object') return scene;
   let seen = scene;
   if (role !== 'dm' && Array.isArray(scene.tokens)) {
-    seen = { ...seen, tokens: scene.tokens.filter((token) => canSeeToken(role, token)) };
+    // Two filters, in this order and for two different reasons. The first is
+    // the DM's own switch, which is about a token; the second is the fog, which
+    // is about where you are standing. A creature the DM has hidden stays
+    // hidden however brightly it is lit.
+    let tokens = scene.tokens.filter((token) => canSeeToken(role, token));
+    if (fogOn(scene)) {
+      tokens = tokensSeenThroughFog({ ...scene, tokens }, actor);
+    }
+    seen = { ...seen, tokens };
   }
   if (Array.isArray(scene.pins)) {
     seen = { ...seen, pins: scene.pins.filter((pin) => canSeePin(actor, pin, campaign, role)) };
