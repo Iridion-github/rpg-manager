@@ -6,6 +6,8 @@ import CharacterSheet from './sheet/CharacterSheet.jsx';
 import SheetTokenLink from './SheetTokenLink.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import SheetImportModal from './SheetImportModal.jsx';
+import { downloadSheet } from './sheetFile.js';
 import { abilityMod, armorClass, blankSheet, signed } from './sheet/rules.js';
 
 // How long we let edits settle before writing them to the server. Typing a
@@ -61,6 +63,9 @@ export default function CharacterSheets({
   // windows are open - two of these on screen would be a way to answer the
   // wrong one.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
+  // The sheet an import is being poured into, or '' for none. One at a time:
+  // the dialog is opened from a window's own header and answers about that one.
+  const [importId, setImportId] = useState('');
   /**
    * This campaign's tokens, so a character can be pointed at one.
    *
@@ -115,6 +120,7 @@ export default function CharacterSheets({
   // Null once it's gone - a sheet deleted from under us takes its own dialog
   // down rather than leaving one asking about a character that no longer is.
   const confirmSheet = sheets.find((s) => s.id === confirmDeleteId) || null;
+  const importSheetTarget = sheets.find((x) => x.id === importId) || null;
 
   // Bring it to the front if it's already up, otherwise put it there.
   const openSheet = (id) => setOpenIds((prev) => [...prev.filter((x) => x !== id), id]);
@@ -203,6 +209,33 @@ export default function CharacterSheets({
       timers.current.set(next.id, setTimeout(() => flush(next.id), SAVE_DEBOUNCE_MS));
     },
     [flush]
+  );
+
+  /**
+   * Replace a character with the one out of a file.
+   *
+   * Written at once rather than through the debounced save: this is not an edit
+   * somebody is in the middle of making, it is a whole sheet arriving, and a
+   * half-second window in which a stray keystroke could interleave with it is a
+   * window worth not having. Anything already queued for this sheet is dropped
+   * for the same reason - it describes the character that is being replaced.
+   *
+   * The id is the one thing that survives from this end: what a file names is a
+   * character, not which record it lands in. The server keeps the access list
+   * for the same reason (see routes/sheets.js), so importing cannot quietly
+   * hand somebody's character to somebody else.
+   */
+  const importSheet = useCallback(
+    async (id, incoming) => {
+      pending.current.delete(id);
+      clearTimeout(timers.current.get(id));
+      timers.current.delete(id);
+      markSaving(id, false);
+      const saved = await api.updateSheet(id, { ...incoming, id });
+      setSheets((prev) => prev.map((s) => (s.id === saved.id ? saved : s)));
+      setError('');
+    },
+    []
   );
 
   // Apply someone else's change as a delta instead of refetching the list.
@@ -527,6 +560,22 @@ export default function CharacterSheets({
                 {savingIds.has(sheet.id) && <span className="badge saving">saving…</span>}
                 {readOnly && <span className="badge role anon">read-only</span>}
                 <div className="spacer" />
+                {/* The character as a file, and back again. Export is offered
+                    to anybody who can read the sheet - it is their character
+                    too, and a copy of it takes nothing from anyone. Import
+                    writes over the sheet, so it asks for the same right an edit
+                    does and is simply absent without it. */}
+                <button onClick={() => downloadSheet(sheet)} title="Save this character as a file">
+                  Export
+                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => setImportId(sheet.id)}
+                    title="Replace this character with one from a file"
+                  >
+                    Import
+                  </button>
+                )}
                 {canManage && (
                   <button className="del" onClick={() => setConfirmDeleteId(sheet.id)}>
                     Delete character
@@ -644,6 +693,17 @@ export default function CharacterSheets({
           description="This removes the sheet for everyone at the table, including the player it belongs to. It can't be undone."
           onConfirm={() => removeSheet(confirmSheet.id)}
           onClose={() => setConfirmDeleteId('')}
+        />
+      )}
+
+      {/* Reading a file into a character. Resolved from the live list rather
+          than captured when the button was pressed, so a sheet taken away
+          mid-import takes its dialog with it. */}
+      {importSheetTarget && (
+        <SheetImportModal
+          sheet={importSheetTarget}
+          onConfirm={(incoming) => importSheet(importSheetTarget.id, incoming)}
+          onClose={() => setImportId('')}
         />
       )}
     </>

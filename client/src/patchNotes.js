@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-16',
     entries: [
       {
+        kind: 'new',
+        text: 'A character can be saved to a file and read back. At the top of an open sheet, beside Delete character, are Export and Import. Export downloads the whole character as a .json file - abilities, kit, spells, notes, the lot - named after them. Import asks for such a file, tells you which character it found in it, and only then offers Confirm Import, with a yellow warning that the sheet in front of you is about to be replaced. Nothing is sent until you confirm, and who the character is shared with is decided by the sheet you import into rather than by the file, so importing can never hand a character to somebody it was not shared with.',
+      },
+      {
         kind: 'change',
         text: 'Windows you have never opened before now appear where you keep that kind of window. A character sheet or a note you drag into a corner already came back to that corner; the next sheet or note you open for the first time landed in the middle of the screen instead, which meant tidying it away every time. It now opens where the last one of its kind was left. Ones you have placed yourself are unaffected - they still come back exactly where you put them.',
       },

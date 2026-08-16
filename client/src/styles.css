@@ -6866,3 +6866,58 @@ body.fog-pov .map-tools {
   margin: 0 0 0.5rem;
   line-height: 1.4;
 }
+
+/* --- a character as a file --- */
+.modal.sheet-import {
+  width: min(30rem, 100%);
+}
+
+/* What was found in the file, so the decision is made against the character
+   rather than against a filename. */
+.import-found {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #2b3242;
+  border-radius: 6px;
+  background: #0f131b;
+}
+
+.import-found small {
+  color: #9aa0b2;
+  font-size: 0.78rem;
+}
+
+.import-source {
+  color: #8b90a0 !important;
+  font-size: 0.72rem !important;
+}
+
+/* The warning and the button that earns it, kept together: a caution read while
+   choosing a file is a caution nobody is reading at the moment of pressing. */
+.import-commit {
+  margin-top: 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Yellow, and the only yellow panel in the app: this is the colour for "this
+   will happen and you cannot take it back", as against the red of a delete
+   (which is about the thing going away) and the blue of a plain question. */
+.warn-box {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #9e7413;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #2a2410;
+  color: #e3c76b;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.warn-box strong {
+  color: #f2cc60;
+}
