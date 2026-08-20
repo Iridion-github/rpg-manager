@@ -24,6 +24,27 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-20',
+    entries: [
+      {
+        kind: 'new',
+        text: 'An uploaded track comes with controls. While one is playing, the DM gets a pause button, a stop button and a slider where the video would be: drag it and the whole table jumps to that point, pause it and the whole table holds there, and the two clocks either side say where in the track everybody is. It moves the room rather than your own speakers, so nobody drifts out of step with you. Players see none of it, as before. A YouTube track is unchanged; it already carries the controls YouTube puts on it.',
+      },
+      {
+        kind: 'new',
+        text: 'Music can be a file of your own, not just a YouTube link. The Music tab has an Add new track button that opens a window with two tabs: YouTube, which works as it always did, and File, where you choose or drop an MP3, OGG, WAV, M4A, WEBM or FLAC of up to 20 MB and give it a title. Anything else is refused on the spot with a red line saying why. Uploaded tracks play for the whole table exactly like a link does, latecomers included, and each row in the list says which of the two it is.',
+      },
+      {
+        kind: 'change',
+        text: 'Uploaded music counts towards your storage, the same allowance your maps come out of, and the bar in your images shows the two together. Removing an uploaded track deletes the file and gives you the space back, which the confirmation now says; removing a YouTube track still only removes the link.',
+      },
+      {
+        kind: 'change',
+        text: 'Adding music no longer happens in a row of boxes above the playlist. The form has become the Add new track window, so the tab itself is your playlist and nothing else.',
+      },
+    ],
+  },
+  {
     date: '2026-08-16',
     entries: [
       {

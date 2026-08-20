@@ -81,17 +81,25 @@ function sniffBytes(buf) {
  * The name is generated, never taken from the client: a name like
  * "../../index.js" would otherwise let an upload escape the uploads directory.
  * Written to a temporary path and renamed, the same dance the record store
- * does, so a half-written image is never reachable at its final URL.
+ * does, so a half-written file is never reachable at its final URL.
+ *
+ * Extension-in, rather than mime-in, because the music tracks land here too
+ * (see audioStore.js) and they have their own table of what an .mp3 is. What
+ * both callers must not do differently is *this* part: where the bytes go and
+ * what the file ends up called.
  */
-async function saveImage(buffer, mime) {
+async function saveUpload(buffer, extension) {
   await fsp.mkdir(UPLOAD_DIR, { recursive: true });
-  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ALLOWED.get(mime)}`;
+  const name = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${extension}`;
   const finalPath = path.join(UPLOAD_DIR, name);
   const tmpPath = `${finalPath}.tmp`;
   await fsp.writeFile(tmpPath, buffer);
   await fsp.rename(tmpPath, finalPath);
   return { url: `/uploads/${name}`, bytes: buffer.length };
 }
+
+/** An image, whose extension is chosen from what its bytes turned out to be. */
+const saveImage = (buffer, mime) => saveUpload(buffer, ALLOWED.get(mime));
 
 /**
  * Take one back off the disk, given the URL it was stored at.
@@ -101,7 +109,7 @@ async function saveImage(buffer, mime) {
  * and a record is a thing somebody's request once influenced. A file already
  * gone is not an error - the point was for it to be absent.
  */
-async function deleteImage(url) {
+async function deleteUpload(url) {
   const name = path.basename(String(url || ''));
   if (!name || !/^[\w.-]+$/.test(name)) return false;
   try {
@@ -119,6 +127,10 @@ module.exports = {
   ALLOWED,
   megabytes,
   sniffBytes,
+  saveUpload,
   saveImage,
-  deleteImage,
+  deleteUpload,
+  // The old name, kept because half a dozen callers say it and an image is
+  // what all of them are deleting.
+  deleteImage: deleteUpload,
 };

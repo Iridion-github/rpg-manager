@@ -6052,6 +6052,105 @@ button.token-tile:hover {
   white-space: nowrap;
 }
 
+/* "+ Add new track", the one way into the playlist. Given the accent because
+   it is the only thing on this screen anybody comes here to press. */
+.add-track-btn {
+  background: #2b3350;
+  border-color: #3a4573;
+  margin-top: 0.5rem;
+}
+
+/* It stands directly on the list, so the list drops the top margin it keeps
+   when it is the first thing under the hint. */
+.add-track-btn + .track-list {
+  margin-top: 0.5rem;
+}
+
+.add-track-btn:hover {
+  background: #35406a;
+}
+
+/* Where a track's sound comes from, said in one small word. Fixed width so the
+   titles beside them still line up down the list. */
+.track-kind {
+  flex: none;
+  width: 4.2rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b90a0;
+  border: 1px solid #2c3140;
+  border-radius: 999px;
+  padding: 0.1rem 0.35rem;
+  text-align: center;
+}
+
+/* The uploaded ones are the campaign's own, and are the ones deleting really
+   deletes, so they are the ones that are coloured. */
+.track-kind.file {
+  color: #9ecbff;
+  border-color: #2b3350;
+  background: #1e2434;
+}
+
+/* --- add a track --- */
+.modal.add-track {
+  width: min(30rem, 100%);
+}
+
+/* The tabs inside the dialog sit tighter than the page's own: there is one
+   line of hint under them and no room to spare. */
+.modal.add-track .tabs {
+  margin: 0.25rem 0 0;
+}
+
+/* Pick or drop, one target. Tall enough to be an obvious place to let go of a
+   file without being a hole in the middle of the dialog. */
+.track-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5rem;
+  padding: 0.75rem;
+  border: 1px dashed #3a4152;
+  border-radius: 10px;
+  background: #171b23;
+  cursor: pointer;
+  text-align: center;
+}
+
+.track-drop:hover,
+.track-drop.over {
+  border-color: #58a6ff;
+  background: #1b2333;
+}
+
+/* A file that was refused leaves the panel saying so until another is chosen. */
+.track-drop.bad {
+  border-color: #f85149;
+}
+
+.track-drop input[type='file'] {
+  display: none;
+}
+
+.track-drop-empty,
+.track-drop-file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.track-drop-file strong {
+  overflow-wrap: anywhere;
+}
+
+.track-drop-empty small,
+.track-drop-file small {
+  color: #8b90a0;
+}
+
 /* Holds the ♪ column so titles line up whether or not a track is playing. */
 .track-mark {
   flex: none;
@@ -6115,6 +6214,12 @@ button.token-tile:hover {
   display: none;
 }
 
+/* A file has nothing to show, so the video box goes rather than sitting there
+   as a black rectangle. The bar keeps its title and its Stop button. */
+.music-frame.file {
+  display: none;
+}
+
 /* Players hear the music and see nothing of it. The iframe is parked off-screen
    rather than removed or display:none'd - a frame that isn't rendered can have
    its playback suspended by the browser, and silence is the one outcome this
@@ -6169,6 +6274,56 @@ button.token-tile:hover {
 
 .music-error {
   color: #ff9a9a;
+}
+
+/* The DM's transport, standing where the video would be for a track that has
+   none. One row, never two: the bar lives in the sidebar and a control that
+   wrapped would push the chat down every time a song came on. */
+.music-transport {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+}
+
+.music-btn {
+  flex: none;
+  background: #2b3350;
+  border: 1px solid #3a4573;
+  border-radius: 6px;
+  color: #e7e9ee;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.35rem 0.45rem;
+  min-width: 1.9rem;
+}
+
+.music-btn:hover {
+  background: #35406a;
+}
+
+/* Fixed width and tabular figures so the numbers don't shuffle the slider
+   sideways once a second as the seconds tick over. */
+.music-time {
+  flex: none;
+  width: 2.6rem;
+  font-size: 0.7rem;
+  color: #8b90a0;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The rest of a slider's dress is on input[type='range'] already. */
+.music-seek {
+  flex: 1;
+  min-width: 0;
+  height: 1rem;
+  margin: 0;
+}
+
+.music-seek:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* The click that dismisses this is itself the gesture the browser wanted. */

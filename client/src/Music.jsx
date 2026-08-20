@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import { socket } from './socket.js';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
+import AddTrackModal from './AddTrackModal.jsx';
 
 /**
  * The campaign's playlist.
@@ -12,15 +13,20 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
  *
  * Players see the list and what's playing; only the DM can add, remove, or
  * press play. It's the table's soundtrack, not a shared jukebox.
+ *
+ * A track is either a YouTube link or a file the DM uploaded. The difference
+ * shows up in exactly two places here - the badge on the row, and what the
+ * confirmation says is about to happen - because everywhere else the two are
+ * the same thing: a name with a play button beside it.
  */
 export default function Music({ canControl, offline }) {
   const [tracks, setTracks] = useState([]);
   const [playing, setPlaying] = useState(null);
-  const [url, setUrl] = useState('');
-  const [title, setTitle] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState('');
+  // Whether the Add new track dialog is up.
+  const [adding, setAdding] = useState(false);
   // The track a confirmation dialog is currently asking about.
   const [confirmDeleteId, setConfirmDeleteId] = useState('');
 
@@ -60,19 +66,6 @@ export default function Music({ canControl, offline }) {
     }
   }
 
-  const add = (e) => {
-    e.preventDefault();
-    return guard(async () => {
-      // Not optimistic: the server decides whether the link is a video at all,
-      // and - when you haven't named it yourself - it's the one that goes and
-      // asks YouTube for the title.
-      const record = await api.addTrack(url, title);
-      setTracks((prev) => [...prev, record]);
-      setUrl('');
-      setTitle('');
-    });
-  };
-
   const rename = (track, next) =>
     guard(async () => {
       const updated = await api.renameTrack(track.id, next);
@@ -80,19 +73,24 @@ export default function Music({ canControl, offline }) {
     });
 
   /**
-   * Put the YouTube link on the clipboard.
+   * Put the track's link on the clipboard.
+   *
+   * An uploaded file's URL is stored relative to this server, so it is made
+   * absolute on the way out: what people do with a copied link is paste it
+   * somewhere else, where /uploads/... means nothing.
    *
    * The clipboard API needs a secure context, which the tunnel gives you but a
    * plain-http LAN address does not - so a refusal falls back to showing the
    * link in a prompt, where it can still be copied by hand.
    */
   async function copyLink(track) {
+    const link = new URL(track.url, window.location.origin).href;
     try {
-      await navigator.clipboard.writeText(track.url);
+      await navigator.clipboard.writeText(link);
       setCopied(track.id);
       setTimeout(() => setCopied(''), 1500);
     } catch {
-      window.prompt(`Link for ${track.title}:`, track.url);
+      window.prompt(`Link for ${track.title}:`, link);
     }
   }
 
@@ -119,7 +117,11 @@ export default function Music({ canControl, offline }) {
     <div className="music-view">
       <div className="sheet-toolbar">
         <h2 className="notes-title">Music</h2>
-        {playing && <span className="badge on">playing</span>}
+        {playing && (
+          <span className={`badge${playing.pausedAt == null ? ' on' : ''}`}>
+            {playing.pausedAt == null ? 'playing' : 'paused'}
+          </span>
+        )}
         <div className="spacer" />
         {canControl && playing && (
           <button onClick={stop} disabled={busy}>
@@ -130,37 +132,34 @@ export default function Music({ canControl, offline }) {
 
       <p className="hint">
         {canControl
-          ? 'Paste a YouTube link and save it - name it yourself, or leave that blank and take the title from YouTube. Pressing play starts it for everyone at the table; they join wherever the track has got to, so nobody restarts it by arriving late.'
+          ? 'Add a YouTube link or a music file of your own. Pressing play starts it for everyone at the table; they join wherever the track has got to, so nobody restarts it by arriving late.'
           : "Your DM's playlist. They choose what plays."}
       </p>
 
       {error && <p className="error">{error}</p>}
 
+      {/* Above the list and hard left, where the thing it adds to begins. It
+          used to sit in the toolbar beside Stop, which put the button you press
+          often at the far end of the row from everything it affects. */}
       {canControl && !offline && (
-        <form className="new-campaign" onSubmit={add}>
-          <input
-            placeholder="https://www.youtube.com/watch?v=…"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-          <input
-            placeholder="Title (optional)"
-            value={title}
-            maxLength={200}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <button type="submit" disabled={busy || !url.trim()}>
-            Save
-          </button>
-        </form>
+        <button className="add-track-btn" onClick={() => setAdding(true)} disabled={busy}>
+          + Add new track
+        </button>
       )}
 
       <ul className="track-list">
         {tracks.map((t) => {
           const isPlaying = playing?.trackId === t.id;
+          const isFile = t.kind === 'file';
           return (
             <li key={t.id} className={isPlaying ? 'playing' : ''}>
               <span className="track-mark">{isPlaying ? '♪' : ''}</span>
+              {/* Where the sound comes from, in one word. It changes what
+                  removing the track does, so it is worth being able to see
+                  without opening anything. */}
+              <span className={`track-kind${isFile ? ' file' : ''}`}>
+                {isFile ? 'file' : 'YouTube'}
+              </span>
               {canControl && !offline ? (
                 // Keyed on the title so a rename from another browser resets
                 // the field, which an uncontrolled input wouldn't otherwise see.
@@ -212,15 +211,30 @@ export default function Music({ canControl, offline }) {
         )}
       </ul>
 
-      {/* Just asks: a track is a title and a link, and adding it back is a
-          paste. Nothing on the far side of this is unrecoverable. */}
+      {/* Just asks, for a link: a track is a title and a URL, and adding it
+          back is a paste. An uploaded file is a different matter - the audio
+          goes with the entry - so the dialog says which of the two this is. */}
       {confirmTrack && (
         <ConfirmDeleteModal
           name={confirmTrack.title || 'this track'}
-          description="This takes the track off the campaign's playlist for everyone. The music itself isn't yours to delete - only the link to it."
+          description={
+            confirmTrack.kind === 'file'
+              ? "This takes the track off the playlist and deletes the file from the server, giving you the space back. You'd have to upload it again."
+              : "This takes the track off the campaign's playlist for everyone. The music itself isn't yours to delete - only the link to it."
+          }
           confirmLabel="Remove track"
           onConfirm={() => remove(confirmTrack.id)}
           onClose={() => setConfirmDeleteId('')}
+        />
+      )}
+
+      {/* Added straight into the list rather than by reloading it: the server
+          has just answered with the record, and the socket's own nudge is on
+          its way to everybody else. */}
+      {adding && (
+        <AddTrackModal
+          onAdded={(record) => setTracks((prev) => [...prev, record])}
+          onClose={() => setAdding(false)}
         />
       )}
     </div>

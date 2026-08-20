@@ -264,9 +264,33 @@ export const api = {
   // read together on every refresh.
   getMusic: () => get(table('/music')),
   addTrack: (url, title) => post(table('/music'), { url, title }),
+  /**
+   * A track that is a file of yours rather than a link to YouTube's.
+   *
+   * Answers with the track *and* what is left of your allowance, because the
+   * bytes have just come out of it and the caller is standing right where that
+   * number is worth showing.
+   */
+  uploadTrackFile: (file, title) => {
+    const form = new FormData();
+    form.append('audio', file);
+    if (title) form.append('title', title);
+    // No Content-Type header: the browser must set the multipart boundary.
+    return fetch(table('/music/files'), {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    }).then(json);
+  },
   renameTrack: (id, title) => put(table(`/music/${id}`), { title }),
   playTrack: (id) => post(table(`/music/${id}/play`), {}),
   stopMusic: () => post(table('/music/stop'), {}),
+  /* The DM's transport, for uploaded tracks. Every one of these is a change to
+     what the *table* is hearing, not to this browser's own playback - which is
+     why they are requests rather than calls on an audio element. */
+  pauseMusic: () => post(table('/music/pause'), {}),
+  resumeMusic: () => post(table('/music/resume'), {}),
+  seekMusic: (seconds) => post(table('/music/seek'), { seconds }),
   deleteTrack: (id) => del(table(`/music/${id}`)),
 
   listScenes: () => get(table('/scenes')),

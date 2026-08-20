@@ -20,6 +20,11 @@
  * rationed is somebody's hard disk. Counted by asking, never by keeping a
  * running total: a stored number drifts the first time a delete half-fails, and
  * the rows are the only thing that cannot be wrong about what is on the disk.
+ *
+ * The count is no longer only the cloud's, even though the allowance is still
+ * called the cloud's: a music track uploaded as a file (routes/music.js) is
+ * bytes on the same disk, put there by the same person, and metering only the
+ * pictures would leave a way to fill the machine that nothing was watching.
  */
 
 const crypto = require('node:crypto');
@@ -74,8 +79,10 @@ function usedBy(userId) {
     .prepare(
       `SELECT COALESCE(SUM(json_extract(data, '$.bytes')), 0) AS bytes
          FROM records
-        WHERE collection LIKE 'campaigns/%/cloud'
-          AND json_extract(data, '$.kind') = 'image'
+        WHERE (
+                (collection LIKE 'campaigns/%/cloud' AND json_extract(data, '$.kind') = 'image')
+             OR (collection LIKE 'campaigns/%/music' AND json_extract(data, '$.kind') = 'file')
+              )
           AND json_extract(data, '$.uploadedBy') = ?`
     )
     .get(String(userId));
