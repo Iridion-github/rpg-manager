@@ -5039,7 +5039,6 @@ button.token-tile:hover {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
 }
 
 .modal-head {
@@ -5086,7 +5085,6 @@ button.token-tile:hover {
   background: #1a1e27;
   border: 1px solid #35406a;
   border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
   overflow: hidden;
 }
 

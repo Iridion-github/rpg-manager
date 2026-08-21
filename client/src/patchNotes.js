@@ -24,6 +24,15 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-21',
+    entries: [
+      {
+        kind: 'fix',
+        text: 'Windows no longer cast a shadow onto what is behind them. Every pop-up window sits flat on the page now, the ones you can drag around like a character sheet as much as the ones that open in the middle and wait for an answer.',
+      },
+    ],
+  },
+  {
     date: '2026-08-20',
     entries: [
       {
