@@ -179,18 +179,24 @@ function rolledInitiative(total, die, mod) {
  * points has fourteen points between it and the floor, and clamping would be
  * the sheet quietly disagreeing with the rules.
  *
+ * Non-lethal damage hangs off the same decision again, and is not clamped
+ * either. It is a tally of the battering a creature has taken rather than a
+ * share of anything: a creature can be beaten well past the point of dropping,
+ * and the number that says by how much is worth keeping.
+ *
  * Null and zero are kept apart on the way in and mean the same thing on the way
  * out: nothing is drawn for either. Zero is stored where the DM typed a zero,
  * which is how clearing the field survives a round trip.
  */
-function hitPoints(maxHp, hp, tempHp) {
+function hitPoints(maxHp, hp, tempHp, nonLethalHp) {
   const max = statOrNull(maxHp, 0, 9999);
-  if (max === null) return { maxHp: null, hp: null, tempHp: null };
+  if (max === null) return { maxHp: null, hp: null, tempHp: null, nonLethalHp: null };
   const current = statOrNull(hp, 0, max);
   return {
     maxHp: max,
     hp: current === null ? max : current,
     tempHp: statOrNull(tempHp, 0, 9999),
+    nonLethalHp: statOrNull(nonLethalHp, 0, 9999),
   };
 }
 
@@ -249,6 +255,9 @@ function sanitizeToken(body = {}, existing = {}) {
     maxHp = existing.maxHp ?? null,
     hp = existing.hp ?? null,
     tempHp = existing.tempHp ?? null,
+    // The battering it has taken that is not killing it. Enough of it and the
+    // creature is out cold; see hp.js, which draws the moment that happens.
+    nonLethalHp = existing.nonLethalHp ?? null,
     /**
      * What this creature can do to somebody, as a list of its own.
      *
@@ -304,7 +313,7 @@ function sanitizeToken(body = {}, existing = {}) {
     // Wide enough for a d20 plus any modifier a table can produce, and for the
     // dexterity contest that follows a tie.
     ...rolledInitiative(initiative, initiativeDie, initiativeMod),
-    ...hitPoints(maxHp, hp, tempHp),
+    ...hitPoints(maxHp, hp, tempHp, nonLethalHp),
     // The sheet's own reading of the same shape, minus the picture: see
     // pickAttacks in sheetSchema.js.
     attacks: pickAttacks(attacks, { media: false }),
@@ -376,7 +385,8 @@ async function touchesForeignSheet(req, token) {
   if (
     asked.hp === token.hp &&
     asked.maxHp === token.maxHp &&
-    asked.tempHp === token.tempHp
+    asked.tempHp === token.tempHp &&
+    asked.nonLethalHp === token.nonLethalHp
   ) {
     return false;
   }

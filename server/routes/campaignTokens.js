@@ -244,6 +244,7 @@ router.post('/', requireUser, async (req, res, next) => {
       hp: null,
       maxHp: null,
       tempHp: null,
+      nonLethalHp: null,
       attacks: [],
       sheetId: null,
       // Not a copy of anything: this one was made rather than pasted. Written

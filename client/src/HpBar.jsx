@@ -20,6 +20,13 @@ export default function HpBar({ bar }) {
       {/* Left out entirely rather than drawn at nought width, so an ordinary
           bar is exactly the two elements it has always been. */}
       {bar.temp > 0 && <span className="hp-temp" style={{ width: `${bar.tempPercent}%` }} />}
+      {/* Over the top of both, from the left edge, rather than beside them:
+          non-lethal damage is not a share of the bar, it is how far along the
+          bar the beating has got. Last in the markup so it lies over what it
+          covers. */}
+      {bar.nonLethal > 0 && (
+        <span className="hp-nonlethal" style={{ width: `${bar.nonLethalPercent}%` }} />
+      )}
     </span>
   );
 }

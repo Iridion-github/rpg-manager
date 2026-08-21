@@ -602,6 +602,10 @@ function sanitizeSheet(body = {}) {
       max: int(hp.max ?? body.maxHp, 0, 0, 999),
       current: int(hp.current ?? legacyHp, 0, -99, 999),
       temp: int(hp.temp, 0, 0, 999),
+      // The battering that is not killing them. Its own tally rather than a
+      // subtraction from `current`, because it heals differently and because a
+      // character knocked out by it is not a character who has lost hit points.
+      nonLethal: int(hp.nonLethal, 0, 0, 999),
     },
     hitDice: {
       die: text(hitDice.die, 'd8', 8),

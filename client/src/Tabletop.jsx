@@ -4476,7 +4476,7 @@ export default function Tabletop({ actor, players, offline }) {
                   // The same reading the hover tooltip makes, from the same
                   // helper, so one creature cannot look different depending on
                   // which of the two you happen to be looking at.
-                  const bar = hpBar(t.hp, t.maxHp, t.tempHp);
+                  const bar = hpBar(t.hp, t.maxHp, t.tempHp, t.nonLethalHp);
                   return (
                     // A menu of its own rather than an action on the click: the
                     // list is a thing you read during a fight, and every camera
@@ -4523,6 +4523,11 @@ export default function Tabletop({ actor, players, offline }) {
                               {bar.temp > 0 && (
                                 <b className="hp-temp-text"> +{bar.temp}</b>
                               )}
+                              {/* Out cold gets the word; short of that, the
+                                  bar alone says how close it is. A line in a
+                                  fight has room for one more thing, and this is
+                                  the one worth knowing at a glance. */}
+                              {bar.out && <b className="hp-out-text"> out</b>}
                             </small>
                           </span>
                         )}

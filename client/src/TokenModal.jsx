@@ -211,6 +211,9 @@ export default function TokenModal({
   // temporary ones either, and a nought typed into every new token would be a
   // number the DM did not write.
   const [tempHp, setTempHp] = useState(token?.tempHp ?? '');
+  // The battering it has taken that is not killing it. Blank rather than nought
+  // when unset, like the other three.
+  const [nonLethalHp, setNonLethalHp] = useState(token?.nonLethalHp ?? '');
   /**
    * What this creature can do to somebody: the token's own list.
    *
@@ -399,6 +402,7 @@ export default function TokenModal({
         hp: blankToNull(hp),
         maxHp: blankToNull(maxHp),
         tempHp: blankToNull(tempHp),
+        nonLethalHp: blankToNull(nonLethalHp),
         // An attack with no name and no dice is a row somebody added and then
         // thought better of; it is dropped here rather than stored as a blank
         // line the token would print for ever.
@@ -598,6 +602,32 @@ export default function TokenModal({
                   aria-label="Temporary hit points"
                   title="Temporary hit points, spent before the ones above"
                 />
+              </span>
+            </div>
+          )}
+
+          {/* On its own row rather than a fourth box in the one above: it is
+              not another quantity of hit points, it is how much of a beating
+              this creature has taken - and the row above already reads as a
+              sentence with three numbers in it. */}
+          {stats && (
+            <div className="token-field">
+              <span>Non-lethal</span>
+              <span className="token-stat">
+                <input
+                  type="number"
+                  min={0}
+                  value={nonLethalHp}
+                  onChange={(e) => setNonLethalHp(e.target.value)}
+                  placeholder="-"
+                  aria-label="Non-lethal damage"
+                  title="Damage that knocks out rather than kills"
+                />
+                {/* What it means, not what the threshold is. The threshold is
+                    one rule and it lives in hp.js, which is what draws it on
+                    the bar; a second copy of it here would be a number to keep
+                    in step for no gain. */}
+                <small>knocks out rather than kills</small>
               </span>
             </div>
           )}

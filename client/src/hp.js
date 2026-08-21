@@ -24,6 +24,14 @@
  * points first, so the blue sits against the green edge and is eaten before it
  * - which is what the bar then shows happening, rather than a gap opening
  * somewhere else.
+ *
+ * **Non-lethal damage is laid over the top, from the left.** Not a segment
+ * among the others: a bruise is not a fourth kind of hit point, it is a count
+ * of how much of what the creature has left has been beaten out of it. So it
+ * runs across whatever it covers - green, then blue - and the moment it reaches
+ * the wound at the far end, the creature has been battered as far as it can go
+ * and drops. `out` is that moment, said as a number rather than left to be
+ * eyeballed off the pixels.
  */
 
 const number = (value) => {
@@ -36,7 +44,7 @@ const number = (value) => {
  * instead of two. A total of zero is a creature whose hit points nobody set up,
  * not one at death's door.
  */
-export function hpBar(current, max, temp) {
+export function hpBar(current, max, temp, nonLethal) {
   const total = Math.max(0, number(max));
   if (!total) return null;
   // Clamped for the bar's sake: a stored value can outlive the total it was
@@ -44,11 +52,26 @@ export function hpBar(current, max, temp) {
   const now = Math.max(0, Math.min(number(current), total));
   const spare = Math.max(0, number(temp));
   const span = total + spare;
+  // Not clamped to anything: a creature can take more of a beating than it has
+  // left to give, and the bar saying so - grey running the whole way across -
+  // is the picture of somebody thoroughly out cold.
+  const bruises = Math.max(0, number(nonLethal));
   return {
     current: now,
     total,
     temp: spare,
+    nonLethal: bruises,
     currentPercent: (now / span) * 100,
     tempPercent: (spare / span) * 100,
+    nonLethalPercent: Math.min(100, (bruises / span) * 100),
+    /**
+     * Whether the bruises have caught up with what is left standing.
+     *
+     * The rule the picture draws: grey reaching the red means the creature has
+     * taken as much battering as it had hit points to absorb it, and goes down
+     * without dying. Temporary points count towards holding it up, because they
+     * are what a blow lands on first.
+     */
+    out: bruises > 0 && bruises >= now + spare,
   };
 }

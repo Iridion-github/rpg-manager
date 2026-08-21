@@ -64,7 +64,7 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note, sheet
   const hasInitiative = token.initiative !== null && token.initiative !== undefined;
   // Null when there is nothing to draw - a token whose hit points nobody set up
   // rather than one at death's door. See hp.js for what the segments mean.
-  const bar = hpBar(token.hp, token.maxHp, token.tempHp);
+  const bar = hpBar(token.hp, token.maxHp, token.tempHp, token.nonLethalHp);
   const tracked = showHp && bar;
 
   /**
@@ -142,9 +142,20 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note, sheet
               Temporary <b className="hp-temp-text">+{bar.temp}</b>
             </span>
           )}
+          {/* A row of its own again, and it says which of the two things the
+              number means: how much of a beating it has taken, or - once that
+              has caught up with everything holding it up - that it is already
+              on the floor. */}
+          {bar.nonLethal > 0 && (
+            <span className="token-tip-row">
+              {bar.out ? 'Knocked out' : 'Non-lethal'}{' '}
+              <b className={bar.out ? 'hp-out-text' : 'hp-nonlethal-text'}>{bar.nonLethal}</b>
+            </span>
+          )}
           {/* The track is the wound and the fill is what's left of them, so the
               red showing through is exactly the damage taken. Any blue in front
-              of it is the cushion that has to go first. */}
+              of it is the cushion that has to go first, and any grey over the
+              top is how far the battering has got along the whole lot. */}
           <HpBar bar={bar} />
         </span>
       )}

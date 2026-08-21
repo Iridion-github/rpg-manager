@@ -28,11 +28,12 @@
  * **Which way the numbers flow** is decided per field, by where the field is
  * actually authored:
  *
- *   hit points          both ways, temporary ones included. The same numbers
- *                       in two places: the DM applies damage on the map, the
- *                       player heals on their sheet, the cleric's ward lands on
- *                       whichever of the two is to hand, and either way both
- *                       show it.
+ *   hit points          both ways, temporary and non-lethal ones included. The
+ *                       same numbers in two places: the DM applies damage on
+ *                       the map, the player heals on their sheet, the cleric's
+ *                       ward lands on whichever of the two is to hand, the
+ *                       barbarian is beaten senseless on either, and both show
+ *                       it.
  *   initiative modifier sheet to token only. On the sheet it is *derived* -
  *                       dexterity plus a bonus - so there is no single number
  *                       for a token edit to write back to. Editing it on the
@@ -87,6 +88,7 @@ function tokenFieldsFromSheet(sheet, token = {}) {
     // hit points, and a character on 4 of 12 with 10 of them really does have
     // fourteen between it and the floor.
     tempHp: clamp(int(sheet?.hp?.temp, 0), 0, 9999),
+    nonLethalHp: clamp(int(sheet?.hp?.nonLethal, 0), 0, 9999),
     initiativeMod,
   };
   if (token.initiativeDie !== null && token.initiativeDie !== undefined) {
@@ -235,7 +237,13 @@ async function pushTokenToSheet(campaignId, token) {
   // carrying 2000 would look like a change on every single write, and the
   // sheet would be rewritten and announced to the table each time.
   const temp = clamp(int(token.tempHp, 0), 0, 999);
-  if (sheet.hp?.max === max && sheet.hp?.current === current && (sheet.hp?.temp || 0) === temp) {
+  const nonLethal = clamp(int(token.nonLethalHp, 0), 0, 999);
+  if (
+    sheet.hp?.max === max &&
+    sheet.hp?.current === current &&
+    (sheet.hp?.temp || 0) === temp &&
+    (sheet.hp?.nonLethal || 0) === nonLethal
+  ) {
     return null;
   }
   // Returned so the caller can tell the table. Writing this to disk without
@@ -243,7 +251,7 @@ async function pushTokenToSheet(campaignId, token) {
   // had before it was hit, until whoever was reading it happened to reload.
   const moved = await store.mutate(sheetsOf(campaignId), sheet.id, (currentSheet) => ({
     ...currentSheet,
-    hp: { ...currentSheet.hp, max, current, temp },
+    hp: { ...currentSheet.hp, max, current, temp, nonLethal },
   }));
   const scenes = await pushSheetToTokens(campaignId, moved, token.id);
   return { sheet: moved, scenes };

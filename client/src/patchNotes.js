@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Non-lethal damage is kept track of, on a character sheet and on a figure alike. There is a box for it beside the hit points, and what you put in it is drawn onto the same bar everything else uses: a dark grey stretch running from the left. It creeps rightwards as the creature is battered, and the moment it catches the red at the far end - the part standing for the hit points already gone - that creature has taken as much as it could stand and is out cold rather than dead. The bubble over a figure says so in words too, and the turn tracker puts a small out beside its numbers. Temporary hit points hold somebody up against a beating the same way they hold them up against a wound, so the grey has to get past those as well. Nothing changes for a creature nobody has knocked about: no grey, no extra line.',
+      },
+      {
+        kind: 'new',
         text: 'A character sheet, and any note, can be sent out to a browser window of its own. The button is the little box with an arrow leaving it, just left of the minimise line, and the window opens at the size the panel already was. Put a sheet on the second monitor and keep the map on the first. It is the same sheet, not a copy: whatever you had half-typed is still half-typed, everything stays live, and the buttons off its title bar - Export, Delete, Sharing mode - travel with it. Dice you roll from over there open over there too. Close the window, or press the same button again, and it comes back to the page where it was. Those two and no others: the tool panels, the grid settings, the turn tracker and a pin\'s card are all about the map in front of them, and none of them is worth much on a screen with no map on it.',
       },
       {

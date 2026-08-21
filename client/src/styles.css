@@ -2225,6 +2225,8 @@ button.token-tile:hover {
   border-radius: 999px;
   background: #3a1d1d;
   overflow: hidden;
+  /* The ground the non-lethal overlay is positioned against. */
+  position: relative;
 }
 
 /* What the creature has left of its own hit points. No radius of its own: the
@@ -2249,6 +2251,38 @@ button.token-tile:hover {
   transition: width 0.15s ease-out;
 }
 
+/* Non-lethal damage: how far along the bar the beating has got.
+
+   Laid over the segments rather than taking a share of the bar, and running
+   from the left edge, because it is not a fourth kind of hit point - it is a
+   count of how much of what the creature has left has been knocked out of it.
+   When the grey catches the red at the far end, everything holding the creature
+   up has been battered through and it goes down without dying, which is the
+   whole reason to draw it this way round.
+
+   Grey, and lighter than the wound behind it rather than darker: on six pixels
+   a dark grey and a dark red are the same smudge, and the one thing this has to
+   be is unmistakably not the wound it is about to meet. */
+.hp-nonlethal {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: #6b7280;
+  transition: width 0.15s ease-out;
+}
+
+/* The same colour in words, for the "5 bruised" printed beside a bar. */
+.hp-nonlethal-text {
+  color: #9aa1ad;
+}
+
+/* Out cold: battered through everything holding it up. Amber rather than red -
+   this creature is not dying, it is asleep on the floor. */
+.hp-out-text {
+  color: #f0c674;
+}
+
 /* The same colour in words, for the "+5" printed beside a bar. */
 .hp-temp-text {
   color: #79c0ff;
@@ -2262,6 +2296,15 @@ button.token-tile:hover {
    move together. */
 .token-tip-row b.hp-temp-text {
   color: #79c0ff;
+}
+
+/* And the same again for the other two, for the same reason. */
+.token-tip-row b.hp-nonlethal-text {
+  color: #9aa1ad;
+}
+
+.token-tip-row b.hp-out-text {
+  color: #f0c674;
 }
 
 .tabletop-empty {

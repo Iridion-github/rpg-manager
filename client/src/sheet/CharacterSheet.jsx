@@ -867,8 +867,21 @@ function MainPage({
               <Num label="Current" value={sheet.hp?.current} onChange={set('hp.current')} readOnly={readOnly} />
               <Num label="Maximum" value={sheet.hp?.max} onChange={set('hp.max')} readOnly={readOnly} />
               <Num label="Temporary" value={sheet.hp?.temp} onChange={set('hp.temp')} readOnly={readOnly} />
+              {/* The battering that is not killing them. Its own box rather
+                  than something taken off Current, because it heals differently
+                  and because a character knocked out by it has not lost a hit
+                  point. */}
+              <Num
+                label="Non-lethal"
+                value={sheet.hp?.nonLethal}
+                onChange={set('hp.nonLethal')}
+                readOnly={readOnly}
+                title="Damage that knocks out rather than kills"
+              />
             </div>
-            <HpBar bar={hpBar(sheet.hp?.current, sheet.hp?.max, sheet.hp?.temp)} />
+            <HpBar
+              bar={hpBar(sheet.hp?.current, sheet.hp?.max, sheet.hp?.temp, sheet.hp?.nonLethal)}
+            />
           </div>
         </Shareable>
 
