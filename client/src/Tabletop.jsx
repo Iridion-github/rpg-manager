@@ -3533,6 +3533,13 @@ export default function Tabletop({ actor, players, offline }) {
    * picker of their own - while the DM's own view stays where it is: setting the
    * table's scene is not the same act as looking at it, and a DM who has just
    * revealed the next map is usually still working on the one after.
+   *
+   * **Nothing is recorded, on purpose.** This is on the no-Ctrl+Z list; see
+   * NEVER_UNDOABLE in sceneHistory.js for why an announcement to the whole
+   * table is not something a stray keystroke should be able to take back. It
+   * goes through its own endpoint rather than patchScene, so there is nothing
+   * here that could record it even by accident - and the guard on the list
+   * covers the case where somebody later changes that.
    */
   function showSceneToTable(target) {
     const chosen = target || scene;

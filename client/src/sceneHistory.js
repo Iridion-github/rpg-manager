@@ -317,6 +317,27 @@ export function recordTokenSpawn({ sceneId, token }) {
 // What to call a scene change in a message, by the field it touched. Several
 // fields can move together - a new map brings its own width and height - so the
 // first one named is the one that gets to speak for the change.
+/**
+ * The no-Ctrl+Z list: things that are never taken back by an undo.
+ *
+ * Undo is for putting right what you did to your own board. A few actions are
+ * not that, and this is where they are written down.
+ *
+ * **Setting the selected scene** is the one on it. It is not an edit, it is an
+ * announcement: every player's board changes to that scene at once, whatever
+ * they were looking at. Taking it back with a keystroke - very likely a
+ * keystroke aimed at something else entirely, several actions later - would
+ * swing the whole table's view back to a map the DM had deliberately moved them
+ * off, and nobody at the table would know why. What the DM shows the table is
+ * decided by choosing it, and undecided the same way.
+ *
+ * Written as the *fields* an action would have to write, rather than as a list
+ * of names, because that is what the guard below can actually check: a field
+ * here cannot be recorded however it comes to be changed - directly, or by some
+ * later refactoring that routes it through patchScene without noticing.
+ */
+export const NEVER_UNDOABLE = new Set(['selected']);
+
 const SCENE_FIELDS = {
   gridSize: 'cell size',
   gridOn: 'grid',
@@ -336,7 +357,14 @@ const SCENE_FIELDS = {
  * as it is now, whoever else has been at it in the meantime.
  */
 export function recordSceneEdit({ sceneId, before, after }) {
-  const keys = Object.keys(after);
+  // Anything on the no-Ctrl+Z list is dropped rather than refused: an action
+  // that changed one of those *and* something ordinary is still worth being
+  // able to take the ordinary half of back. When nothing but the exempt field
+  // moved, there is no entry at all - which is what makes the guarantee.
+  const keys = Object.keys(after).filter((k) => !NEVER_UNDOABLE.has(k));
+  if (!keys.length) return;
+  const only = (fields) => Object.fromEntries(keys.map((k) => [k, fields[k]]));
+  const [was, now] = [only(before), only(after)];
   const what = SCENE_FIELDS[keys[0]] || 'scene';
   const step = (expected, next) => async () => {
     const scene = await sceneNow(sceneId);
@@ -349,7 +377,7 @@ export function recordSceneEdit({ sceneId, before, after }) {
   record({
     label: `change the ${what}`,
     sceneId,
-    undo: step(after, before),
-    redo: step(before, after),
+    undo: step(now, was),
+    redo: step(was, now),
   });
 }
