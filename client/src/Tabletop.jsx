@@ -31,8 +31,11 @@ import {
   DEFAULT_STYLE,
   angleTo,
   contrastInk,
+  distance,
   edgesAt,
   isDrawn,
+  polygonFrom,
+  polygonPoints,
   localPoint,
   resizeRadius,
   resizeRect,
@@ -224,6 +227,11 @@ function pinLabelSide(pin, others, zoom) {
 const MEASURE_GRAB = 0.4;
 const MEASURE_POINT_GRAB = 0.25;
 
+// The same again, for a polygon's corners: how near a click has to land to be
+// about the dot rather than about the map under it. Shared value, because they
+// are the same gesture aimed at the same size of mark.
+const POLY_CLOSE_GRAB = MEASURE_POINT_GRAB;
+
 // How wide a shape's outline is to *grab*, in screen pixels, as against the one
 // or two it may be drawn as. A border you have to hit exactly is a border you
 // end up dragging the whole shape by, so the band that answers to the hand is
@@ -326,7 +334,9 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
   // that quietly wrote a new facing nobody could see would still be a change,
   // a broadcast and an entry in everyone's undo. It keeps the dot, which says
   // where the burst is centred. Everything else can be pointed somewhere.
-  const turnable = shape.kind !== 'circle';
+  // A polygon joins it: its corners are where they were clicked, and a facing
+  // would have to turn them all about a centre nobody chose.
+  const turnable = shape.kind !== 'circle' && shape.kind !== 'poly';
 
   return (
     <g
@@ -390,6 +400,53 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
           {turnable && <circle className="shape-grab" data-grip="rotate" r="9" />}
         </g>
       )}
+    </g>
+  );
+}
+
+/**
+ * A polygon part-way through being clicked out.
+ *
+ * Deliberately not a ShapeMark: that draws a shape, and this draws a decision
+ * being made. The outline is left open at the end - the last corner is not
+ * joined back to the first - because that is exactly what is true of it, and a
+ * closed outline would say the thing was finished when a click is still owed.
+ *
+ * The corners are what the right-click menu is aimed at, so they are drawn at
+ * the size a hand can find, scaled against the zoom like the ruler's own. The
+ * whole layer is inert to the pointer; the hit-testing is done in cells by the
+ * menu handler, for the reason given there.
+ */
+function PolygonSketch({ points, cell, origin, zoom, style }) {
+  const at = (p) => ({ x: origin.x + p.x * cell, y: origin.y + p.y * cell });
+  const screen = points.map(at);
+  const scale = 1 / zoom;
+  // Open, not closed: `M a L b L c` and no Z. With three corners or more the
+  // fill still shows what is being enclosed, which is what you are judging.
+  const d = `M ${screen.map((p) => `${p.x} ${p.y}`).join(' L ')}`;
+
+  return (
+    <g className="poly-sketch">
+      <path
+        d={points.length > 2 ? `${d} Z` : d}
+        fill={points.length > 2 ? style.fill : 'none'}
+        fillOpacity={((style.opacity ?? 35) / 100) * 0.6}
+        stroke={style.stroke}
+        strokeWidth={style.strokeWidth}
+        vectorEffect="non-scaling-stroke"
+      />
+      {screen.map((p, i) => (
+        <circle
+          key={i}
+          // The first is the one that closes the polygon, so it is drawn a
+          // little larger: it is a target as well as a corner.
+          className={`poly-dot${i === 0 ? ' first' : ''}`}
+          cx={p.x}
+          cy={p.y}
+          r={(i === 0 ? 4.5 : 3) * scale}
+          strokeWidth={1.5 * scale}
+        />
+      ))}
     </g>
   );
 }
@@ -741,6 +798,18 @@ export default function Tabletop({ actor, players, offline }) {
   });
   // The shape the panel is pointing at, and the drag drawing one right now.
   const [selectedShapeId, setSelectedShapeId] = useState(null);
+  /**
+   * The polygon being clicked out, in absolute cells - or null.
+   *
+   * Every other shape is drawn by a drag, which begins and ends inside one
+   * gesture and needs nothing kept between them. A polygon is a run of separate
+   * clicks, so the corners so far have to live somewhere; this is that place.
+   * Local until it is finished, exactly as a measurement is local: a half-drawn
+   * outline broadcast corner by corner would put a shape on everybody's board
+   * that its author had not decided on yet, and would write to the server once
+   * per click.
+   */
+  const [polyPoints, setPolyPoints] = useState(null);
   const [sketch, setSketch] = useState(null);
 
   // --- the ruler ---
@@ -1850,7 +1919,11 @@ export default function Tabletop({ actor, players, offline }) {
       // Somebody else's shape can be pointed at but not pushed around. The
       // selection is still worth making: it's what tells you whose it is.
       if (!canEditShape(shape)) return;
-      const grip = e.target?.closest?.('[data-grip]')?.dataset.grip || 'move';
+      // A polygon has neither a box nor a radius, so there is nothing for a
+      // stretch to write: grabbing its edge picks it up instead. Better than a
+      // grip that quietly set an `r` nothing draws.
+      const grabbed = e.target?.closest?.('[data-grip]')?.dataset.grip || 'move';
+      const grip = shape?.kind === 'poly' && grabbed === 'resize' ? 'move' : grabbed;
       const raw = rawPoint(e);
       const base = { ...shape };
 
@@ -1904,6 +1977,28 @@ export default function Tabletop({ actor, players, offline }) {
     // rearrange rather than one you draw on.
     setSelectedShapeId(null);
     if (!shapeTool) return;
+
+    /**
+     * The polygon is clicked out rather than dragged, so its press does the
+     * whole of the work and there is no gesture left to hand to the move
+     * handler below.
+     *
+     * Landing on the first corner closes it, which is the gesture every
+     * drawing program uses for this and the one people try first. Escape
+     * finishes it too - see the key handler - because a polygon you meant to
+     * leave open-ended should not have to be walked back to its own start.
+     */
+    if (shapeTool === 'poly') {
+      const at = drawPoint(e);
+      const open = polyPoints || [];
+      if (open.length >= 3 && closesPolygon(open, at)) {
+        finishPolygon(open);
+        return;
+      }
+      setPolyPoints([...open, at]);
+      return;
+    }
+
     const at = drawPoint(e);
     const started = { ...shapeFromDrag(shapeTool, at, at, shapeStyle), ...shapeLook() };
     drawRef.current = { mode: 'draw', from: at, shape: started };
@@ -1970,6 +2065,31 @@ export default function Tabletop({ actor, players, offline }) {
     }
     if (Object.keys(changes).length) editShape(d.id, changes);
     return true;
+  }
+
+  /**
+   * Whether a click landed back on the corner the polygon started from.
+   *
+   * In cells, and generously: the dot is a few pixels of screen and the hand is
+   * aiming at it rather than at the cell it sits in. The same tolerance the
+   * ruler uses for grabbing one of its own points, for the same reason.
+   */
+  const closesPolygon = (points, at) =>
+    points.length > 0 && distance(points[0], at) <= POLY_CLOSE_GRAB;
+
+  /**
+   * Put the finished polygon on the board, or throw it away.
+   *
+   * Fewer than three corners is not a shape - see isDrawn - and the ones that
+   * were clicked are dropped rather than left half-drawn on screen with no way
+   * to finish them. Either way the pencil is put down: the next click starts a
+   * new polygon rather than continuing one nobody can see the end of.
+   */
+  function finishPolygon(points = polyPoints) {
+    setPolyPoints(null);
+    const corners = points || [];
+    if (corners.length < 3) return;
+    createShape({ ...polygonFrom(corners), ...shapeLook() });
   }
 
   async function createShape(shape) {
@@ -2823,6 +2943,46 @@ export default function Tabletop({ actor, players, offline }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawing, selectedShapeId]);
 
+  /**
+   * Escape finishes the polygon being clicked out.
+   *
+   * The same key that closes an open measuring chain, because it is the same
+   * situation: a run of clicks with no natural last one. It goes down as a
+   * shape if there is enough of it to be one and is dropped if there is not,
+   * which makes Escape the way out of a polygon started by mistake as well as
+   * the way to finish a good one.
+   *
+   * On `window` rather than the map, so it works with the focus anywhere - the
+   * drawing panel's own fields included, since a corner is often the last thing
+   * clicked before reaching for a colour.
+   */
+  useEffect(() => {
+    if (!polyPoints) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      finishRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [polyPoints]);
+
+  // Through a ref for the reason the eraser above is: the listener is bound
+  // once per run of corners and must act on the corners as they stand.
+  const finishRef = useRef(() => {});
+  finishRef.current = () => finishPolygon();
+
+  /**
+   * A tool put down, or the mode left, abandons a half-drawn polygon.
+   *
+   * Not finished - abandoned. Choosing the circle tool is not a way of saying
+   * "and commit that": what was on screen was a thing being decided, and the
+   * decision was to go and do something else.
+   */
+  useEffect(() => {
+    if (!drawing || shapeTool !== 'poly') setPolyPoints(null);
+  }, [drawing, shapeTool]);
+
   function onContextMenu(e) {
     // Windows fires contextmenu on mouse-*up*, so a pan that finishes over a
     // token would otherwise pop that token's menu. A gesture that panned never
@@ -2846,6 +3006,34 @@ export default function Tabletop({ actor, players, offline }) {
         clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
         clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
         moving: true,
+      });
+      return;
+    }
+
+    /**
+     * A polygon being clicked out owns the right-click while it is open.
+     *
+     * Before everything below it for the reason the ruler's menu is: the shape
+     * in hand is what the pointer is about, and offering to edit a token under
+     * a corner you were aiming at would be a menu describing something else.
+     * Hit-tested here in cells rather than by the DOM, again like the ruler -
+     * the corners are drawn on a layer the pointer passes straight through, so
+     * that they never get in the way of the map itself.
+     */
+    if (drawing && shapeTool === 'poly' && polyPoints?.length) {
+      e.preventDefault();
+      const surf = surfaceRef.current;
+      if (!surf) return;
+      const box = surf.getBoundingClientRect();
+      const at = {
+        x: (e.clientX - box.left - offXPx) / cellPx,
+        y: (e.clientY - box.top - offYPx) / cellPx,
+      };
+      const pointIndex = pointIndexAt(polyPoints, at, POLY_CLOSE_GRAB);
+      setMenu({
+        clientX: clamp(e.clientX, 8, window.innerWidth - MENU_W),
+        clientY: clamp(e.clientY, 8, window.innerHeight - MENU_H),
+        polygon: { pointIndex },
       });
       return;
     }
@@ -2990,6 +3178,29 @@ export default function Tabletop({ actor, players, offline }) {
       measurements: was.filter((m) => m.id !== chainId),
       openChainId: open === chainId ? null : open,
     }));
+  }
+
+  /**
+   * Drop one corner from the polygon in hand.
+   *
+   * No confirmation and no writing: this is a shape being decided rather than
+   * one on the board, so there is nothing to lose and nothing to tell anybody
+   * about. Taking the last corner out ends the polygon, the same way taking the
+   * last point out of a measurement ends that.
+   */
+  function deletePolygonPoint() {
+    const { pointIndex } = menu?.polygon || {};
+    setMenu(null);
+    if (pointIndex == null || pointIndex < 0) return;
+    setPolyPoints((was) => {
+      const left = (was || []).filter((_, i) => i !== pointIndex);
+      return left.length ? left : null;
+    });
+  }
+
+  function deletePolygon() {
+    setMenu(null);
+    setPolyPoints(null);
   }
 
   function deleteAllMeasurements() {
@@ -3974,6 +4185,20 @@ export default function Tabletop({ actor, players, offline }) {
                   sketching
                 />
               )}
+              {/* The polygon being clicked out: the outline so far, and a dot on
+                  every corner. Drawn from the corners rather than through
+                  ShapeMark because it is not a shape yet - it has no id, may be
+                  a single point, and wants its corners shown, which no finished
+                  shape does. */}
+              {polyPoints?.length > 0 && (
+                <PolygonSketch
+                  points={polyPoints}
+                  cell={gridSize}
+                  origin={{ x: gridOffX, y: gridOffY }}
+                  zoom={zoom}
+                  style={shapeStyle}
+                />
+              )}
             </svg>
 
             {/* Borrowed while a ruler is on the board, whoever's it is - see
@@ -4660,6 +4885,17 @@ export default function Tabletop({ actor, players, offline }) {
                 title="Put it again (Ctrl+Shift+Z)"
               >
                 Redo
+              </button>
+            </>
+          ) : menu.polygon ? (
+            <>
+              {/* Only where a corner was actually under the pointer. Elsewhere
+                  the polygon itself is all there is to act on. */}
+              {menu.polygon.pointIndex >= 0 && (
+                <button onClick={deletePolygonPoint}>Delete this point</button>
+              )}
+              <button className="danger" onClick={deletePolygon}>
+                Delete entire polygon
               </button>
             </>
           ) : menu.measure ? (

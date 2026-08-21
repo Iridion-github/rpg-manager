@@ -1170,6 +1170,25 @@ button.linky:hover {
   opacity: 0.7;
 }
 
+/* The corners of a polygon being clicked out. Same treatment as the ruler's
+   points, because they are the same kind of mark: a thing you aim at. */
+.poly-dot {
+  fill: #0d1117;
+  stroke: #9fb4ff;
+}
+
+/* The one that closes the outline, drawn to be found rather than merely seen. */
+.poly-dot.first {
+  fill: #9fb4ff;
+  stroke: #0d1117;
+}
+
+/* Inert, like everything else on the drawn layer: what the pointer is over is
+   the map, and the corners are hit-tested in cells by the menu handler. */
+.poly-sketch {
+  pointer-events: none;
+}
+
 .measure-dot {
   fill: var(--ink, #ffd479);
   stroke: #10131a;

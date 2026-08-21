@@ -24,6 +24,15 @@
 
 export const PATCH_NOTES = [
   {
+    date: '2026-08-22',
+    entries: [
+      {
+        kind: 'new',
+        text: 'Freehand polygon, a fifth shape in Drawing mode, for the room that is not a box and the lake that is not a circle. It is clicked out rather than dragged: every click puts down a corner, the way the ruler puts down points. Press Escape or click the first corner again to finish it, and right-click a corner for Delete this point or Delete entire polygon. Until you finish it, it is yours alone - nobody else sees it going up. Afterwards it is an ordinary shape: drag it about, colour it, label it, delete it, take it back with Ctrl+Z. Two corners is not a polygon, so one started by mistake and escaped simply goes away.',
+      },
+    ],
+  },
+  {
     date: '2026-08-21',
     entries: [
       {

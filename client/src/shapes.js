@@ -6,10 +6,16 @@
 // is cells → map pixels, and it's the same one tokens make: the grid's own
 // corner, plus so many cells of it.
 //
-// The four kinds are the ones every tabletop with a template tool settles on -
-// a rectangle for a room, a circle for a burst, a cone for a breath weapon, a
+// Four of the kinds are the ones every tabletop with a template tool settles on
+// - a rectangle for a room, a circle for a burst, a cone for a breath weapon, a
 // line for a lightning bolt - and they carry the same handful of numbers those
 // tools do: a length, a direction, and how wide the cone opens.
+//
+// The fifth is the polygon, which is none of those: it is a list of corners,
+// for the room that is not a box and the lake that is not a circle. It is drawn
+// by clicking rather than dragging, and its corners are stored as offsets from
+// its anchor so that everything which moves a shape by writing x and y - the
+// drag, the undo of a drag - moves it without knowing what it is.
 
 /** The tools, in the order they're offered. */
 export const TOOLS = [
@@ -33,6 +39,12 @@ export const TOOLS = [
     kind: 'line',
     name: 'Line',
     hint: 'Drag from end to end. Its width is a slider.',
+  },
+  {
+    kind: 'poly',
+    name: 'Freehand polygon',
+    // The only tool here that isn't a drag. See the note on `polygonFrom`.
+    hint: 'Click each corner. Escape or the first corner again finishes it; right-click a corner to drop it.',
   },
 ];
 
@@ -63,6 +75,10 @@ const TOOL_FIELDS = {
   circle: ['fill', 'stroke', 'opacity', 'strokeWidth', 'label', 'snap'],
   cone: ['fill', 'stroke', 'opacity', 'strokeWidth', 'angle', 'label', 'snap'],
   line: ['fill', 'stroke', 'opacity', 'strokeWidth', 'thickness', 'label', 'snap'],
+  // No size of its own: a polygon's shape *is* its corners, and there is no
+  // number a slider could offer that would not be a worse way of saying where
+  // one of them goes.
+  poly: ['fill', 'stroke', 'opacity', 'strokeWidth', 'label', 'snap'],
 };
 
 export const usesField = (kind, field) => (TOOL_FIELDS[kind] || []).includes(field);
@@ -120,6 +136,10 @@ export const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
  */
 export function shapePivot(shape) {
   if (shape.kind === 'rect') return { x: shape.x + shape.w / 2, y: shape.y + shape.h / 2 };
+  // A polygon's anchor is one of its corners, so the mark belongs in the middle
+  // of what it covers rather than on the corner that happened to be clicked
+  // first - which is often nowhere near the middle of anything.
+  if (shape.kind === 'poly') return centroid(polygonPoints(shape));
   return { x: shape.x, y: shape.y };
 }
 
@@ -329,9 +349,46 @@ export function shapeFromDrag(kind, from, to, style) {
   };
 }
 
-/** Whether a drag went far enough to have meant a shape at all. */
-export const isDrawn = (shape) =>
-  shape.kind === 'rect' ? shape.w > 0.15 && shape.h > 0.15 : shape.r > 0.15;
+/**
+ * Build a polygon from the corners that were clicked, in cells.
+ *
+ * The first corner becomes the anchor and the rest are stored relative to it,
+ * which is what lets a polygon be moved by the same drag that moves everything
+ * else: `x` and `y` are the whole of where it sits, exactly as they are for a
+ * rectangle. Absolute corners would have meant a second way of moving a shape,
+ * and a second thing for undo to know about.
+ */
+export function polygonFrom(points) {
+  const [first] = points;
+  return {
+    kind: 'poly',
+    x: round2(first.x),
+    y: round2(first.y),
+    points: points.map((p) => ({ x: round2(p.x - first.x), y: round2(p.y - first.y) })),
+  };
+}
+
+/** A polygon's corners in absolute cells, anchor included. */
+export const polygonPoints = (shape) =>
+  (shape.points || []).map((p) => ({ x: shape.x + p.x, y: shape.y + p.y }));
+
+/** The middle of a set of points. Used for the label and the centre mark. */
+export function centroid(points) {
+  if (!points.length) return { x: 0, y: 0 };
+  const sum = points.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+/**
+ * Whether a gesture went far enough to have meant a shape at all.
+ *
+ * For a polygon that is three corners: two is a line drawn the long way round,
+ * and one is a click on the map. Neither is a thing to leave on the board.
+ */
+export const isDrawn = (shape) => {
+  if (shape.kind === 'poly') return (shape.points || []).length >= 3;
+  return shape.kind === 'rect' ? shape.w > 0.15 && shape.h > 0.15 : shape.r > 0.15;
+};
 
 /**
  * The shape as SVG, in map pixels.
@@ -357,6 +414,15 @@ export function shapePath(shape, cell, origin = { x: 0, y: 0 }) {
       { x: cx + w, y: cy + h },
       { x: cx, y: cy + h },
     ].map((p) => rotateAbout(p, middle, shape.dir || 0));
+    return `M ${corners.map((p) => `${p.x} ${p.y}`).join(' L ')} Z`;
+  }
+
+  if (shape.kind === 'poly') {
+    const corners = polygonPoints(shape).map((p) => ({
+      x: origin.x + px(p.x),
+      y: origin.y + px(p.y),
+    }));
+    if (!corners.length) return '';
     return `M ${corners.map((p) => `${p.x} ${p.y}`).join(' L ')} Z`;
   }
 
@@ -403,6 +469,10 @@ export function shapeAnchor(shape, cell, origin = { x: 0, y: 0 }) {
   const cy = origin.y + shape.y * cell;
   if (shape.kind === 'rect') return { x: cx + (shape.w * cell) / 2, y: cy + (shape.h * cell) / 2 };
   if (shape.kind === 'circle') return { x: cx, y: cy };
+  if (shape.kind === 'poly') {
+    const mid = centroid(polygonPoints(shape));
+    return { x: origin.x + mid.x * cell, y: origin.y + mid.y * cell };
+  }
   // A cone or a line reads best from halfway along it rather than from the
   // point it comes out of, which is usually under a token.
   const a = rad(shape.dir);
@@ -415,5 +485,9 @@ export function shapeSize(shape) {
   if (shape.kind === 'rect') return `${n(shape.w)} × ${n(shape.h)}`;
   if (shape.kind === 'circle') return `r ${n(shape.r)}`;
   if (shape.kind === 'cone') return `${n(shape.r)} · ${Math.round(shape.angle)}°`;
+  if (shape.kind === 'poly') {
+    const count = (shape.points || []).length;
+    return `${count} ${count === 1 ? 'corner' : 'corners'}`;
+  }
   return `${n(shape.r)} long`;
 }

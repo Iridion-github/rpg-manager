@@ -1041,7 +1041,32 @@ router.post('/:id/tokens/paste', requireUser, async (req, res, next) => {
  * it, that hand may change or rub out its own, and the DM may change or rub out
  * anybody's. Nobody can reach across the table at somebody else's marks.
  */
-const SHAPE_KINDS = new Set(['rect', 'circle', 'cone', 'line']);
+const SHAPE_KINDS = new Set(['rect', 'circle', 'cone', 'line', 'poly']);
+
+/**
+ * A polygon's corners, as offsets from where it sits.
+ *
+ * The one shape whose form is a list rather than a number or two, so it is the
+ * one that needs a cap: three corners is the least that encloses anything, and
+ * the ceiling is there for the same reason MAX_SHAPES is - not because anybody
+ * would click two hundred corners on purpose, but because a stuck pointer or a
+ * bad script might, and a scene record is read and broadcast whole.
+ *
+ * Kept relative rather than absolute so that x and y remain the whole of where
+ * a shape is, which is what lets one drag move every kind of them.
+ */
+const MAX_POINTS = 200;
+
+function polygonPoints(value, existing) {
+  const source = Array.isArray(value) ? value : existing;
+  if (!Array.isArray(source)) return [];
+  return source
+    .slice(0, MAX_POINTS)
+    .map((p) => ({
+      x: clamp(num(p?.x, 0), -500, 500),
+      y: clamp(num(p?.y, 0), -500, 500),
+    }));
+}
 
 // A ceiling, not a budget. Nobody draws two hundred shapes on one map on
 // purpose; something that has is a stuck pointer or a bad script, and the point
@@ -1072,6 +1097,12 @@ function sanitizeShape(body = {}, existing = {}) {
     opacity: clamp(Math.round(num(body.opacity, existing.opacity ?? 35)), 5, 100),
     strokeWidth: clamp(Math.round(num(body.strokeWidth, existing.strokeWidth ?? 2)), 0, 12),
     label: String(body.label ?? existing.label ?? '').slice(0, 40),
+    // Only where they mean something. Every other kind is described by the
+    // numbers above, and an empty array stored on all of them would be a field
+    // on four shapes that could never be anything but empty.
+    ...(((body.kind ?? existing.kind) === 'poly')
+      ? { points: polygonPoints(body.points, existing.points) }
+      : {}),
   };
 }
 
