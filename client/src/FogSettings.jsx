@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { UNITS, unitNamed } from './measure.js';
 import { toCells, toUnit } from './fog.js';
 
@@ -36,6 +37,8 @@ export default function FogSettings({
   onClose,
   offline,
 }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const perCell = Number(fog.perCell) || unitNamed(fog.unit).perCell;
   const suffix = unitNamed(fog.unit).suffix;
   /**
@@ -261,6 +264,6 @@ export default function FogSettings({
         )}
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

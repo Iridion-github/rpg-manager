@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { initiativeText } from './initiative.js';
 import HpBar, { hpBar } from './HpBar.jsx';
 import { notation } from './dice.js';
@@ -25,6 +26,8 @@ const GAP = 10;
 const MARGIN = 4;
 
 export default function TokenTooltip({ anchor, token, owner, showHp, note, sheet = null }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const ref = useRef(null);
 
   /**
@@ -200,6 +203,6 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note, sheet
           it this second, which outranks nothing and belongs after the facts. */}
       {note && <small>{note}</small>}
     </div>,
-    document.body
+    portalTarget
   );
 }

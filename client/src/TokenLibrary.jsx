@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { api } from './api.js';
 
 /**
@@ -59,6 +60,8 @@ function buildTree(files) {
 }
 
 export default function TokenLibrary({ onPick, selectedUrl, emptyHint }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [files, setFiles] = useState(cached || []);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(!cached);
@@ -282,6 +285,6 @@ function TokenPreview({ file, onClose }) {
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

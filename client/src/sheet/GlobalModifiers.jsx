@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from '../portalTarget.js';
 import { DAMAGE_DICE } from '../dice.js';
 import { MODIFIER_TARGETS, extrasNotation, modifierExtras, modifierTargets } from './rules.js';
 
@@ -37,6 +38,8 @@ const blank = () => ({
 });
 
 export default function GlobalModifiers({ effects, onSave, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // Edited in a copy, so Cancel is a real cancel rather than an undo somebody
   // has to perform themselves. Every row's destinations are put in list form on
   // the way in, so nothing below has to know that a sheet written before this
@@ -257,6 +260,6 @@ export default function GlobalModifiers({ effects, onSave, onClose }) {
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { formatDateTime } from './dateFormat.js';
 import { describeSheet, readSheetFile } from './sheetFile.js';
 
@@ -21,6 +22,8 @@ import { describeSheet, readSheetFile } from './sheetFile.js';
 const MAX_BYTES = 2 * 1024 * 1024;
 
 export default function SheetImportModal({ sheet, onConfirm, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // What was read out of the file, ready to go in. Null until a good one lands.
   const [incoming, setIncoming] = useState(null);
   const [from, setFrom] = useState('');
@@ -132,6 +135,6 @@ export default function SheetImportModal({ sheet, onConfirm, onClose }) {
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

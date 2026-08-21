@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import ImageCloud from './ImageCloud.jsx';
 
 /**
@@ -21,6 +22,8 @@ import ImageCloud from './ImageCloud.jsx';
  * that: this is only ever rendered where the answer is already known.
  */
 export default function CloudPicker({ title = 'Choose a picture', purpose, currentUrl, onPick, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   useEffect(() => {
     const onKey = (e) => {
       // Only this one. Anything under it - the form that opened this - keeps
@@ -63,6 +66,6 @@ export default function CloudPicker({ title = 'Choose a picture', purpose, curre
         />
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

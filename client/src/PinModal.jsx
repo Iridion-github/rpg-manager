@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { RichTextEditor } from './RichTextLazy.jsx';
 import SharePanel from './SharePanel.jsx';
 
@@ -25,6 +26,8 @@ const DEFAULT_BACKGROUND = '#161b22';
 const MAX_TITLE = 80; // the server's own limit; see sanitizePin
 
 export default function PinModal({ pin, at, players = [], actor, onSubmit, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [title, setTitle] = useState(pin?.title || '');
   const [color, setColor] = useState(pin?.color || DEFAULT_COLOR);
   const [background, setBackground] = useState(pin?.background || DEFAULT_BACKGROUND);
@@ -140,6 +143,6 @@ export default function PinModal({ pin, at, players = [], actor, onSubmit, onClo
         </div>
       </form>
     </div>,
-    document.body
+    portalTarget
   );
 }

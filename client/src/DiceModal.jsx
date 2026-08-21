@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import {
   DICE_OPTIONS,
   MAX_DICE,
@@ -31,6 +32,8 @@ export default function DiceModal({
   onClose,
   onConfirm,
 }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const options = allowed
     ? DICE_OPTIONS.filter((d) => allowed.includes(d.sides))
     : DICE_OPTIONS;
@@ -191,6 +194,6 @@ export default function DiceModal({
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

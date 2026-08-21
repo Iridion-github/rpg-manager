@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * The tokens that aren't on any map, offered back to the spot you right-clicked.
@@ -14,6 +15,8 @@ import { createPortal } from 'react-dom';
  * goblins on it.
  */
 export default function SpawnModal({ bench, owners, onPick, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const nameOf = (ownerId) => owners.find((p) => p.id === ownerId)?.name || null;
 
   return createPortal(
@@ -76,6 +79,6 @@ export default function SpawnModal({ bench, owners, onPick, onClose }) {
         )}
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

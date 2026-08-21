@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import PopoutWindow from './PopoutWindow.jsx';
 
 /**
  * A panel that floats over the app instead of replacing what's underneath.
@@ -153,6 +154,35 @@ function stretch(from, mode, dx, dy, min) {
   return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
 }
 
+/**
+ * A box with an arrow leaving it, or coming back into it.
+ *
+ * Drawn rather than typed, for the reason the fold and close marks are: as
+ * characters these come from whatever font the system hands over, at optical
+ * sizes and baselines that have nothing to do with each other. Two paths buy an
+ * exact size and a true centre.
+ */
+function PopIcon({ back = false }) {
+  return (
+    <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+      {/* The window, open at the corner the arrow passes through. */}
+      <path d="M5.6 1.4 H1.4 V8.6 H8.6 V4.4" />
+      {/* And the arrow: out to the top right, or back in from it. */}
+      {back ? (
+        <>
+          <path d="M9 1 L5.6 4.4" />
+          <path d="M5.6 1.9 V4.4 H8.1" />
+        </>
+      ) : (
+        <>
+          <path d="M9 1 L5.6 4.4" />
+          <path d="M6.5 1 H9 V3.5" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export default function FloatingWindow({
   title,
   controls,
@@ -209,6 +239,22 @@ export default function FloatingWindow({
    * that do the same thing is one button too many, so it isn't drawn.
    */
   foldable = true,
+  /**
+   * Whether this one may be sent out to a browser window of its own.
+   *
+   * Off unless asked for, and asked for by exactly two: a character sheet and a
+   * note. Those are the windows somebody reads *while* doing something else -
+   * a sheet beside the map, a note beside the fight - which is the whole reason
+   * to want one on a second monitor.
+   *
+   * The rest are not refused out of caution; they would simply be worse for it.
+   * The tools panels, the grid settings and the turn tracker are about the map
+   * in front of them and are no use on another screen with no map on it, and a
+   * pin's card is about a spot on that map, which makes it the same argument
+   * twice over. A window that offers to do a thing it would be a mistake to do
+   * is a worse window than one that does not offer.
+   */
+  poppable = false,
 }) {
   const [rect, setRect] = useState(() =>
     firstRect(storageKey, fallbackKey, defaultSize, cascade, minSize)
@@ -218,6 +264,21 @@ export default function FloatingWindow({
   // every window "already placed", and a cascade of untouched windows would
   // restore itself into a single pile on the next open.
   const [placed, setPlaced] = useState(() => hasSavedRect(storageKey));
+  /**
+   * Whether this window is out on the desktop rather than on the page.
+   *
+   * A window and not a copy of one: see PopoutWindow. While it is out, none of
+   * the chrome below is drawn - no drag handle, no grips, no fold - because the
+   * window manager already offers all of it and does it better. What is drawn
+   * inside the popped-out window is the title bar's *contents*: a sheet's
+   * Export and Delete are reached from that bar and would otherwise be stranded
+   * on the page the sheet is no longer on.
+   */
+  const [poppedOut, setPoppedOut] = useState(false);
+  // Whether the browser refused the last attempt to open one. Cleared by the
+  // next attempt, so the note is about what just happened rather than a sign
+  // that stays up.
+  const [blocked, setBlocked] = useState(false);
   // '' when idle, otherwise 'move' or the edge being pulled. Held in state
   // because the cursor and the body's inertness depend on it.
   const [mode, setMode] = useState('');
@@ -382,6 +443,54 @@ export default function FloatingWindow({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, isTop]);
 
+  /**
+   * Put it back on the page.
+   *
+   * Also what the popped-out window's own close button ends up calling, through
+   * `onClose` on PopoutWindow: shutting the window is not closing the sheet, it
+   * is bringing it home. Closing the sheet is the ✕, which is on the title bar
+   * either way.
+   */
+  const putBack = (why) => {
+    setPoppedOut(false);
+    // Refused by the browser rather than by the user. Said in the title bar,
+    // because the alternative is a button that visibly does nothing - and not
+    // said in an alert(), which stops the whole page dead until it is dismissed
+    // and is a poor way to report that a button did not work.
+    setBlocked(why === 'blocked');
+  };
+
+  // Out on the desktop: the page keeps nothing of this window - no bar, no
+  // ghost - because a title bar for a window that is somewhere else is a thing
+  // to accidentally close.
+  if (poppedOut) {
+    return (
+      <PopoutWindow title={title} width={box.w} height={box.h} onClose={putBack}>
+        <div className="win win-popped">
+          <div className="win-head">
+            <strong className="win-title">{title}</strong>
+            {controls}
+            <button
+              type="button"
+              className="linky win-pop"
+              onClick={() => putBack()}
+              aria-label="Put back on the page"
+              title="Put back on the page"
+            >
+              <PopIcon back />
+            </button>
+            {onClose && (
+              <button type="button" className="linky win-close" onClick={onClose} aria-label="Close">
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="win-body">{children}</div>
+        </div>
+      </PopoutWindow>
+    );
+  }
+
   // Into <body>, not into whatever rendered us. A window pinned to the viewport
   // has no business in the middle of a column's child list: it doesn't lay out
   // there, it outlives the view it was opened from, and its owner's output would
@@ -429,6 +538,29 @@ export default function FloatingWindow({
 
             Absent on a window that says it cannot fold, the same way the ✕ is
             absent on one nobody may close. */}
+        {/* Left of the minimise button, and drawn the same way and for the same
+            reason - see the note on that one. Only where the caller says it is
+            worth having; see `poppable`. The refusal note goes with it, since
+            it is a note about this button and nothing else. */}
+        {poppable && blocked && (
+          <small className="win-note" role="status">
+            Pop-ups blocked
+          </small>
+        )}
+        {poppable && (
+          <button
+            type="button"
+            className="linky win-pop"
+            onClick={() => {
+              setBlocked(false);
+              setPoppedOut(true);
+            }}
+            aria-label="Open in a new window"
+            title="Open in a new window"
+          >
+            <PopIcon />
+          </button>
+        )}
         {foldable && (
           <button
             type="button"

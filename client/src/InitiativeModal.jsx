@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * What a creature rolled, asked on its own.
@@ -19,6 +20,8 @@ import { createPortal } from 'react-dom';
 const blankToNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
 
 export default function InitiativeModal({ token, onSubmit, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [total, setTotal] = useState(token?.initiative ?? '');
   const [die, setDie] = useState(token?.initiativeDie ?? '');
   const [mod, setMod] = useState(token?.initiativeMod ?? '');
@@ -112,6 +115,6 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
         </div>
       </form>
     </div>,
-    document.body
+    portalTarget
   );
 }

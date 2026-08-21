@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * "Which part of this picture do you want?" - the step between choosing a file
@@ -77,6 +78,8 @@ function fitStage(aspect) {
 }
 
 export default function CropModal({ file, aspect = 1, title = 'Frame the picture', onCancel, onDone }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // The frame's size on screen. Fitted to the window rather than fixed, and
   // held in state because every calculation in this file is against it.
   const [stage, setStage] = useState(() => fitStage(aspect));
@@ -355,6 +358,6 @@ export default function CropModal({ file, aspect = 1, title = 'Frame the picture
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { notation } from './dice.js';
 import { extrasNotation } from './sheet/rules.js';
 
@@ -51,6 +52,8 @@ export default function RollConfirmModal({
   onConfirm,
   onClose,
 }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // Which of the three is chosen. Normal is where every roll starts unless
   // something on the sheet says otherwise: it says what you can do, and the
   // circumstances of one attack are yours to say.
@@ -208,6 +211,6 @@ export default function RollConfirmModal({
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

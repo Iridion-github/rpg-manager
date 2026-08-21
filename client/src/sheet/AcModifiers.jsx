@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from '../portalTarget.js';
 import { signed } from './rules.js';
 
 /**
@@ -21,6 +22,8 @@ const uid = () => crypto.randomUUID();
 const blank = () => ({ id: uid(), name: '', active: true, modifier: 1 });
 
 export default function AcModifiers({ effects, onSave, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // Edited in a copy, so Cancel is a real cancel rather than an undo somebody
   // has to perform themselves.
   const [draft, setDraft] = useState(() => effects.map((e) => ({ ...e })));
@@ -138,6 +141,6 @@ export default function AcModifiers({ effects, onSave, onClose }) {
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

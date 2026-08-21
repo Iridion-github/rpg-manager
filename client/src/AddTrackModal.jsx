@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import { api } from './api.js';
 
 /**
@@ -56,6 +57,8 @@ function whyNot(file) {
 }
 
 export default function AddTrackModal({ onAdded, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [tab, setTab] = useState('youtube');
   const [busy, setBusy] = useState(false);
 
@@ -252,6 +255,6 @@ export default function AddTrackModal({ onAdded, onClose }) {
         </div>
       </form>
     </div>,
-    document.body
+    portalTarget
   );
 }

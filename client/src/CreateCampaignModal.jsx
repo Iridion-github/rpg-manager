@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * "What table are we starting?" - a name, a subtitle, and optionally a whole
@@ -37,6 +38,8 @@ function checkExport(data) {
 }
 
 export default function CreateCampaignModal({ onCreate, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [name, setName] = useState('');
   const [subtitle, setSubtitle] = useState('');
   // null | { ok: true, data } | { ok: false }
@@ -169,6 +172,6 @@ export default function CreateCampaignModal({ onCreate, onClose }) {
         </div>
       </form>
     </div>,
-    document.body
+    portalTarget
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * "This one, here?" - the step between choosing Paste token and another figure
@@ -17,6 +18,8 @@ import { createPortal } from 'react-dom';
  * a worse answer than a picture.
  */
 export default function PasteTokenModal({ token, name, busy, error, onConfirm, onClose }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -82,6 +85,6 @@ export default function PasteTokenModal({ token, name, busy, error, onConfirm, o
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from '../portalTarget.js';
 
 /**
  * Sharing mode: the sheet stops being something you fill in and becomes
@@ -23,6 +24,8 @@ import { createPortal } from 'react-dom';
  * how you get to ask for either without a second control saying which.
  */
 export default function Shareable({ sharing, share, onPick, children, label, className = '' }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const props = shareProps({ sharing, share, onPick, label });
   if (!props) return children;
   // `className` is for the handful of regions whose wrapper has to take a
@@ -116,6 +119,6 @@ export function SharePreviewModal({ share, busy, error, onCancel, onSend }) {
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

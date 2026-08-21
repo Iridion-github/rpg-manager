@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'A character sheet, and any note, can be sent out to a browser window of its own. The button is the little box with an arrow leaving it, just left of the minimise line, and the window opens at the size the panel already was. Put a sheet on the second monitor and keep the map on the first. It is the same sheet, not a copy: whatever you had half-typed is still half-typed, everything stays live, and the buttons off its title bar - Export, Delete, Sharing mode - travel with it. Dice you roll from over there open over there too. Close the window, or press the same button again, and it comes back to the page where it was. Those two and no others: the tool panels, the grid settings, the turn tracker and a pin\'s card are all about the map in front of them, and none of them is worth much on a screen with no map on it.',
+      },
+      {
+        kind: 'new',
         text: 'Tokens have attacks. Give a figure a bite or a claw when you make it or edit it, in the same row of boxes the character sheet uses: a name, dice to hit, dice for damage and what kind of damage it does. A goblin can now have its attacks written down without anybody writing it a whole character. If the figure is linked to a character, that character\'s attacks are listed above its own so you can see everything it can do in one place; those stay the sheet\'s to change, and nothing you add to the figure is written onto the character. Every one of them has the crossed swords beside it, so you can throw an attack straight from the figure: its own roll under its own name, and a character\'s exactly as it would roll from their sheet, ability modifier and global modifiers and all. Hovering the figure shows the lot. The one thing a token\'s attack has no room for is the picture a sheet\'s can carry, which belongs on the sheet.',
       },
       {

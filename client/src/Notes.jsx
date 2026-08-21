@@ -236,71 +236,71 @@ export default function Notes({
   return (
     <>
       {showList && (
-    <div className="notes-view">
-      <div className="sheet-toolbar">
-        <h2 className="notes-title">{canEdit ? 'Notes & handouts' : 'Handouts'}</h2>
-        {saving > 0 && <span className="badge saving">saving…</span>}
-        {canEdit && offline && <span className="badge role anon">read-only</span>}
-        <div className="spacer" />
-        {!readOnly && <button onClick={addNote}>+ New note</button>}
-      </div>
+        <div className="notes-view">
+          <div className="sheet-toolbar">
+            <h2 className="notes-title">{canEdit ? 'Notes & handouts' : 'Handouts'}</h2>
+            {saving > 0 && <span className="badge saving">saving…</span>}
+            {canEdit && offline && <span className="badge role anon">read-only</span>}
+            <div className="spacer" />
+            {!readOnly && <button onClick={addNote}>+ New note</button>}
+          </div>
 
-      {error && <p className="error">{error}</p>}
+          {error && <p className="error">{error}</p>}
 
-      <div className="notes-layout">
-        <ul className="note-list">
-          {notes.map((n) => (
-            <li key={n.id}>
-              <button
-                className={`note-item${n.id === openId ? ' active' : ''}`}
-                onClick={() => setOpenId(n.id)}
-              >
-                <span className="note-item-title">{n.title || 'Untitled note'}</span>
-                {/* Only on the notes you could change: a note somebody has
+          <div className="notes-layout">
+            <ul className="note-list">
+              {notes.map((n) => (
+                <li key={n.id}>
+                  <button
+                    className={`note-item${n.id === openId ? ' active' : ''}`}
+                    onClick={() => setOpenId(n.id)}
+                  >
+                    <span className="note-item-title">{n.title || 'Untitled note'}</span>
+                    {/* Only on the notes you could change: a note somebody has
                     handed you is one you can read, and saying "shared" over it
                     describes your own screen back to you. */}
-                {mayEdit(n) && (
-                  <span className={`note-flag ${n.visibility || 'private'}`}>
-                    {flagLabel(n, players)}
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-          {notes.length === 0 && (
-            <li className="empty">
-              {canEdit
-                ? 'No notes yet.'
-                : offline
-                  ? 'No handouts cached yet.'
-                  : "Nothing shared yet - your DM hasn't handed anything out."}
-            </li>
-          )}
-        </ul>
+                    {mayEdit(n) && (
+                      <span className={`note-flag ${n.visibility || 'private'}`}>
+                        {flagLabel(n, players)}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+              {notes.length === 0 && (
+                <li className="empty">
+                  {canEdit
+                    ? 'No notes yet.'
+                    : offline
+                      ? 'No handouts cached yet.'
+                      : "Nothing shared yet - your DM hasn't handed anything out."}
+                </li>
+              )}
+            </ul>
 
-        <div className="note-pane">
-          {!open && notes.length > 0 && <p className="hint">Pick a note to read it.</p>}
+            <div className="note-pane">
+              {!open && notes.length > 0 && <p className="hint">Pick a note to read it.</p>}
 
-          {open && (
-            <NoteView
-              note={open}
-              readOnly={!mayEdit(open)}
-              players={players}
-              actor={actor}
-              onEdit={edit}
-              // Sharing is a click with a consequence at the table rather than
-              // typing, so it goes at once instead of waiting out the debounce.
-              onShare={(patch) => queueSave({ ...open, ...patch }, { immediate: true })}
-              onDelete={() => setConfirmDeleteId(open.id)}
-              // Only offered from the pane. Inside a window it would be a
-              // button to open the window you are already looking at.
-              onPopOut={() => openWindow(open.id)}
-              popOutLabel={windowIds.includes(open.id) ? 'Bring window forward' : 'Open in window'}
-            />
-          )}
+              {open && (
+                <NoteView
+                  note={open}
+                  readOnly={!mayEdit(open)}
+                  players={players}
+                  actor={actor}
+                  onEdit={edit}
+                  // Sharing is a click with a consequence at the table rather than
+                  // typing, so it goes at once instead of waiting out the debounce.
+                  onShare={(patch) => queueSave({ ...open, ...patch }, { immediate: true })}
+                  onDelete={() => setConfirmDeleteId(open.id)}
+                  // Only offered from the pane. Inside a window it would be a
+                  // button to open the window you are already looking at.
+                  onPopOut={() => openWindow(open.id)}
+                  popOutLabel={windowIds.includes(open.id) ? 'Focus this modal' : 'Open in modal'}
+                />
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
       )}
 
       {/* One window per popped-out note, painted in the order they were last
@@ -314,6 +314,9 @@ export default function Notes({
           zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
           cascade={i}
           isTop={i === openWindows.length - 1}
+          // The other one: a note is something you keep beside the game rather
+          // than something you look at instead of it.
+          poppable
           defaultSize={{ w: 560, h: 520 }}
           onFocus={() => openWindow(note.id)}
           onClose={() => closeWindow(note.id)}

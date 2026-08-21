@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 
 /**
  * "Delete Kira?" - the step between clicking a delete button and the thing
@@ -24,6 +25,8 @@ export default function ConfirmDeleteModal({
   onConfirm,
   onClose,
 }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -113,6 +116,6 @@ export default function ConfirmDeleteModal({
         </div>
       </form>
     </div>,
-    document.body
+    portalTarget
   );
 }

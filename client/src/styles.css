@@ -5269,6 +5269,7 @@ button.token-tile:hover {
 
    Equal square targets with their contents centred, so the mark inside each one
    lands in the same place whether it's drawn or typed. */
+.win-head .win-pop,
 .win-head .win-fold,
 .win-head .win-close {
   display: inline-flex;
@@ -5284,6 +5285,7 @@ button.token-tile:hover {
 }
 
 /* currentColor, so the icon dims and lights with the button's own text. */
+.win-pop svg,
 .win-fold svg {
   /* Sized to the ✕ beside it rather than to a round number - a stroked square
      reads smaller than a glyph of the same box, so it needs the extra. */
@@ -5295,6 +5297,41 @@ button.token-tile:hover {
   stroke-linecap: square;
 }
 
+
+/* The browser refused to open one. In the bar rather than over the page: it is
+   a note about the button beside it, not an event the whole app needs to stop
+   for. */
+.win-note {
+  flex: none;
+  color: #ff9a9a;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+/* --- a window that has been sent to the desktop --- */
+/* Same window, no longer floating over anything: it fills the browser window it
+   was given, so the position, the size and the shadowless card the page version
+   sits on are all the operating system's business now. */
+.popout-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+}
+
+.win.win-popped {
+  position: static;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+/* Nothing to grab: the title bar is a bar of buttons here rather than a handle,
+   because the window it would move is moved from outside. */
+.win-popped .win-head {
+  cursor: default;
+}
 
 .win-body {
   flex: 1;

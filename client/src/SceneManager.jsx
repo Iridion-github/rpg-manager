@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePortalTarget } from './portalTarget.js';
 import ImageCloud from './ImageCloud.jsx';
 
 /**
@@ -38,6 +39,8 @@ export default function SceneManager({
   onShowToTable,
   onClose,
 }) {
+  // Where a dialog goes: the page, or the window it was popped out into.
+  const portalTarget = usePortalTarget();
   // The name as it is being typed. Committed on blur, exactly as the bar did:
   // a scene's name is broadcast to the table, and saving each keystroke would
   // be a scene called "D", "Do", "Doc" on everybody's screen.
@@ -187,6 +190,6 @@ export default function SceneManager({
         </div>
       </div>
     </div>,
-    document.body
+    portalTarget
   );
 }

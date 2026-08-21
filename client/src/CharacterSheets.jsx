@@ -578,6 +578,9 @@ export default function CharacterSheets({
             zIndex={Math.min(WIN_Z_BASE + i, WIN_Z_CEILING)}
             cascade={i}
             isTop={i === openSheets.length - 1}
+            // A sheet is read while looking at something else, so it is one of
+            // the two windows worth having on a second screen.
+            poppable
             onFocus={() => openSheet(sheet.id)}
             onClose={() => closeSheet(sheet.id)}
             opacity={opacityOf(sheet.id) / 100}
