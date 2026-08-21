@@ -341,16 +341,20 @@ router.post('/:id/play', requireDm, async (req, res, next) => {
 /**
  * The DM's transport: hold it, let it go, or move it.
  *
- * Uploaded tracks only. A YouTube embed comes with YouTube's own controls, and
- * a second set of buttons over the top of them would be two scrubbers
- * disagreeing about the same video.
+ * Either kind of track. It used to be uploaded files alone, because a YouTube
+ * embed came with YouTube's own controls and a second set of buttons over the
+ * top of them would have been two scrubbers disagreeing about the same video.
+ * The embed is no longer shown, so there is only one set of buttons again -
+ * and these are the ones worth having, because YouTube's move the DM's own
+ * player and these move the room.
+ *
+ * Nothing below this line cared which kind it was in the first place: a track
+ * is a start time and possibly a held position, and that is as true of a video
+ * as of a file.
  */
 async function transport(req, res, change) {
   const playing = await readState(req);
   if (!playing) return res.status(409).json({ error: 'Nothing is playing.' });
-  if (playing.kind !== 'file') {
-    return res.status(400).json({ error: 'Only an uploaded track can be controlled from here.' });
-  }
   const next = change(playing);
   await setState(req, next);
   announce(req, next);

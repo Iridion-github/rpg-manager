@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-21',
     entries: [
       {
+        kind: 'change',
+        text: 'The video is gone from under the chat, and a YouTube track gets the same controls an uploaded one has: pause, stop, and a slider you can drag, with the two clocks either side saying where in the track the table is. They move the room rather than your own browser, which is the point of the change: the buttons on the embedded video only ever moved yours, so pausing on them left you conducting a table that could still hear the music. Long tracks now read as hours and minutes, so a three-hour ambience mix says 3:04:55 instead of 184:55.',
+      },
+      {
         kind: 'new',
         text: 'Global modifiers ride along on checks and saving throws, not just attacks, and each one can land on as many of them as it really does. Applies to is now four tickboxes rather than one dropdown: To hit, Damage, Checks and Saves. Tick Bless on To hit and Saves, Guidance on Checks alone, a magic weapon on To hit and Damage. Every roll you make from the sheet picks up whatever applies to it, and the confirm box lists what is riding along and lets you drop one for that roll alone. Checks means ability checks, skills and initiative; saving throws are their own answer, because the things that help with one are usually not the things that help with the other. One box always has to stay ticked, since a modifier that lands nowhere would do nothing. Anything you had set up before still works and has been carried across: what used to say Both now shows To hit and Damage ticked together.',
       },

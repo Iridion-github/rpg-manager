@@ -20,11 +20,17 @@ import { socket } from './socket.js';
  * on demand would cost a beat at the start of every track, and the one being
  * left behind is silenced rather than removed.
  *
- * The DM gets a transport for an uploaded track - hold it, let it go, drag it
- * to a point - where the video would be. None of those buttons touch this
- * browser's audio element directly: they ask the server to move the *table*,
- * and this player then follows the answer like every other browser does. That
- * is what keeps a scrub from desynchronising the room.
+ * The DM gets a transport - hold it, let it go, drag it to a point - and the
+ * same one whichever kind of track is on. A video used to be handed to
+ * YouTube's own controls instead, on the reasoning that a second set of
+ * buttons over the top of them would be two scrubbers disagreeing about one
+ * video. The trouble was that they disagreed about something more important:
+ * YouTube's buttons move the DM's browser, and pausing on them left the DM
+ * conducting a table that could still hear the music. So the embed is not
+ * shown at all, and none of the buttons here touch this browser's player
+ * directly: they ask the server to move the *table*, and every browser
+ * including this one then follows the answer. That is what keeps a scrub from
+ * desynchronising the room.
  *
  * Only the DM sees what is playing. For everyone else the music is meant to be
  * scenery - they are told nothing about it: no video, no title, and nothing
@@ -119,11 +125,45 @@ const errorText = (code) =>
  * order of the numbers is a real question. This is a length, and 3:07 means
  * the same thing at every table.
  */
+/**
+ * How far into the track the table is, right now.
+ *
+ * The twin of positionOf in server/routes/music.js, and the whole of how a
+ * browser works out where it should be: a running track is timed from
+ * `startedAt` against the clock, a held one has its position written down,
+ * because a clock is exactly what a pause stops. Both players ask this the
+ * same question, which is what makes the transport mean the same thing
+ * whichever kind of track is on.
+ */
+const positionOf = (playing) =>
+  Math.max(
+    0,
+    playing.pausedAt != null
+      ? Number(playing.pausedAt) || 0
+      : (Date.now() - Date.parse(playing.startedAt)) / 1000
+  );
+
+/**
+ * How often the readout for a video is redrawn.
+ *
+ * An <audio> element says where it is several times a second, through
+ * `timeupdate`. The iframe has no such event, so the number is worked out
+ * instead - see the effect that uses this - and twice a second is often enough
+ * that the seconds never visibly stick.
+ */
+const YT_TICK_MS = 500;
+
 function clock(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const whole = Math.floor(seconds);
-  const minutes = Math.floor(whole / 60);
-  return `${minutes}:${String(whole % 60).padStart(2, '0')}`;
+  const ss = String(whole % 60).padStart(2, '0');
+  // Hours only once there are any. This never came up while the transport was
+  // for uploaded files, which run to a few minutes each; a three-hour ambience
+  // video is the ordinary case for the other kind, and "184:12" is not a
+  // length anybody reads as a bit over three hours.
+  const hours = Math.floor(whole / 3600);
+  if (!hours) return `${Math.floor(whole / 60)}:${ss}`;
+  return `${hours}:${String(Math.floor(whole / 60) % 60).padStart(2, '0')}:${ss}`;
 }
 
 export default function MusicPlayer({ canControl }) {
@@ -151,6 +191,10 @@ export default function MusicPlayer({ canControl }) {
   const lastAudible = useRef(volume || 1);
   const hostRef = useRef(null);
   const playerRef = useRef(null);
+  // Which video the iframe player is currently holding. The player itself
+  // could be asked, but not reliably at the moment this is needed: right after
+  // loadVideoById it still answers with the one before.
+  const loadedVideo = useRef(null);
   const audioRef = useRef(null);
   const graceTimer = useRef(null);
   // Read from inside callbacks that must not be rebuilt for every drag of the
@@ -235,54 +279,109 @@ export default function MusicPlayer({ canControl }) {
     };
   }, [load]);
 
-  // Drive the embedded player from whatever the table is currently playing.
-  // Silence for anything that isn't a YouTube track: a file playing underneath
-  // a video would be two songs at once, and the reverse is just as bad.
+  /**
+   * Drive the embedded player from whatever the table is currently playing.
+   *
+   * Silence for anything that isn't a YouTube track: a file playing underneath
+   * a video would be two songs at once, and the reverse is just as bad.
+   *
+   * This runs on every change to the table's playback - a new track, a pause,
+   * a seek - and asks the same question the <audio> element below is asked:
+   * where should this browser be, and should it be moving? Which is what lets
+   * one transport drive both kinds. The three cases are told apart by
+   * `loadedVideo`, because they want different things of the player: a new
+   * video is loaded, a moved one is seeked, and reloading on a seek would
+   * throw away the whole buffer to travel four seconds.
+   */
   useEffect(() => {
     let cancelled = false;
     clearTimeout(graceTimer.current);
 
     if (!playing || playing.kind === 'file') {
       playerRef.current?.stopVideo?.();
+      loadedVideo.current = null;
       if (!playing) setBlocked(false);
       return;
     }
 
+    const target = positionOf(playing);
+    // The readout goes where the table is going, now, rather than waiting for
+    // the player to get there and report it - the DM who just dragged the
+    // slider should see the number they dropped it on.
+    setPosition(target);
+
     loadYouTubeApi()
       .then((YT) => {
         if (cancelled || !hostRef.current) return;
-        // Where the track should be by now - this is the whole sync mechanism.
-        const startSeconds = Math.max(0, (Date.now() - Date.parse(playing.startedAt)) / 1000);
+        const player = playerRef.current;
+        // Held rather than running. Read from the payload this effect ran for,
+        // not from the `held` above, so the closure cannot be looking at a
+        // different render's answer to the same question.
+        const holding = playing.pausedAt != null;
 
-        if (playerRef.current?.loadVideoById) {
-          playerRef.current.loadVideoById({ videoId: playing.videoId, startSeconds });
-        } else {
+        if (!player) {
+          loadedVideo.current = playing.videoId;
+          // Until this one says how long it is. Whatever was there belonged to
+          // the track before, and a slider whose end is the wrong track's end
+          // is a slider that drops the thumb in the wrong place.
+          setDuration(0);
           playerRef.current = new YT.Player(hostRef.current, {
             width: '100%',
             height: '100%',
             videoId: playing.videoId,
-            playerVars: { autoplay: 1, start: Math.floor(startSeconds), playsinline: 1 },
+            // Cued at the right second either way; autoplay is the only
+            // difference between arriving at a running track and a held one.
+            playerVars: { autoplay: holding ? 0 : 1, start: Math.floor(target), playsinline: 1 },
             events: {
               onReady: (e) => {
                 applyVolume();
-                e.target.playVideo();
+                setDuration(e.target.getDuration?.() || 0);
+                if (!holding) e.target.playVideo();
               },
               // The positive answer, straight from the player. It arrives
               // whenever playback really begins - on its own, or on the retry
-              // below, or because somebody pressed play inside the embed - so
-              // the grace timer is left to say only "it didn't".
+              // below, or because somebody pressed play - so the grace timer
+              // is left to say only "it didn't". The length rides along with
+              // it: a video that has only just been cued does not know its own
+              // duration yet, and the slider needs one before it can be
+              // dragged.
               onStateChange: (e) => {
                 if (e.data === PLAYING) setBlocked(false);
+                const total = e.target.getDuration?.() || 0;
+                if (total) setDuration(total);
               },
               onError: (e) => setError(errorText(e.data)),
             },
           });
+        } else if (loadedVideo.current !== playing.videoId) {
+          loadedVideo.current = playing.videoId;
+          setDuration(0); // as above: the old length is not this one's
+
+          // Cue rather than load when it arrives held, or the opening second
+          // of a track nobody asked to hear yet plays before the pause lands.
+          if (holding) player.cueVideoById?.({ videoId: playing.videoId, startSeconds: target });
+          else player.loadVideoById?.({ videoId: playing.videoId, startSeconds: target });
+        } else {
+          // Same video, and the table moved inside it. Only move the playhead
+          // when it is really somewhere else: half a second of drift is the
+          // network, not an instruction, and seeking on it would put a stutter
+          // in the sound every time this effect ran.
+          const at = player.getCurrentTime?.() ?? 0;
+          if (Math.abs(at - target) > 0.75) player.seekTo?.(target, true);
+          if (holding) player.pauseVideo?.();
+          else player.playVideo?.();
         }
 
-        // Autoplay with sound needs a user gesture, and a player who hasn't
-        // clicked anything yet won't get one. Rather than guess at the rules,
-        // watch whether it actually started and offer a button if it didn't.
-        graceTimer.current = setTimeout(checkStarted, AUTOPLAY_GRACE_MS);
+        if (holding) {
+          // A held track is not playing because it was told not to, so there
+          // is nothing here for the Enable sound button to fix.
+          setBlocked(false);
+        } else {
+          // Autoplay with sound needs a user gesture, and a listener who hasn't
+          // clicked anything yet won't get one. Rather than guess at the rules,
+          // watch whether it actually started and offer a button if it didn't.
+          graceTimer.current = setTimeout(checkStarted, AUTOPLAY_GRACE_MS);
+        }
         // A player built before the volume was last changed would otherwise
         // start at full for somebody who had turned it down.
         applyVolume();
@@ -293,7 +392,40 @@ export default function MusicPlayer({ canControl }) {
       cancelled = true;
       clearTimeout(graceTimer.current);
     };
-  }, [playing?.kind, playing?.videoId, playing?.startedAt, applyVolume]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing?.kind, playing?.videoId, playing?.startedAt, playing?.pausedAt, applyVolume]);
+
+  /**
+   * Where the table is in a video, for the readout and the slider.
+   *
+   * Worked out from the table's own clock rather than asked of the player, and
+   * that is the important part. The player *can* be asked - getCurrentTime -
+   * and doing so was the obvious thing, but its answer is where this one
+   * browser's video has got to, which is not the question the transport is
+   * about. Drag the slider to twenty minutes and the player reports the old
+   * second until its seek lands, so the readout jumped forward and then
+   * visibly fell back; and while a video is buffering or was never allowed to
+   * start, it reports a number that has nothing to do with where the room is.
+   *
+   * `positionOf` is the same clock every browser at the table uses to decide
+   * where it should be, so the DM reads the number they are commanding rather
+   * than the number their own iframe happens to have reached.
+   *
+   * Only while a track is running: a held one already shows the second it was
+   * held at, and its answer cannot change until somebody moves it.
+   */
+  useEffect(() => {
+    if (!playing || isFile || held) return undefined;
+    const tick = setInterval(() => {
+      // Never while a thumb is down: the slider belongs to the finger holding
+      // it until it is let go.
+      if (scrubRef.current != null) return;
+      // Past the end, the clock keeps running and the video does not. Parked
+      // at the end for the same reason the file player parks there.
+      setPosition(duration ? Math.min(positionOf(playing), duration) : positionOf(playing));
+    }, YT_TICK_MS);
+    return () => clearInterval(tick);
+  }, [playing, isFile, held, duration]);
 
   /**
    * The same job for an uploaded file, done by an <audio> element.
@@ -490,7 +622,15 @@ export default function MusicPlayer({ canControl }) {
 
   return (
     <aside className={`music-bar${idle ? ' idle' : ''}${canControl ? '' : ' hidden'}`}>
-      <div className={`music-frame${isFile ? ' file' : ''}`}>
+      {/* The iframe, which nobody sees any more. It used to be the DM's window
+          onto the video and their only way to pause it; the transport below
+          does that job now, and does it for the whole table rather than for
+          the one browser. What is left of the embed is a sound source, so it
+          is parked off-screen for the DM exactly as it always was for
+          everybody else - removed or display:none'd, a frame can have its
+          playback suspended by the browser, and silence is the one outcome
+          this must not produce. */}
+      <div className="music-frame">
         <div ref={hostRef} />
       </div>
 
@@ -511,11 +651,15 @@ export default function MusicPlayer({ canControl }) {
         }}
       />
 
-      {/* Where the video would be, for a track that has no video: the classic
-          three - hold it, stop it, drag it somewhere - and the two numbers that
-          say where in the track the table is. The DM's alone, like the frame it
-          stands in for. */}
-      {!idle && canControl && isFile && (
+      {/* The classic three - hold it, stop it, drag it somewhere - and the two
+          numbers that say where in the track the table is. The DM's alone.
+
+          One transport for both kinds of track now. A video used to be handed
+          to YouTube's own controls instead, which looked like the same thing
+          and was not: those move the DM's browser, and these move the room.
+          Pausing on the embed left the DM conducting a table that could still
+          hear the music. */}
+      {!idle && canControl && (
         <div className="music-transport">
           <button
             type="button"
@@ -571,13 +715,9 @@ export default function MusicPlayer({ canControl }) {
               🔊 Enable audio
             </button>
           )}
-          {/* The transport has its own ■ when there is one, and two stops on
-              one bar is one stop too many. */}
-          {!isFile && (
-            <button className="linky" onClick={stop}>
-              Stop for everyone
-            </button>
-          )}
+          {/* No second Stop here. There used to be one for a video, because the
+              transport with the ■ on it was for uploaded files only; now every
+              track has that button, and two stops on one bar is one too many. */}
         </div>
       )}
 

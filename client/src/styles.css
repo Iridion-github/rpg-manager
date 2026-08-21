@@ -6237,38 +6237,25 @@ button.token-tile:hover {
   background: none;
 }
 
-.music-bar.idle .music-frame {
-  display: none;
-}
+/* Nobody sees the video, the DM included. It used to be their window onto a
+   YouTube track and their only way to pause one; the transport does that now,
+   and does it for the whole table, so what is left of the embed is a sound
+   source with a picture nobody needs.
 
-/* A file has nothing to show, so the video box goes rather than sitting there
-   as a black rectangle. The bar keeps its title and its Stop button. */
-.music-frame.file {
-  display: none;
-}
-
-/* Players hear the music and see nothing of what it is: no video and no title,
-   only the volume control every listener gets. The iframe is parked off-screen
-   rather than removed or display:none'd - a frame that isn't rendered can have
-   its playback suspended by the browser, and silence is the one outcome this
-   must not produce. */
-.music-bar.hidden .music-frame {
+   Parked off-screen rather than removed or display:none'd - a frame that isn't
+   rendered can have its playback suspended by the browser, and silence is the
+   one outcome this must not produce. One rule now rather than three: it is the
+   same 1px wherever it is and whatever is playing, so there is nothing left for
+   .idle or .hidden to say about it. */
+.music-frame {
   display: block;
   position: fixed;
   left: -9999px;
   bottom: 0;
   width: 1px;
   height: 1px;
-  aspect-ratio: auto;
   pointer-events: none;
-}
-
-.music-frame {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 6px;
   overflow: hidden;
-  background: #10131a;
 }
 
 .music-frame>div,
@@ -6323,11 +6310,14 @@ button.token-tile:hover {
   background: #35406a;
 }
 
-/* Fixed width and tabular figures so the numbers don't shuffle the slider
-   sideways once a second as the seconds tick over. */
+/* Tabular figures so the numbers don't shuffle the slider sideways once a
+   second as the seconds tick over, and a floor rather than a fixed width so an
+   hour-long track can print its hours. The floor is what keeps a track that has
+   only just started from sitting in a narrower box than the one beside it;
+   crossing from 9:59 to 10:00 moves the slider a digit's width, once. */
 .music-time {
   flex: none;
-  width: 2.6rem;
+  min-width: 2.6rem;
   font-size: 0.7rem;
   color: #8b90a0;
   font-variant-numeric: tabular-nums;
