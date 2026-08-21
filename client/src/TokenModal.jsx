@@ -7,6 +7,8 @@ import DiceModal from './DiceModal.jsx';
 import AttackRow, { isBlankAttack } from './sheet/AttackRow.jsx';
 import RollConfirmModal from './RollConfirmModal.jsx';
 import { DAMAGE_DICE, TO_HIT_DICE } from './dice.js';
+import SheetTokenLink from './SheetTokenLink.jsx';
+import { canOpenSheet, openCharacterSheet } from './sheetWindows.js';
 import { attackRollLabels, characterRollLabel } from './sheet/rollLabels.js';
 import { activeModifiers, modifierExtras, specAbilityBonus } from './sheet/rules.js';
 
@@ -157,11 +159,37 @@ export default function TokenModal({
    * sheet link is careful not to let happen.
    */
   sheet = null,
+  /**
+   * The characters this person may put on a figure, in SheetTokenLink's own
+   * shape - `{ id, name, note }`.
+   *
+   * Shaped by the caller rather than filtered here, exactly as the Tokens tab
+   * shapes its own: who may link what is a question each screen answers from
+   * the lists it already holds, and the server asks it again regardless. The
+   * note is what that character is currently standing on, if anything, because
+   * choosing it here takes it off there.
+   */
+  sheetOptions = null,
+  // Couple this figure to a character, or set null to uncouple it. Async, and
+  // the caller does the writing - see onLinkSheet in Tabletop. No handler means
+  // no picker, which is how the Tokens tab keeps the one it already has.
+  onLinkSheet,
   title,
   onSubmit,
   onClose,
 }) {
   const editing = Boolean(token);
+  /**
+   * Which character this figure is holding.
+   *
+   * Its own state rather than read straight off the token, because linking is
+   * not part of this form: it is written the moment it is chosen, through a
+   * route of its own that releases whatever else held that character and copies
+   * its numbers across. The token this dialog was opened with is a snapshot
+   * from before that, so it cannot be what the picker shows afterwards.
+   */
+  const [linkedSheetId, setLinkedSheetId] = useState(token?.sheetId || '');
+  const [linking, setLinking] = useState(false);
   // What the linked character can do, minus the half-written row a sheet keeps
   // while somebody is adding one.
   const sheetAttacks = (sheet?.attacks || []).filter((a) => !isBlankAttack(a));
@@ -519,6 +547,57 @@ export default function TokenModal({
                 ))}
               </select>
             </label>
+          )}
+
+          {/* Which character this figure is. Directly under who it belongs to,
+              because the two are the same kind of question - what this piece
+              stands for - and they are read together.
+
+              Acted on as it is chosen rather than saved with the rest of the
+              form, which is the one thing about it that differs from every
+              other field here. Coupling is not a field: it releases whatever
+              else held that character and copies their hit points and
+              initiative across, so it has a route of its own and happens at the
+              moment you ask for it. The same gesture it is in the Tokens tab. */}
+          {sheetOptions && onLinkSheet && (
+            <div className="token-field">
+              <span>Linked to</span>
+              <span className="token-link-row">
+                <SheetTokenLink
+                  label=""
+                  ariaLabel="Linked to which character sheet"
+                  value={linkedSheetId}
+                  busy={linking}
+                  options={sheetOptions}
+                  onChange={async (id) => {
+                    setLinking(true);
+                    setError('');
+                    try {
+                      await onLinkSheet(id);
+                      setLinkedSheetId(id || '');
+                    } catch (err) {
+                      setError(err.message);
+                    } finally {
+                      setLinking(false);
+                    }
+                  }}
+                />
+                {/* Only with something to open, and only where there is
+                    somebody listening to open it - the sheets are drawn by a
+                    different part of the app, and on a screen where that part
+                    is not mounted this would be a button that did nothing. */}
+                {linkedSheetId && canOpenSheet() && (
+                  <button
+                    type="button"
+                    className="linky token-open-sheet"
+                    onClick={() => openCharacterSheet(linkedSheetId)}
+                    title="Open this character's sheet"
+                  >
+                    Open sheet
+                  </button>
+                )}
+              </span>
+            </div>
           )}
 
           {/* Left blank on the tokens nobody rolls for - scenery, a door, a pile

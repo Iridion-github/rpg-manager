@@ -6043,6 +6043,25 @@ button.token-tile:hover {
   opacity: 0.75;
 }
 
+/* The character picker and the button that opens what it points at, on one
+   line. The picker takes the room; the button is as wide as its words. */
+.token-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.token-link-row .link-pair {
+  flex: 1;
+  min-width: 0;
+}
+
+.token-open-sheet {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* Three number boxes now that temporary points are among them, so the row is
    allowed to wrap rather than squeeze: on a narrow window the third drops onto
    its own line and stays readable. */

@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'A figure can be told which character it is without leaving the map. Edit a token and there is a Linked to row under Belongs to, listing the characters you are allowed to change - all of them if you are the DM, and the ones handed to you if you are not. Beside it, on the same line, Open sheet brings that character up in a window over the board, so you can read them without going to the Characters tab and coming back. Picking a character takes them off whatever figure was holding them, which the list says before you choose rather than after, and it copies their hit points and initiative onto the figure the moment you pick - that part does not wait for Save, because it never did. The Tokens tab keeps the picker it already had.',
+      },
+      {
+        kind: 'new',
         text: 'Set initiative can roll it for you. Right-click a figure, choose Set initiative, and there is a Roll it button beside the boxes: it throws a d20 into the chat under that figure\'s name, and writes the die and the total onto the figure in one go, so it is in the turn order without you typing anything. The modifier is the one already in the box - for a figure holding a character that is the character\'s own, worked out from their dexterity, and it is used whatever else is typed there so the line in the chat and the number on the figure can never disagree. Typing a total in by hand still works exactly as it did, for when the die is on the table in front of you.',
       },
       {

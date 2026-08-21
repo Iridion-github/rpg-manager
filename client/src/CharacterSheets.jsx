@@ -9,6 +9,7 @@ import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import SheetImportModal from './SheetImportModal.jsx';
 import { downloadSheet } from './sheetFile.js';
 import { abilityMod, armorClass, blankSheet, signed } from './sheet/rules.js';
+import { provideSheetOpener } from './sheetWindows.js';
 
 // How long we let edits settle before writing them to the server. Typing a
 // sentence in a notes field is one save, not one save per keystroke.
@@ -140,6 +141,16 @@ export default function CharacterSheets({
 
   // Bring it to the front if it's already up, otherwise put it there.
   const openSheet = (id) => setOpenIds((prev) => [...prev.filter((x) => x !== id), id]);
+
+  /**
+   * And let the rest of the app ask for the same thing.
+   *
+   * The token form on the map has a button that opens the character a figure is
+   * holding; this is what answers it. Registered once and never re-registered,
+   * because the function it hands over only ever calls a setter - there is
+   * nothing in it that could go stale.
+   */
+  useEffect(() => provideSheetOpener((id) => openSheet(id)), []);
 
   const opacityKey = (id) => `rpg:sheet-opacity:${id}`;
 

@@ -1010,6 +1010,56 @@ export default function Tabletop({ actor, players, offline }) {
   }, [refresh, loadRoster, loadSheets]);
 
   /**
+   * The characters this person may put on a figure.
+   *
+   * The DM may link any of them; anybody else may link the ones they have been
+   * given edit rights on. The same rule the Tokens tab uses, because it is the
+   * same question - and the server asks it again on the way in, so this decides
+   * what is offered rather than what is allowed.
+   */
+  const linkableSheets = useMemo(
+    () => sheets.filter((x) => isDm || x.access?.[actor?.userId] === 'edit'),
+    [sheets, isDm, actor?.userId]
+  );
+
+  /**
+   * Those characters as the picker wants them, with what each is standing on.
+   *
+   * The note is said before the choice rather than after it: a character is on
+   * one figure at a time, so picking one that is already somewhere takes it off
+   * there, and that is worth knowing before you click rather than after.
+   */
+  const sheetOptionsFor = useCallback(
+    (token) =>
+      linkableSheets.map((x) => {
+        const holder = roster.find((other) => other.sheetId === x.id && other.id !== token?.id);
+        return {
+          id: x.id,
+          name: x.name || 'Unnamed',
+          note: holder ? `currently ${holder.label}` : '',
+        };
+      }),
+    [linkableSheets, roster]
+  );
+
+  /**
+   * Couple a figure to a character, or uncouple it.
+   *
+   * One call: the route releases whatever else held that character, so moving
+   * one from figure to figure has no moment in between where two of them claim
+   * it. The board and the roster are both re-read afterwards, because the
+   * coupling copies the character's hit points and initiative onto the figure
+   * and this screen draws both.
+   */
+  const linkTokenSheet = useCallback(
+    async (tokenId, sheetId) => {
+      await api.linkTokenSheet(tokenId, sheetId);
+      await Promise.all([refresh(), loadRoster()]);
+    },
+    [refresh, loadRoster]
+  );
+
+  /**
    * The character a token holds, or null - for nothing linked, for a link
    * pointing at a sheet that has since been deleted, and for a sheet this
    * person is not allowed to open, which arrives here as simply absent.
@@ -4865,6 +4915,15 @@ export default function Tabletop({ actor, players, offline }) {
           // The linked character, whose attacks are listed in the form without
           // being editable there: those belong to the sheet.
           sheet={sheetFor(tokenForm.token)}
+          // And the picker that decides which character that is. Only on a
+          // token that exists: coupling is written the moment it is chosen, and
+          // there is nothing to couple until the figure has been created.
+          sheetOptions={tokenForm.token && !offline ? sheetOptionsFor(tokenForm.token) : null}
+          onLinkSheet={
+            tokenForm.token && !offline
+              ? (sheetId) => linkTokenSheet(tokenForm.token.id, sheetId)
+              : undefined
+          }
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />
