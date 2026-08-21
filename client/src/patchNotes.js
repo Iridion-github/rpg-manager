@@ -27,6 +27,10 @@ export const PATCH_NOTES = [
     date: '2026-08-21',
     entries: [
       {
+        kind: 'new',
+        text: 'Rest the pointer on the time beside a chat message and it tells you exactly when that was, down to the second and with the date: 21:07:57 21/08/2026. The line itself still shows the clock time and nothing more, because that is all you need while reading down a conversation. It is the one you come back to hours later, or the second of two rolls that both say 23:28, where knowing precisely when actually matters.',
+      },
+      {
         kind: 'change',
         text: 'The video is gone from under the chat, and a YouTube track gets the same controls an uploaded one has: pause, stop, and a slider you can drag, with the two clocks either side saying where in the track the table is. They move the room rather than your own browser, which is the point of the change: the buttons on the embedded video only ever moved yours, so pausing on them left you conducting a table that could still hear the music. Long tracks now read as hours and minutes, so a three-hour ambience mix says 3:04:55 instead of 184:55.',
       },

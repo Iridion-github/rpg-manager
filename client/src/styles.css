@@ -4472,6 +4472,14 @@ button.token-tile:hover {
   min-width: 0;
 }
 
+/* The time carries a tooltip with the exact moment on it, so the pointer says
+   there is something to read here. `help` rather than `pointer`: nothing
+   happens when you click it, and a hand promising an action that never comes is
+   worse than no signal at all. */
+.chat-time {
+  cursor: help;
+}
+
 .chat-msg.from-gm .chat-meta strong {
   color: #f0c674;
 }

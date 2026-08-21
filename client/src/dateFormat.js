@@ -21,6 +21,7 @@ const LOCALE = 'en-GB';
 
 const DATE = { day: '2-digit', month: '2-digit', year: 'numeric' };
 const TIME = { hour: '2-digit', minute: '2-digit', hour12: false };
+const TIME_EXACT = { ...TIME, second: '2-digit' };
 
 const parse = (value) => {
   if (!value) return null;
@@ -44,4 +45,23 @@ export function formatTime(value) {
 export function formatDateTime(value) {
   const d = parse(value);
   return d ? d.toLocaleString(LOCALE, { ...DATE, ...TIME }) : '';
+}
+
+/**
+ * "14:32:07 16/08/2026" - the exact moment, time first.
+ *
+ * For hovering something that already shows a time and wants to say precisely
+ * which one: the chat prints 14:32 beside every line, and two lines an hour
+ * apart on different days print the same thing. The order is the opposite of
+ * formatDateTime's on purpose - what is being expanded is the time, so the
+ * time leads and the date follows to place it.
+ *
+ * Seconds are here and nowhere else. On a line of chat they would be noise
+ * three characters wide, but they are exactly what tells two rolls in the same
+ * minute apart, which is the reason to go looking at all.
+ */
+export function formatTimestamp(value) {
+  const d = parse(value);
+  if (!d) return '';
+  return `${d.toLocaleTimeString(LOCALE, TIME_EXACT)} ${d.toLocaleDateString(LOCALE, DATE)}`;
 }

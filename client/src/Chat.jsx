@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { api } from './api.js';
 import { socket } from './socket.js';
 import DiceModal from './DiceModal.jsx';
-import { formatTime } from './dateFormat.js';
+import { formatTime, formatTimestamp } from './dateFormat.js';
 
 // Treat "within this many pixels of the bottom" as following the conversation.
 const STICK_PX = 40;
@@ -181,7 +181,14 @@ export default function Chat({ actor, offline }) {
           >
             <div className="chat-meta">
               <strong>{m.author}</strong>
-              <span>{time(m.at)}</span>
+              {/* The clock time is all a line of chat needs; which day it was,
+                  and which second, is a question you only ask about one line at
+                  a time - so it waits under the pointer. A <time> rather than a
+                  span so the machine-readable moment is on the element that
+                  shows it, which is also what a screen reader is handed. */}
+              <time className="chat-time" dateTime={m.at} title={formatTimestamp(m.at)}>
+                {time(m.at)}
+              </time>
               {/* Anyone reading this line is either the DM or the person who
                   rolled it - the server never sends it to anybody else. Saying
                   so is what stops it being read as a public result. */}
