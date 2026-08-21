@@ -6,6 +6,8 @@
  * Every broadcast carries `origin`, the writer's client id (see the client's
  * api.js). The writer already applied the change optimistically, so it uses
  * `origin` to skip its own echo rather than clobbering what it has typed since.
+ * The exception is a knock-on change, which goes out with no origin at all
+ * because the writer never applied it; see `originFor`.
  *
  * Everything here is scoped to a campaign. A socket announces which campaign it
  * is looking at (see index.js), and these functions only ever reach sockets
@@ -18,6 +20,24 @@ const { roleIn } = require('./campaigns');
 
 const originOf = (req) => req.get('x-client-id') || null;
 
+/**
+ * The origin to stamp on one broadcast.
+ *
+ * `origin` exists for exactly one purpose: a writer skips the echo of the
+ * change it already applied optimistically, so what it has typed since is not
+ * clobbered by its own round trip. That reasoning holds for the record the
+ * writer actually wrote, and only for that one.
+ *
+ * A knock-on change is a different record: the sheet that a token's damage
+ * moved, the token that a sheet's healing moved. The writer never touched it
+ * and so never applied anything to it optimistically. Stamped with the writer's
+ * client id it is thrown away by the one person who has both things on screen,
+ * which is how applying damage on the map left the character sheet open beside
+ * it showing the hit points from before the hit, until its reader reloaded.
+ * Sent with no origin, it lands on the writer like it lands on everybody else.
+ */
+const originFor = (req, knockOn) => (knockOn ? null : originOf(req));
+
 // Sockets currently watching this campaign.
 function* watchers(io, campaignId) {
   if (!io || !campaignId) return;
@@ -26,10 +46,11 @@ function* watchers(io, campaignId) {
   }
 }
 
-// Everyone at this table, same payload for all.
-function broadcast(req, event, payload) {
+// Everyone at this table, same payload for all. `knockOn` marks a change the
+// writer did not make itself; see originFor.
+function broadcast(req, event, payload, { knockOn = false } = {}) {
   const io = req.app.get('io');
-  const origin = originOf(req);
+  const origin = originFor(req, knockOn);
   for (const socket of watchers(io, req.campaignId)) {
     socket.emit(event, { ...payload, origin });
   }
@@ -48,10 +69,12 @@ function broadcast(req, event, payload) {
  * nothing. `role` is recomputed from the campaign record on the request rather
  * than read from the socket, so a membership change that just landed is already
  * reflected instead of being one reconnect behind.
+ *
+ * `knockOn` marks a change the writer did not make itself; see originFor.
  */
-function broadcastPerActor(req, event, build) {
+function broadcastPerActor(req, event, build, { knockOn = false } = {}) {
   const io = req.app.get('io');
-  const origin = originOf(req);
+  const origin = originFor(req, knockOn);
   for (const socket of watchers(io, req.campaignId)) {
     const actor = socket.data.actor;
     const payload = build(actor, roleIn(req.campaign, actor));

@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'fix',
+        text: 'Hit points move in front of the person who moved them. Wound a figure on the map and the character sheet you have open beside it drops to the new number as it lands; heal on the sheet and the figure on the map fills back up. Everybody else at the table always saw these straight away and you were the one left looking at the old value until you reloaded the page.',
+      },
+      {
+        kind: 'fix',
         text: 'Windows no longer cast a shadow onto what is behind them. Every pop-up window sits flat on the page now, the ones you can drag around like a character sheet as much as the ones that open in the middle and wait for an answer.',
       },
     ],

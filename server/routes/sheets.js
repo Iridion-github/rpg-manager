@@ -150,11 +150,21 @@ router.put('/:id', async (req, res, next) => {
       // Per actor, like everything else that carries a scene: a token the DM
       // has hidden is not on the players' board, and a character sheet edit
       // must not be the thing that puts it there. See sceneAsSeenBy.
+      //
+      // Knock-on, so no origin: the scene is not the record this request wrote
+      // and nobody applied it optimistically. The other direction of the same
+      // fix in routes/scenes.js - healing on your own sheet has to move your
+      // figure on the map you are looking at, not only everybody else's.
       if (scene) {
-        broadcastPerActor(req, 'scenes:changed', (actor, role) => ({
-          action: 'token:update',
-          record: sceneAsSeenBy(role, scene, actor, req.campaign),
-        }));
+        broadcastPerActor(
+          req,
+          'scenes:changed',
+          (actor, role) => ({
+            action: 'token:update',
+            record: sceneAsSeenBy(role, scene, actor, req.campaign),
+          }),
+          { knockOn: true }
+        );
       }
     }
     res.json(record);

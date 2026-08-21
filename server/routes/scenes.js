@@ -619,11 +619,21 @@ router.put('/:id/tokens/:tokenId', requireUser, async (req, res, next) => {
     // wound as it lands rather than whenever its reader next reloads. Per actor
     // because who may see a sheet varies, and this is the same record the
     // sheets router would be broadcasting.
+    //
+    // A knock-on change, so it carries no origin. Whoever applied the damage
+    // edited a *token*; the sheet moving with it is a record they never wrote
+    // and never applied locally, and with their own id on it they were the one
+    // person at the table who threw it away - the DM hitting a goblin while
+    // reading its sheet saw the old hit points there until they reloaded.
     if (moved) {
-      broadcastPerActor(req, 'sheets:changed', (actor, role) =>
-        canViewSheet(actor, role, moved.sheet)
-          ? { action: 'update', record: moved.sheet }
-          : { action: 'delete', record: { id: moved.sheet.id } }
+      broadcastPerActor(
+        req,
+        'sheets:changed',
+        (actor, role) =>
+          canViewSheet(actor, role, moved.sheet)
+            ? { action: 'update', record: moved.sheet }
+            : { action: 'delete', record: { id: moved.sheet.id } },
+        { knockOn: true }
       );
     }
 
