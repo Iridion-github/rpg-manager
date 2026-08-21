@@ -115,7 +115,37 @@ function pickDice(source, allowed) {
  * Dice are optional. An effect can be a flat bonus, some dice, or both, but one
  * that is neither adds nothing and is not worth storing or printing.
  */
-const APPLIES_TO = new Set(['toHit', 'damage', 'both']);
+/**
+ * Where an effect lands: any combination of the four, never none.
+ *
+ * A list rather than the single word this used to be, so "to hit and damage"
+ * is two answers instead of a third word meaning that pair. The old words are
+ * still read, because a sheet that has not been saved since the change still
+ * holds one and has to keep rolling the same way in the meantime: 'both' was
+ * the two halves of an attack, and 'check' was checks and saves together.
+ *
+ * The twin of modifierTargets in client/src/sheet/rules.js, and the two have to
+ * stay in step - this decides what is stored, that decides what is rolled, and
+ * a sheet where those disagree is one that rolls differently from what it says.
+ */
+const APPLIES_TO = ['toHit', 'damage', 'check', 'save'];
+const LEGACY_APPLIES = {
+  toHit: ['toHit'],
+  damage: ['damage'],
+  both: ['toHit', 'damage'],
+  check: ['check', 'save'],
+};
+
+function pickApplies(raw) {
+  if (!Array.isArray(raw)) return LEGACY_APPLIES[raw] || ['toHit'];
+  // Filtered through the canonical order rather than the order they arrived in,
+  // which also drops anything unrecognised and any duplicate.
+  const kept = APPLIES_TO.filter((t) => raw.includes(t));
+  // Never empty. The dialog will not let you untick the last one, but a request
+  // is not a dialog and this is the file that decides what a sheet may hold.
+  return kept.length ? kept : ['toHit'];
+}
+
 const MAX_MODIFIERS = 12;
 
 function pickGlobalModifiers(source) {
@@ -132,7 +162,7 @@ function pickGlobalModifiers(source) {
     effects.push({
       id: text(item.id, '', 40) || crypto.randomUUID(),
       name: text(item.name, '', 40),
-      applies: APPLIES_TO.has(item.applies) ? item.applies : 'toHit',
+      applies: pickApplies(item.applies),
       // Absent means on: an effect somebody has just written down is one they
       // are about to use.
       active: item.active !== false,

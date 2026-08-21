@@ -332,10 +332,63 @@ export const specAbilityBonus = (sheet, spec) =>
 export const activeModifiers = (sheet) =>
   sheet.globalModifiers?.on ? (sheet.globalModifiers.effects || []).filter((e) => e.active) : [];
 
-/** Those of them that land on one half of an attack, shaped as roll extras. */
+/**
+ * The rolls a global modifier can land on.
+ *
+ * Four, and each one on its own: an effect names any combination of them, so
+ * "to hit and damage" is two ticks rather than a third word that means the pair
+ * of them. That word ('both') is how this started, and it stopped scaling the
+ * moment there was anything to combine other than those two.
+ *
+ * Checks and saves are separate for the reason the game separates them: Bless
+ * lands on attacks and saving throws, Guidance lands on ability checks, and a
+ * single answer covering both could only ever be right for one of them.
+ *
+ * The order here is the order these are printed in, everywhere they are
+ * printed, so one modifier reads the same on the sheet as in the chat however
+ * its boxes were ticked.
+ */
+export const MODIFIER_TARGETS = [
+  { value: 'toHit', label: 'To hit' },
+  { value: 'damage', label: 'Damage' },
+  { value: 'check', label: 'Checks' },
+  { value: 'save', label: 'Saves' },
+];
+
+/**
+ * What the single word `applies` used to hold means as a list.
+ *
+ * Read rather than migrated: nothing rewrites a character until somebody saves
+ * it, and a sheet nobody has opened since this changed still has to roll
+ * correctly tonight. 'both' was the two halves of an attack; 'check' was
+ * checks and saves together, which is exactly the pair it expands to.
+ */
+const LEGACY_TARGETS = {
+  toHit: ['toHit'],
+  damage: ['damage'],
+  both: ['toHit', 'damage'],
+  check: ['check', 'save'],
+};
+
+/**
+ * What one effect lands on, always as a list, always in the order above.
+ *
+ * Falls back to the attack roll rather than to nothing: an effect that landed
+ * nowhere would be a row somebody wrote down, can see on the sheet, and would
+ * watch do nothing at all. Keep in step with pickGlobalModifiers in
+ * server/sheetSchema.js.
+ */
+export function modifierTargets(effect) {
+  const raw = effect?.applies;
+  if (!Array.isArray(raw)) return LEGACY_TARGETS[raw] || ['toHit'];
+  const kept = MODIFIER_TARGETS.map((t) => t.value).filter((t) => raw.includes(t));
+  return kept.length ? kept : ['toHit'];
+}
+
+/** Those of them that land on a given roll, shaped as roll extras. */
 export const modifierExtras = (effects, which) =>
   effects
-    .filter((e) => e.applies === which || e.applies === 'both')
+    .filter((e) => modifierTargets(e).includes(which))
     .map((e) => ({
       id: e.id,
       label: e.name || 'Modifier',

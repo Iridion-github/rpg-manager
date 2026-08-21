@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DAMAGE_DICE } from '../dice.js';
-import { extrasNotation, modifierExtras } from './rules.js';
+import { MODIFIER_TARGETS, extrasNotation, modifierExtras, modifierTargets } from './rules.js';
 
 /**
- * The situational things that ride along on every attack this character rolls.
+ * The situational things that ride along on every roll this character makes.
  *
  * A list rather than one setting, because a fight has several running at once
- * and they end at different times: Bless on the to-hit, Rage on the damage, a
- * magic weapon on both. Each is a name, where it lands, and what it adds, and
+ * and they end at different times: Bless on the to-hit and the saves, Rage on
+ * the damage, a magic weapon on both halves of an attack, Guidance on the
+ * checks. Each is a name, whichever rolls it lands on, and what it adds, and
  * each keeps its own tick so a round can be played without editing anything.
  *
  * Fixed and centred, and not one of the app's floating windows: those can be
@@ -28,23 +29,21 @@ const uid = () => crypto.randomUUID();
 const blank = () => ({
   id: uid(),
   name: '',
-  applies: 'toHit',
+  applies: ['toHit'],
   active: true,
   count: 1,
   sides: 0,
   modifier: 0,
 });
 
-const WHERE = [
-  { value: 'toHit', label: 'To hit' },
-  { value: 'damage', label: 'Damage' },
-  { value: 'both', label: 'Both' },
-];
-
 export default function GlobalModifiers({ effects, onSave, onClose }) {
   // Edited in a copy, so Cancel is a real cancel rather than an undo somebody
-  // has to perform themselves.
-  const [draft, setDraft] = useState(() => effects.map((e) => ({ ...e })));
+  // has to perform themselves. Every row's destinations are put in list form on
+  // the way in, so nothing below has to know that a sheet written before this
+  // change holds a single word there - and saving one writes the new shape.
+  const [draft, setDraft] = useState(() =>
+    effects.map((e) => ({ ...e, applies: modifierTargets(e) }))
+  );
 
   useEffect(() => {
     const onKey = (e) => {
@@ -57,13 +56,40 @@ export default function GlobalModifiers({ effects, onSave, onClose }) {
   const edit = (id, field, value) =>
     setDraft((list) => list.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
 
+  /**
+   * Tick or untick one destination.
+   *
+   * The last one standing cannot be unticked - its box is disabled - because a
+   * modifier that lands nowhere is a row you wrote down, can see in the list,
+   * and would then watch do nothing on every roll you made. Refused at the box
+   * rather than at Save, so the rule is visible while you are working instead
+   * of arriving as a complaint afterwards. The guard here is the belt to that
+   * brace.
+   */
+  const toggleTarget = (id, target) =>
+    setDraft((list) =>
+      list.map((e) => {
+        if (e.id !== id) return e;
+        const now = e.applies;
+        if (now.includes(target)) {
+          return now.length > 1 ? { ...e, applies: now.filter((t) => t !== target) } : e;
+        }
+        // Rebuilt in the canonical order rather than appended to, so what is
+        // stored does not depend on which box somebody happened to tick first.
+        const wanted = new Set([...now, target]);
+        return { ...e, applies: MODIFIER_TARGETS.map((t) => t.value).filter((t) => wanted.has(t)) };
+      })
+    );
+
   // What the ticked ones come to, which is the question the list is really
-  // being asked. Shown for both halves so the answer is complete: a reader who
-  // sees only "to hit +1d4" cannot tell whether the damage line is empty or
-  // simply not mentioned.
+  // being asked. All four destinations are shown, empty ones included, so the
+  // answer is complete: a reader who sees only "to hit +1d4" cannot tell
+  // whether the other lines are empty or simply not mentioned.
   const ticked = draft.filter((e) => e.active);
-  const toHit = extrasNotation(modifierExtras(ticked, 'toHit'));
-  const damage = extrasNotation(modifierExtras(ticked, 'damage'));
+  const totals = MODIFIER_TARGETS.map((t) => ({
+    label: t.label,
+    text: extrasNotation(modifierExtras(ticked, t.value)),
+  }));
 
   return createPortal(
     // No dismissal on the backdrop: this holds typed work, and every other
@@ -76,8 +102,8 @@ export default function GlobalModifiers({ effects, onSave, onClose }) {
         </div>
 
         <p className="hint">
-          Anything ticked here is added to every attack you roll from this sheet, until you untick
-          it.
+          Each of these is added to every roll it applies to, until you untick it. Tick as many as
+          it lands on: to hit, damage, checks (abilities, skills and initiative) and saving throws.
         </p>
 
         {/* Each effect is a block of labelled fields rather than a row in a
@@ -112,20 +138,34 @@ export default function GlobalModifiers({ effects, onSave, onClose }) {
                   />
                 </label>
 
-                <label className="gm-field gm-where">
+                {/* Not a label, for the reason the dice pair below is not one:
+                    four controls, and a label can only speak for the first of
+                    them. The group carries the name instead. */}
+                <div
+                  className="gm-field gm-where"
+                  role="group"
+                  aria-label={`Which rolls ${e.name || 'this modifier'} lands on`}
+                >
                   <span>Applies to</span>
-                  <select
-                    value={e.applies}
-                    onChange={(ev) => edit(e.id, 'applies', ev.target.value)}
-                    aria-label="Which roll this modifier lands on"
-                  >
-                    {WHERE.map((w) => (
-                      <option key={w.value} value={w.value}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  <div className="gm-where-set">
+                    {MODIFIER_TARGETS.map((t) => {
+                      const on = e.applies.includes(t.value);
+                      const last = on && e.applies.length === 1;
+                      return (
+                        <label className="gm-where-opt" key={t.value}>
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={last}
+                            title={last ? 'A modifier has to land on something' : undefined}
+                            onChange={() => toggleTarget(e.id, t.value)}
+                          />
+                          {t.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <label className="gm-field gm-bonus">
                   <span>Bonus</span>
@@ -192,12 +232,11 @@ export default function GlobalModifiers({ effects, onSave, onClose }) {
             two numbers at the bottom of it and nobody should have to add up
             their own modifiers mid-fight. */}
         <div className="gm-summary">
-          <span>
-            To hit <b>{toHit || 'nothing'}</b>
-          </span>
-          <span>
-            Damage <b>{damage || 'nothing'}</b>
-          </span>
+          {totals.map((t) => (
+            <span key={t.label}>
+              {t.label} <b>{t.text || 'nothing'}</b>
+            </span>
+          ))}
         </div>
 
         <div className="modal-actions">

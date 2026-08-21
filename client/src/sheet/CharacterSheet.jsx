@@ -59,6 +59,7 @@ import {
   featureRows,
   inventoryRows,
   inventoryWeight,
+  MODIFIER_TARGETS,
   modifierExtras,
   proficiencyRows,
   specAbilityBonus,
@@ -223,7 +224,15 @@ export default function CharacterSheet({
   }
 
   /**
-   * A d20 check against some bonus - abilities, saves and skills all share it.
+   * A d20 check against some bonus - abilities, saves, skills and initiative
+   * all share it.
+   *
+   * `kind` is which of the two the global modifiers should read it as, and the
+   * default is the commoner one. A saving throw is the exception and says so:
+   * the game treats checks and saves as different rolls, Bless helps with one
+   * and Guidance with the other, so a sheet that ran them together could only
+   * ever be right about half of them. Initiative counts as a check, because it
+   * is a Dexterity check.
    *
    * `note` is a reason the dialog should open on Disadvantage rather than
    * Normal: armour that drags Stealth down, so far. It is a default and not a
@@ -231,7 +240,7 @@ export default function CharacterSheet({
    * call and not the sheet's - so the dialog says where it came from and lets
    * it be changed.
    */
-  const askCheck = (what, modifier, note = '') =>
+  const askCheck = (what, modifier, { kind = 'check', note = '' } = {}) =>
     setConfirming({
       title: what,
       allowAdvantage: true,
@@ -243,6 +252,13 @@ export default function CharacterSheet({
           logLabel: what,
           advantage: true,
           spec: { count: 1, sides: 20, modifier },
+          // Whatever is riding along on this kind of roll - Guidance on a
+          // check, Bless on a save. Worked out here for the same reason as on
+          // an attack: what the dialog confirms and what is sent have to be
+          // built from one list. The dialog lists them with a tick each, so a
+          // check made without the Guidance that is technically still up costs
+          // a click rather than a trip back to the sheet.
+          extras: modifierExtras(activeModifiers(sheet), kind),
         },
       ],
     });
@@ -580,15 +596,23 @@ function MainPage({
     .join(', ');
   const setAcMods = (patch) => onChange({ ...sheet, acModifiers: { ...acMods, ...patch } });
 
-  // What the attacks are carrying, said two ways: the names, for the row beside
+  // What the rolls are carrying, said two ways: the names, for the row beside
   // the switch, and the arithmetic, for the line under it.
   const running = activeModifiers(sheet);
   const modifierNames = running
     .map((e) => e.name)
     .filter(Boolean)
     .join(', ');
-  const liveToHit = extrasNotation(modifierExtras(running, 'toHit'));
-  const liveDamage = extrasNotation(modifierExtras(running, 'damage'));
+  // One phrase per destination that has anything on it, in the order the editor
+  // lists them, with only the first letter of the line capitalised: it is one
+  // sentence about the sheet, not four headings.
+  const liveLine = MODIFIER_TARGETS.map((t) => {
+    const text = extrasNotation(modifierExtras(running, t.value));
+    return text ? `${t.label.toLowerCase()} ${text}` : '';
+  })
+    .filter(Boolean)
+    .join(', ')
+    .replace(/^./, (c) => c.toUpperCase());
 
   const setAttack = (id, field, value) =>
     onChange({
@@ -699,7 +723,7 @@ function MainPage({
                 className="rollable"
                 title={`Roll a ${a.label} saving throw`}
                 onClick={() =>
-                  askCheck(`${a.label} saving throw`, saveBonus(sheet, a.key))
+                  askCheck(`${a.label} saving throw`, saveBonus(sheet, a.key), { kind: 'save' })
                 }
               >
                 {a.label}
@@ -735,11 +759,9 @@ function MainPage({
                   className="rollable"
                   title={`Roll a ${s.label} check`}
                   onClick={() =>
-                    askCheck(
-                      `${s.label} check`,
-                      skillBonus(sheet, s),
-                      hampered ? '(Equipped armor)' : ''
-                    )
+                    askCheck(`${s.label} check`, skillBonus(sheet, s), {
+                      note: hampered ? '(Equipped armor)' : '',
+                    })
                   }
                 >
                   {s.label} <i>({s.ability})</i>
@@ -1022,15 +1044,11 @@ function MainPage({
               </button>
             )}
           </div>
-          {/* What every attack is currently carrying, in the same words the
-              roll dialog will use. Only when there is something to say. */}
-          {(liveToHit || liveDamage) && (
-            <small className="gm-live">
-              {liveToHit && <>To hit {liveToHit}</>}
-              {liveToHit && liveDamage && <>, </>}
-              {liveDamage && <>damage {liveDamage}</>}
-            </small>
-          )}
+          {/* What every roll is currently carrying, in the same words the roll
+              dialog will use. Only the destinations that have something on
+              them: a line that named all four every time would be mostly the
+              word "nothing". */}
+          {liveLine && <small className="gm-live">{liveLine}</small>}
           </Shareable>
 
           {editingModifiers && (

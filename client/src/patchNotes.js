@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Global modifiers ride along on checks and saving throws, not just attacks, and each one can land on as many of them as it really does. Applies to is now four tickboxes rather than one dropdown: To hit, Damage, Checks and Saves. Tick Bless on To hit and Saves, Guidance on Checks alone, a magic weapon on To hit and Damage. Every roll you make from the sheet picks up whatever applies to it, and the confirm box lists what is riding along and lets you drop one for that roll alone. Checks means ability checks, skills and initiative; saving throws are their own answer, because the things that help with one are usually not the things that help with the other. One box always has to stay ticked, since a modifier that lands nowhere would do nothing. Anything you had set up before still works and has been carried across: what used to say Both now shows To hit and Damage ticked together.',
+      },
+      {
+        kind: 'new',
         text: 'You decide how loud the music is in your own room. A speaker button and a slider sit under the chat whenever something is playing, for players as well as the DM, and they move your speakers only: turning yourself down leaves the rest of the table where they were. Press the speaker to silence it and press it again to come back to the volume you had, not to full. Wherever you set it is where the next track starts, tomorrow as much as tonight.',
       },
       {

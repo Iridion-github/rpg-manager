@@ -16,6 +16,8 @@ import { notation } from '../dice.js';
 import {
   ABILITIES,
   abilityMod,
+  MODIFIER_TARGETS,
+  modifierTargets,
   activeAcModifiers,
   activeModifiers,
   armorClass,
@@ -39,6 +41,13 @@ import {
 const DOT = ' · ';
 
 const clean = (v) => String(v ?? '').trim();
+
+// Mid-sentence, so lower case, and taken from the editor's own list rather than
+// written out again - a fifth destination should not be able to appear in the
+// dialog and be missing from the chat.
+const MODIFIER_TARGET_TEXT = Object.fromEntries(
+  MODIFIER_TARGETS.map((t) => [t.value, t.label.toLowerCase()])
+);
 
 /** Drop the blanks and join what's left, so an unfilled field leaves no gap. */
 const line = (parts) => parts.filter((p) => clean(p)).join(DOT);
@@ -169,11 +178,19 @@ function attackText(sheet, attack) {
 export const shareAttack = (sheet, attack) =>
   block(sheet, clean(attack.name) || 'Attack', attackText(sheet, attack), attack.media);
 
-/** What is riding along on every roll: Bless, Rage, a magic weapon. */
+/**
+ * A list said the way a person says one: "damage", "to hit and damage", "to
+ * hit, checks and saves". The dot separator this file uses elsewhere is for
+ * unrelated facts standing beside each other, and these are one answer.
+ */
+const andList = (parts) =>
+  parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+
+/** What is riding along on every roll: Bless, Rage, a magic weapon, Guidance. */
 const effectText = (e) => {
   const dice = e.sides ? `+${e.count || 1}d${e.sides}` : '';
   const flat = e.modifier ? signed(Number(e.modifier)) : '';
-  const where = e.applies === 'both' ? 'to hit and damage' : e.applies === 'damage' ? 'damage' : 'to hit';
+  const where = andList(modifierTargets(e).map((t) => MODIFIER_TARGET_TEXT[t]));
   return `${clean(e.name) || 'Modifier'}: ${line([[dice, flat].filter(Boolean).join(' '), where])}`;
 };
 

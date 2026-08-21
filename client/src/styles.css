@@ -3056,9 +3056,45 @@ button.token-tile:hover {
   flex: 1 1 9rem;
 }
 
+/* Four tickboxes where there was one dropdown, so it wants about half as much
+   again. Two by two rather than a row of four: in a row they are the widest
+   thing in the dialog and push everything else onto its own line. */
 .gm-where {
-  flex: 0 1 8rem;
-  min-width: 7rem;
+  flex: 0 1 12rem;
+  min-width: 11rem;
+}
+
+.gm-where-set {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.1rem 0.5rem;
+}
+
+/* The caption above says "Applies to"; these are the answers, so they read at
+   the size the answers to a question read at rather than as four more labels. */
+.gm-where-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The width rule above is for the fields that fill their column. A tickbox that
+   stretched to the width of its label would be a checkbox the size of a word. */
+.gm-where-opt input {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
+
+/* The last one left is held rather than removed, so the row still reads as four
+   answers with one of them fixed. Dimmed enough to say it will not move, not so
+   much that it stops looking ticked. */
+.gm-where-opt input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
 }
 
 .gm-bonus {

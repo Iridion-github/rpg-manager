@@ -31,10 +31,11 @@ const SWINGS = [
  * where they mean something.
  *
  * A roll can also carry `extras`: the sheet's global modifiers, already worked
- * out for that half of the attack. They are listed once each with a tick, so a
- * one-off exception - swinging without the bard's Bless this round - costs a
- * click here rather than a trip back to the sheet to turn something off and on
- * again.
+ * out for the roll they land on - half of an attack, or a d20 check. They are
+ * listed once each with a tick, so a one-off exception - swinging without the
+ * bard's Bless this round, climbing without the Guidance that is technically
+ * still up - costs a click here rather than a trip back to the sheet to turn
+ * something off and on again.
  *
  * `disadvantageNote` is a reason the character starts this one at a
  * disadvantage - armour that clanks, so far. It picks Disadvantage and says
