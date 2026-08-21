@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Set initiative can roll it for you. Right-click a figure, choose Set initiative, and there is a Roll it button beside the boxes: it throws a d20 into the chat under that figure\'s name, and writes the die and the total onto the figure in one go, so it is in the turn order without you typing anything. The modifier is the one already in the box - for a figure holding a character that is the character\'s own, worked out from their dexterity, and it is used whatever else is typed there so the line in the chat and the number on the figure can never disagree. Typing a total in by hand still works exactly as it did, for when the die is on the table in front of you.',
+      },
+      {
+        kind: 'new',
         text: 'Non-lethal damage is kept track of, on a character sheet and on a figure alike. There is a box for it beside the hit points, and what you put in it is drawn onto the same bar everything else uses: a dark grey stretch running from the left. It creeps rightwards as the creature is battered, and the moment it catches the red at the far end - the part standing for the hit points already gone - that creature has taken as much as it could stand and is out cold rather than dead. The bubble over a figure says so in words too, and the turn tracker puts a small out beside its numbers. Temporary hit points hold somebody up against a beating the same way they hold them up against a wound, so the grey has to get past those as well. Nothing changes for a creature nobody has knocked about: no grey, no extra line.',
       },
       {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { api } from './api.js';
 import { usePortalTarget } from './portalTarget.js';
+import { characterRollLabel } from './sheet/rollLabels.js';
 
 /**
  * What a creature rolled, asked on its own.
@@ -15,6 +17,12 @@ import { usePortalTarget } from './portalTarget.js';
  * the modifier and the total follows, because a tie is settled by the modifier
  * and 18+7 beats 22+3. Fill neither and a bare total still works, which is what
  * somebody who rolled on the table in front of them will type.
+ *
+ * Or don't type any of it: Roll it throws the d20 here, puts the result in the
+ * chat where the table can see it, and writes the two halves onto the token in
+ * one go. That is the ordinary case for a monster nobody is keeping a sheet
+ * for - the DM has a dozen of them to get into the order, and typing a number
+ * they have just watched a die produce is a step with nothing in it.
  */
 
 const blankToNull = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
@@ -30,6 +38,65 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
 
   // Both halves known means the total is theirs to decide, not yours to type.
   const rolled = die !== '' && mod !== '' ? Number(die) + Number(mod) : null;
+
+  /**
+   * Throw it now: into the chat, and onto the token.
+   *
+   * The modifier has to be the one the *server* will store, which is not always
+   * the one in the box. A token holding a character takes its modifier from
+   * that character - dexterity plus a bonus, worked out rather than typed - and
+   * the route that saves this says so outright: "a linked token's modifier is
+   * its sheet's, whatever the request says". Roll with the number in the box
+   * and a DM who had cleared it would watch 1d20 land on 17 in the chat and the
+   * token settle on 20. So a linked token rolls with what the sheet gave it,
+   * and the box is corrected to match rather than quietly ignored.
+   *
+   * Empty means none, not "don't roll": a goblin with no modifier still rolls
+   * a d20.
+   *
+   * The order matters. The die is thrown first, because that is the part that
+   * cannot be done again: a second attempt would be a different number, and a
+   * DM who rerolls because a save failed is a DM rerolling their own initiative
+   * until they like it. So the result is written into the fields *before* it is
+   * saved - if the save then fails, the dialog stays open with the number the
+   * table has already seen sitting in it, and Save will try again with exactly
+   * that.
+   */
+  async function rollIt() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    const modifier = token.sheetId ? Number(token.initiativeMod) || 0 : Number(mod) || 0;
+    let thrown;
+    try {
+      const { roll } = await api.rollDice({
+        count: 1,
+        sides: 20,
+        modifier,
+        label: characterRollLabel(token.label, 'Initiative'),
+      });
+      thrown = { die: roll.rolls[0], total: roll.total };
+      setDie(String(thrown.die));
+      setMod(String(modifier));
+      setTotal(String(thrown.total));
+    } catch (err) {
+      // Nothing was rolled, so there is nothing to write down.
+      setError(err.message);
+      setBusy(false);
+      return;
+    }
+    try {
+      await onSubmit({
+        initiative: thrown.total,
+        initiativeDie: thrown.die,
+        initiativeMod: modifier,
+      });
+      onClose();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -106,6 +173,13 @@ export default function InitiativeModal({ token, onSubmit, onClose }) {
         {error && <p className="error">{error}</p>}
 
         <div className="modal-actions">
+          {/* At the far end from Save, with the spacer between: it is not a
+              second way of finishing the form, it is the thing that fills it
+              in. */}
+          <button type="button" className="roll-btn init-roll" onClick={rollIt} disabled={busy}>
+            🎲 Roll it
+          </button>
+          <div className="spacer" />
           <button type="button" className="linky" onClick={onClose}>
             Cancel
           </button>

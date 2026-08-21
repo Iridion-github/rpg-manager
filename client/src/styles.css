@@ -3366,6 +3366,14 @@ button.token-tile:hover {
   background: #1e222b;
 }
 
+/* The one in the initiative dialog carries a word as well as the die, so it
+   wants a button's padding rather than the tight box the sheet's row-end ones
+   sit in. */
+.init-roll {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+
 .attacks th {
   text-align: left;
   font-weight: 500;
