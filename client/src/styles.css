@@ -6178,15 +6178,8 @@ button.token-tile:hover {
   margin-top: 0.5rem;
 }
 
-.sidebar > .music-bar.idle,
-.sidebar > .music-bar.hidden {
+.sidebar > .music-bar.idle {
   margin-top: 0;
-}
-
-/* One exception: a listener whose browser blocked playback keeps a single
-   button in an otherwise hidden bar, and that does need the space. */
-.music-bar.hidden > .music-enable {
-  margin-top: 0.5rem;
 }
 
 .music-bar {
@@ -6218,17 +6211,11 @@ button.token-tile:hover {
   display: none;
 }
 
-/* Players hear the music and see nothing of it. The iframe is parked off-screen
+/* Players hear the music and see nothing of what it is: no video and no title,
+   only the volume control every listener gets. The iframe is parked off-screen
    rather than removed or display:none'd - a frame that isn't rendered can have
    its playback suspended by the browser, and silence is the one outcome this
    must not produce. */
-.music-bar.hidden {
-  padding: 0;
-  border: none;
-  background: none;
-  gap: 0;
-}
-
 .music-bar.hidden .music-frame {
   display: block;
   position: fixed;
@@ -6322,6 +6309,22 @@ button.token-tile:hover {
 .music-seek:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* How loud it is here. The same row as the transport, and deliberately narrower
+   than it: a speaker to press and a slider, and no numbers, because a volume
+   nobody else can hear is not a value worth reading off a readout. */
+.music-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.music-vol {
+  flex: 1;
+  min-width: 0;
+  height: 1rem;
+  margin: 0;
 }
 
 /* The click that dismisses this is itself the gesture the browser wanted. */

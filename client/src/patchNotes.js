@@ -27,6 +27,14 @@ export const PATCH_NOTES = [
     date: '2026-08-21',
     entries: [
       {
+        kind: 'new',
+        text: 'You decide how loud the music is in your own room. A speaker button and a slider sit under the chat whenever something is playing, for players as well as the DM, and they move your speakers only: turning yourself down leaves the rest of the table where they were. Press the speaker to silence it and press it again to come back to the volume you had, not to full. Wherever you set it is where the next track starts, tomorrow as much as tonight.',
+      },
+      {
+        kind: 'fix',
+        text: 'Music actually starts for everybody when the DM puts a track on or changes to a new one. Players were being left in silence until they reloaded the page, and with nothing on screen to tell them so. If a browser still refuses to play on its own - some do, until you have clicked something - there is now an Enable sound button under the chat, and clicking anywhere in the app will start it too.',
+      },
+      {
         kind: 'fix',
         text: 'Hit points move in front of the person who moved them. Wound a figure on the map and the character sheet you have open beside it drops to the new number as it lands; heal on the sheet and the figure on the map fills back up. Everybody else at the table always saw these straight away and you were the one left looking at the old value until you reloaded the page.',
       },

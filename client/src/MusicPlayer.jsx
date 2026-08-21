@@ -26,20 +26,56 @@ import { socket } from './socket.js';
  * and this player then follows the answer like every other browser does. That
  * is what keeps a scrub from desynchronising the room.
  *
- * Only the DM sees any of it. For everyone else the music is meant to be
- * scenery - they hear it and are told nothing: no video, no title, no controls.
- * The iframe still has to exist for them, so it's parked off-screen rather than
- * removed, because a frame that isn't rendered can have its playback suspended.
+ * Only the DM sees what is playing. For everyone else the music is meant to be
+ * scenery - they are told nothing about it: no video, no title, and nothing
+ * that could move the table. What they do get is a volume slider, because how
+ * loud somebody else's music is in your room is the one thing about it that is
+ * genuinely yours to decide, and the alternative was reaching for the system
+ * mixer. The iframe still has to exist for them, so it's parked off-screen
+ * rather than removed, because a frame that isn't rendered can have its
+ * playback suspended.
  */
 
 const API_SRC = 'https://www.youtube.com/iframe_api';
 
-// YT.PlayerState, without needing the API loaded to name them.
+// YT.PlayerState, without needing the API loaded to name it.
 const PLAYING = 1;
-const BUFFERING = 3;
 
-// How long to give the player before deciding the browser refused to start it.
-const AUTOPLAY_GRACE_MS = 1500;
+/**
+ * How long to give the player before deciding the browser refused to start it.
+ *
+ * Longer than it used to be, and it can afford to be: `onStateChange` now says
+ * the moment playback really begins, so this timer is only ever the *negative*
+ * answer. Erring long costs a slow connection nothing, where erring short used
+ * to put an Enable sound button in front of somebody whose track was about to
+ * start on its own.
+ */
+const AUTOPLAY_GRACE_MS = 3000;
+
+/**
+ * This browser's own volume, 0 to 1, remembered between visits.
+ *
+ * Local, and deliberately not part of the table's playback state. The DM's
+ * transport moves the room - pause it and everybody holds - because where in a
+ * track the table is has to be one answer. How loud it is in your room is not:
+ * it depends on your speakers and who else is in the house, and a shared
+ * number would mean the DM turning themselves down turning everybody down.
+ *
+ * In localStorage rather than state alone so it is already right when the next
+ * track starts, including the first one after a reload.
+ */
+const VOLUME_KEY = 'rpg-manager:music-volume';
+
+function storedVolume() {
+  // Read as text first and only then as a number. `Number(null)` is 0, not
+  // NaN, so asking a browser that has never stored this what it stored gets
+  // you a perfectly valid zero - which is to say full silence, as the default,
+  // for everybody who had never touched the slider.
+  const raw = localStorage.getItem(VOLUME_KEY);
+  if (raw === null) return 1;
+  const level = Number(raw);
+  return Number.isFinite(level) && level >= 0 && level <= 1 ? level : 1;
+}
 
 /**
  * Load YouTube's iframe API once per page.
@@ -104,10 +140,55 @@ export default function MusicPlayer({ canControl }) {
   // The same value again, where a listener on the window can read it without
   // being re-attached for every pixel of the drag.
   const scrubRef = useRef(null);
+  // This browser's loudness, 0 to 1. Zero is what the speaker button means by
+  // muted - one number rather than a volume and a flag, because the two would
+  // have to be kept in step and there is nothing a separate flag could say
+  // that a zero cannot.
+  const [volume, setVolume] = useState(storedVolume);
+  // What to come back to when the speaker button is pressed again. A track
+  // turned down to nothing and then unmuted has to land somewhere, and silence
+  // is not an answer.
+  const lastAudible = useRef(volume || 1);
   const hostRef = useRef(null);
   const playerRef = useRef(null);
   const audioRef = useRef(null);
   const graceTimer = useRef(null);
+  // Read from inside callbacks that must not be rebuilt for every drag of the
+  // slider - the YouTube player's onReady, in particular, is handed over once
+  // when the player is built and keeps whatever closure it was given.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
+  /**
+   * Put the current volume into whichever player is actually making noise.
+   *
+   * Called from three places for one reason each: when the number changes,
+   * when the file element gets a new track, and when the YouTube player is
+   * first built - a player created after the last change would otherwise start
+   * at full volume for somebody who had turned it down.
+   */
+  const applyVolume = useCallback(() => {
+    const level = volumeRef.current;
+    const el = audioRef.current;
+    if (el) {
+      el.volume = level;
+      el.muted = level === 0;
+    }
+    // The YouTube player counts to a hundred, and has a mute of its own that
+    // setVolume(0) does not touch.
+    playerRef.current?.setVolume?.(Math.round(level * 100));
+    if (level === 0) playerRef.current?.mute?.();
+    else playerRef.current?.unMute?.();
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(VOLUME_KEY, String(volume));
+    if (volume > 0) lastAudible.current = volume;
+    applyVolume();
+  }, [volume, applyVolume]);
+
+  const muted = volume === 0;
+  const toggleMute = () => setVolume(muted ? lastAudible.current || 1 : 0);
 
   // Which of the two players this track belongs to.
   const isFile = playing?.kind === 'file';
@@ -115,11 +196,20 @@ export default function MusicPlayer({ canControl }) {
   // table is concerned - it is the track that is on, and it has a position.
   const held = playing?.pausedAt != null;
 
-  // Deciding it started is needed in two places: once after the initial grace
-  // period, and again after a retry.
+  /**
+   * Did it actually start? Asked after the grace period, and again after a
+   * retry.
+   *
+   * Playing is the only answer that counts. Buffering used to count as well,
+   * on the reasoning that a track about to start is a track that started - but
+   * a player the browser has refused to autoplay *parks* in buffering and
+   * stays there, so counting it meant deciding "yes, it is playing" about the
+   * exact state that means it never will. With nothing checking a second time,
+   * a listener was left in silence with no button to fix it, which is what
+   * made a track change inaudible until they reloaded the page.
+   */
   const checkStarted = useCallback(() => {
-    const state = playerRef.current?.getPlayerState?.();
-    setBlocked(state !== PLAYING && state !== BUFFERING);
+    setBlocked(playerRef.current?.getPlayerState?.() !== PLAYING);
   }, []);
 
   const load = useCallback(async () => {
@@ -173,7 +263,17 @@ export default function MusicPlayer({ canControl }) {
             videoId: playing.videoId,
             playerVars: { autoplay: 1, start: Math.floor(startSeconds), playsinline: 1 },
             events: {
-              onReady: (e) => e.target.playVideo(),
+              onReady: (e) => {
+                applyVolume();
+                e.target.playVideo();
+              },
+              // The positive answer, straight from the player. It arrives
+              // whenever playback really begins - on its own, or on the retry
+              // below, or because somebody pressed play inside the embed - so
+              // the grace timer is left to say only "it didn't".
+              onStateChange: (e) => {
+                if (e.data === PLAYING) setBlocked(false);
+              },
               onError: (e) => setError(errorText(e.data)),
             },
           });
@@ -183,6 +283,9 @@ export default function MusicPlayer({ canControl }) {
         // clicked anything yet won't get one. Rather than guess at the rules,
         // watch whether it actually started and offer a button if it didn't.
         graceTimer.current = setTimeout(checkStarted, AUTOPLAY_GRACE_MS);
+        // A player built before the volume was last changed would otherwise
+        // start at full for somebody who had turned it down.
+        applyVolume();
       })
       .catch((e) => setError(e.message));
 
@@ -190,7 +293,7 @@ export default function MusicPlayer({ canControl }) {
       cancelled = true;
       clearTimeout(graceTimer.current);
     };
-  }, [playing?.kind, playing?.videoId, playing?.startedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playing?.kind, playing?.videoId, playing?.startedAt, applyVolume]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * The same job for an uploaded file, done by an <audio> element.
@@ -202,8 +305,14 @@ export default function MusicPlayer({ canControl }) {
    * 42 seconds, and this puts them at 42 seconds paused exactly as it does for
    * everybody else.
    *
-   * The seek has to wait for the browser to know how long the file is, because
-   * `currentTime` on a file whose metadata has not arrived yet goes nowhere.
+   * The *seek* has to wait for the browser to know how long the file is,
+   * because `currentTime` on a file whose metadata has not arrived yet goes
+   * nowhere. Starting it does not, and must not: a browser will happily leave
+   * an element it has never been asked to play sitting at readyState 0 with
+   * the download deferred, so waiting for metadata before calling play() is
+   * waiting for something that only playing will produce. That deadlock was
+   * silence with no way out of it - not even the Enable sound button, since
+   * the code that offers it was on the far side of the same wait.
    */
   useEffect(() => {
     const el = audioRef.current;
@@ -223,7 +332,9 @@ export default function MusicPlayer({ canControl }) {
         : (Date.now() - Date.parse(playing.startedAt)) / 1000
     );
 
-    const apply = () => {
+    // Where the table is, put onto this element's playhead. Nothing else: this
+    // is the half that genuinely needs the file's metadata first.
+    const seek = () => {
       if (cancelled) return;
       // Past the end: park at the end rather than starting the track over for
       // whoever has only just arrived, which is the one thing this whole
@@ -237,18 +348,6 @@ export default function MusicPlayer({ canControl }) {
       // of drift is the network, not an instruction, and correcting it would
       // put a stutter in the sound every time this effect ran.
       if (Math.abs(el.currentTime - target) > 0.75) el.currentTime = target;
-
-      if (playing.pausedAt != null) {
-        el.pause();
-        setBlocked(false);
-        return;
-      }
-      // Unlike the iframe, this says outright whether it was allowed to start,
-      // so there is no grace period to sit through.
-      el.play().then(
-        () => setBlocked(false),
-        () => setBlocked(true)
-      );
     };
 
     // Only when it is actually a different file: re-assigning the same src
@@ -262,15 +361,33 @@ export default function MusicPlayer({ canControl }) {
     // the element to get there and report it: the DM who just dragged the
     // slider should see the number they dropped it on.
     setPosition(target);
+    applyVolume();
 
-    if (el.readyState >= 1) apply(); // metadata already in hand
-    else el.addEventListener('loadedmetadata', apply, { once: true });
+    if (el.readyState >= 1) seek(); // metadata already in hand
+    else el.addEventListener('loadedmetadata', seek, { once: true });
+
+    // Started - or held - without waiting for any of that. On a cold file the
+    // seek above lands a moment later, so a latecomer can hear the opening bar
+    // before it jumps to where the table is. That is the price of the fix and
+    // it is worth paying: the alternative was not a cleaner start, it was no
+    // sound at all.
+    if (playing.pausedAt != null) {
+      el.pause();
+      setBlocked(false);
+    } else {
+      // Unlike the iframe, this says outright whether it was allowed to start,
+      // so there is no grace period to sit through.
+      el.play().then(
+        () => setBlocked(false),
+        () => setBlocked(true)
+      );
+    }
 
     return () => {
       cancelled = true;
-      el.removeEventListener('loadedmetadata', apply);
+      el.removeEventListener('loadedmetadata', seek);
     };
-  }, [playing?.kind, playing?.url, playing?.startedAt, playing?.pausedAt]);
+  }, [playing?.kind, playing?.url, playing?.startedAt, playing?.pausedAt, applyVolume]);
 
   /**
    * If the browser refused to start, try again the moment the user touches
@@ -464,15 +581,46 @@ export default function MusicPlayer({ canControl }) {
         </div>
       )}
 
-      {/* Everyone else gets nothing - except, when their browser has actually
-          refused to play, one button that says nothing about what's playing.
-          That isn't a music control, it's the browser's consent gate: without
-          it a blocked player would sit in silence with no way out of it. It
-          only appears if the retry-on-any-click above has already failed. */}
+      {/* Everyone else gets nothing about *what* is playing - except, when
+          their browser has actually refused to play, one button that says
+          nothing about it either. That isn't a music control, it's the
+          browser's consent gate: without it a blocked listener would sit in
+          silence with no way out. It only appears if the retry-on-any-click
+          above has already failed. */}
       {!idle && !canControl && blocked && !error && (
         <button className="music-enable" onClick={enableAudio}>
           🔊 Enable sound
         </button>
+      )}
+
+      {/* How loud it is here, for everybody at the table including the DM.
+          This is the one music control a player gets, and it is theirs alone -
+          it moves this browser's speakers and tells the server nothing, unlike
+          every other button on this bar. Still nothing about what is playing:
+          a listener learns that there is music and how loud it is, which is
+          all they could act on anyway. */}
+      {!idle && (
+        <div className="music-volume">
+          <button
+            type="button"
+            className="music-btn"
+            onClick={toggleMute}
+            title={muted ? 'Sound on, for you' : 'Silence it, for you'}
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+          <input
+            className="music-vol"
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            aria-label="Volume"
+            onChange={(e) => setVolume(Number(e.target.value))}
+          />
+        </div>
       )}
     </aside>
   );
