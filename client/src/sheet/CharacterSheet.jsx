@@ -74,6 +74,8 @@ import {
   spellAttackBonus,
   spellToHitBonus,
 } from './rules.js';
+import HpBar, { hpBar } from '../HpBar.jsx';
+import AttackRow from './AttackRow.jsx';
 
 /**
  * Write one value into a copy of the sheet, at a dotted path.
@@ -866,9 +868,7 @@ function MainPage({
               <Num label="Maximum" value={sheet.hp?.max} onChange={set('hp.max')} readOnly={readOnly} />
               <Num label="Temporary" value={sheet.hp?.temp} onChange={set('hp.temp')} readOnly={readOnly} />
             </div>
-            <div className="hp-bar" aria-hidden="true">
-              <i style={{ width: `${hpPercent(sheet)}%` }} />
-            </div>
+            <HpBar bar={hpBar(sheet.hp?.current, sheet.hp?.max, sheet.hp?.temp)} />
           </div>
         </Shareable>
 
@@ -892,7 +892,7 @@ function MainPage({
           </Shareable>
         </div>
 
-        <div className="box item-box attacks-box">
+        <div className="box item-box">
           <div className="item-box-head">
             <h4>Attacks & spellcasting</h4>
           </div>
@@ -913,91 +913,22 @@ function MainPage({
                 share={shareAttack(sheet, a)}
                 onPick={onPick}
               >
-                <li className="item-row attack-row">
-                  <div className="item-head">
-                    <button
-                      type="button"
-                      className="roll-btn"
-                      title={
-                        a.toHit || a.damage
-                          ? `Roll ${a.name || 'this attack'}`
-                          : 'Set the dice first'
-                      }
-                      disabled={!a.toHit && !a.damage}
-                      onClick={() => askAttack(a)}
-                    >
-                      {/* A sword rather than a die: what this throws is an
-                          attack, and the die is what the chat's own roller
-                          uses for dice that are nobody's attack in particular.
-                          With the emoji selector on it, so it is drawn as the
-                          crossed swords the app's own header uses rather than
-                          as a thin monochrome glyph. */}
-                      ⚔️
-                    </button>
-
-                    <label className="fld item-field grow">
-                      <input
-                        value={a.name}
-                        placeholder="Longsword"
-                        disabled={readOnly}
-                        onChange={(e) => setAttack(a.id, 'name', e.target.value)}
-                      />
-                      <span>Name</span>
-                    </label>
-
-                    {/* Both dice cells read as their notation once chosen - the
-                        ability's own contribution shown as its own term, so the
-                        cell reads the way the dialog that set it did and the
-                        way the roll will. */}
-                    <label className="fld item-field attack-dice">
-                      <button
-                        type="button"
-                        className={`dice-cell${a.toHit ? ' set' : ''}`}
-                        disabled={readOnly}
-                        onClick={() => setPicking({ id: a.id, field: 'toHit' })}
-                      >
-                        {notation(a.toHit, specAbilityBonus(sheet, a.toHit)) || 'Set…'}
-                      </button>
-                      <span>To hit</span>
-                    </label>
-
-                    <label className="fld item-field attack-dice">
-                      <button
-                        type="button"
-                        className={`dice-cell${a.damage ? ' set' : ''}`}
-                        disabled={readOnly}
-                        onClick={() => setPicking({ id: a.id, field: 'damage' })}
-                      >
-                        {notation(a.damage, specAbilityBonus(sheet, a.damage)) || 'Set…'}
-                      </button>
-                      <span>Damage</span>
-                    </label>
-
-                    <label className="fld item-field attack-type">
-                      <input
-                        value={a.damageType || ''}
-                        placeholder="fire"
-                        disabled={readOnly}
-                        onChange={(e) => setAttack(a.id, 'damageType', e.target.value)}
-                      />
-                      <span>Type</span>
-                    </label>
-
-                    {!readOnly && (
-                      <button
-                        className="del"
-                        onClick={() => setConfirmAttackId(a.id)}
-                        title={a.name ? `Remove ${a.name}` : 'Remove this attack'}
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-
+                <AttackRow
+                  attack={a}
+                  readOnly={readOnly}
+                  // The character's own modifier for whichever ability the spec
+                  // names, printed as its own term beside the dice.
+                  abilityBonus={(spec) => specAbilityBonus(sheet, spec)}
+                  onChange={(field, value) => setAttack(a.id, field, value)}
+                  onPickDice={(field) => setPicking({ id: a.id, field })}
+                  onRemove={() => setConfirmAttackId(a.id)}
+                  onRoll={askAttack}
+                >
                   {/* What it looks like when it lands. Kept to a thumbnail on
                       the sheet however big the file is: this is a sheet, and
                       the picture's place to be seen is the chat line the throw
-                      writes. */}
+                      writes. Passed in rather than built into the row, because
+                      a token's attacks use the same row and have no picture. */}
                   <MediaField
                     url={a.media || ''}
                     alt={a.name ? `${a.name} in action` : 'Attack'}
@@ -1007,7 +938,7 @@ function MainPage({
                     hint="shown in the chat when this is thrown"
                     onChange={(url) => setAttack(a.id, 'media', url)}
                   />
-                </li>
+                </AttackRow>
               </Shareable>
             ))}
             {attacks.length === 0 && <li className="empty">No attacks yet.</li>}
@@ -1167,13 +1098,6 @@ function MainPage({
       )}
     </div>
   );
-}
-
-function hpPercent(sheet) {
-  const max = Number(sheet.hp?.max) || 0;
-  if (max <= 0) return 0;
-  const current = Number(sheet.hp?.current) || 0;
-  return Math.max(0, Math.min(100, (current / max) * 100));
 }
 
 function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {

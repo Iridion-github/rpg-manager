@@ -28,9 +28,11 @@
  * **Which way the numbers flow** is decided per field, by where the field is
  * actually authored:
  *
- *   hit points          both ways. The same number in two places: the DM
- *                       applies damage on the map, the player heals on their
- *                       sheet, and either way both show it.
+ *   hit points          both ways, temporary ones included. The same numbers
+ *                       in two places: the DM applies damage on the map, the
+ *                       player heals on their sheet, the cleric's ward lands on
+ *                       whichever of the two is to hand, and either way both
+ *                       show it.
  *   initiative modifier sheet to token only. On the sheet it is *derived* -
  *                       dexterity plus a bonus - so there is no single number
  *                       for a token edit to write back to. Editing it on the
@@ -80,6 +82,11 @@ function tokenFieldsFromSheet(sheet, token = {}) {
   const fields = {
     maxHp: clamp(int(sheet?.hp?.max, 0), 0, 9999),
     hp: clamp(int(sheet?.hp?.current, 0), 0, 9999),
+    // The cushion travels with the two numbers it sits in front of. Not clamped
+    // to the maximum, because it is not part of it: temporary points are extra
+    // hit points, and a character on 4 of 12 with 10 of them really does have
+    // fourteen between it and the floor.
+    tempHp: clamp(int(sheet?.hp?.temp, 0), 0, 9999),
     initiativeMod,
   };
   if (token.initiativeDie !== null && token.initiativeDie !== undefined) {
@@ -205,7 +212,7 @@ async function pushSheetToTokens(campaignId, sheet, except = null) {
  * A token's hit points have changed - carry them back to its sheet.
  *
  * Only the hit points. The modifier is the sheet's to decide and the rest of
- * the token was never the sheet's business, so this writes exactly the two
+ * the token was never the sheet's business, so this writes exactly the three
  * numbers that mean the same thing at both ends.
  *
  * It then carries them on to anything else holding that sheet, which should be
@@ -223,13 +230,20 @@ async function pushTokenToSheet(campaignId, token) {
   if (!sheet) return null;
   const max = clamp(int(token.maxHp, 0), 0, 999);
   const current = clamp(int(token.hp, 0), -99, 999);
-  if (sheet.hp?.max === max && sheet.hp?.current === current) return null;
+  // The sheet's own field is capped at 999 (see sheetSchema), so the token's
+  // wider range is brought into that before comparing - otherwise a token
+  // carrying 2000 would look like a change on every single write, and the
+  // sheet would be rewritten and announced to the table each time.
+  const temp = clamp(int(token.tempHp, 0), 0, 999);
+  if (sheet.hp?.max === max && sheet.hp?.current === current && (sheet.hp?.temp || 0) === temp) {
+    return null;
+  }
   // Returned so the caller can tell the table. Writing this to disk without
   // saying so left an open sheet window showing the hit points the character
   // had before it was hit, until whoever was reading it happened to reload.
   const moved = await store.mutate(sheetsOf(campaignId), sheet.id, (currentSheet) => ({
     ...currentSheet,
-    hp: { ...currentSheet.hp, max, current },
+    hp: { ...currentSheet.hp, max, current, temp },
   }));
   const scenes = await pushSheetToTokens(campaignId, moved, token.id);
   return { sheet: moved, scenes };

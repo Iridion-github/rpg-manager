@@ -3,6 +3,12 @@ import { api } from './api.js';
 import ClipboardImage from './ClipboardImage.jsx';
 import TokenLibrary from './TokenLibrary.jsx';
 import CloudPicker from './CloudPicker.jsx';
+import DiceModal from './DiceModal.jsx';
+import AttackRow, { isBlankAttack } from './sheet/AttackRow.jsx';
+import RollConfirmModal from './RollConfirmModal.jsx';
+import { DAMAGE_DICE, TO_HIT_DICE } from './dice.js';
+import { attackRollLabels, characterRollLabel } from './sheet/rollLabels.js';
+import { activeModifiers, modifierExtras, specAbilityBonus } from './sheet/rules.js';
 
 /**
  * "What token?" - the step between choosing Create token on the map and a
@@ -135,11 +141,30 @@ export default function TokenModal({
   // itself, and off unless the caller says otherwise - a form that quietly
   // cannot reach the cloud is the harmless way to get this wrong.
   canCloud = false,
+  /**
+   * The character this token is linked to, if it is linked to one and the
+   * reader is allowed to see it.
+   *
+   * The whole sheet rather than just its attacks, because an attack on its own
+   * does not say what it comes to: "+1 to hit" on the page is "+4 +1" once the
+   * character's Dexterity is counted, and that number lives on the sheet. Handed
+   * the attacks alone, this dialog printed the smaller of the two and would have
+   * rolled it.
+   *
+   * Its attacks are shown beside the token's own and never edited from here.
+   * They belong to the sheet, and editing them here would be editing somebody's
+   * character through a dialog about a piece on a board - the one thing the
+   * sheet link is careful not to let happen.
+   */
+  sheet = null,
   title,
   onSubmit,
   onClose,
 }) {
   const editing = Boolean(token);
+  // What the linked character can do, minus the half-written row a sheet keeps
+  // while somebody is adding one.
+  const sheetAttacks = (sheet?.attacks || []).filter((a) => !isBlankAttack(a));
   const [label, setLabel] = useState(token?.label ?? 'NPC');
   // Whether the name is written on the board under the token, or only shown
   // when somebody hovers it. Off unless the token says otherwise, which covers
@@ -181,6 +206,107 @@ export default function TokenModal({
   const [initMod, setInitMod] = useState(token?.initiativeMod ?? '');
   const [hp, setHp] = useState(token?.hp ?? '');
   const [maxHp, setMaxHp] = useState(token?.maxHp ?? '');
+  // The cushion in front of those two. Blank rather than nought when unset, the
+  // same as the other two: a token nobody has given hit points to has no
+  // temporary ones either, and a nought typed into every new token would be a
+  // number the DM did not write.
+  const [tempHp, setTempHp] = useState(token?.tempHp ?? '');
+  /**
+   * What this creature can do to somebody: the token's own list.
+   *
+   * Its own even when a character sheet is linked. A hobgoblin captain borrowing
+   * the party wizard's sheet for one fight should not be able to write "flaming
+   * greatsword" onto that wizard's record on the way past, and a goblin nobody
+   * wrote a sheet for should still be able to bite.
+   */
+  const [attacks, setAttacks] = useState(() => (token?.attacks || []).map((a) => ({ ...a })));
+  // Which dice cell has the picker open on it: { id, field }. Named apart from
+  // the `picking` further down, which is the cloud image picker's.
+  const [dicePicking, setDicePicking] = useState(null);
+  // An attack waiting to be confirmed, in the shape RollConfirmModal wants.
+  const [confirming, setConfirming] = useState(null);
+
+  /**
+   * Throw one attack at the chat, from here.
+   *
+   * The same two rolls the character sheet builds, because it is the same
+   * button doing the same thing - see askAttack in sheet/CharacterSheet.jsx.
+   * What differs is only who is rolling and what they bring to it:
+   *
+   *   a token's own attack   rolls under the token's name, with the dice
+   *                          exactly as written. A token has no ability scores
+   *                          and no global modifiers, so there is nothing to add.
+   *   a character's attack   rolls under the character's name, with their
+   *                          ability modifier as its own term and whatever
+   *                          global modifiers are running on the sheet - which
+   *                          is what makes it the same throw as pressing the
+   *                          same button on the sheet itself.
+   *
+   * `label` is read live rather than from the saved token, so a figure being
+   * renamed in this dialog rolls under the name in front of you.
+   */
+  const askAttack = (attack, fromSheet) => {
+    const names = attackRollLabels(attack);
+    const type = (attack.damageType || '').trim();
+    const effects = fromSheet ? activeModifiers(sheet) : [];
+    const who = fromSheet ? sheet?.name : label;
+    const bonus = (spec) => (fromSheet ? specAbilityBonus(sheet, spec) : 0);
+    const rolls = [];
+    if (attack.toHit) {
+      rolls.push({
+        key: 'toHit',
+        label: 'To hit',
+        logLabel: characterRollLabel(who, names.toHit),
+        advantage: true,
+        spec: attack.toHit,
+        abilityBonus: bonus(attack.toHit),
+        extras: modifierExtras(effects, 'toHit'),
+      });
+    }
+    if (attack.damage) {
+      rolls.push({
+        key: 'damage',
+        label: type ? `Damage (${type})` : 'Damage',
+        logLabel: characterRollLabel(who, names.damage),
+        advantage: false,
+        spec: attack.damage,
+        abilityBonus: bonus(attack.damage),
+        extras: modifierExtras(effects, 'damage'),
+      });
+    }
+    if (!rolls.length) return; // nothing set on this attack yet
+    setConfirming({
+      title: attack.name || 'Attack',
+      allowAdvantage: Boolean(attack.toHit),
+      rolls,
+      // Only a sheet's attack has one, and only the first line carries it.
+      media: (fromSheet && attack.media) || '',
+    });
+  };
+
+  /**
+   * Send what the dialog confirmed.
+   *
+   * The twin of runRolls on the character sheet, and deliberately not shared
+   * with it: that one folds in the character the roll came from, and this one
+   * has already done that in askAttack above, because half of what it throws
+   * belongs to a token that is not a character at all.
+   */
+  async function runRolls({ swing, secret, skipped }) {
+    for (const [i, r] of confirming.rolls.entries()) {
+      const { ability, modifier = 0, ...spec } = r.spec;
+      await api.rollDice({
+        ...spec,
+        modifier: modifier + (r.abilityBonus || 0),
+        advantage: r.advantage && swing === 'advantage',
+        disadvantage: r.advantage && swing === 'disadvantage',
+        secret,
+        label: r.logLabel,
+        extras: (r.extras || []).filter((x) => !skipped?.has(x.id)),
+        media: i === 0 ? confirming.media || '' : '',
+      });
+    }
+  }
   // The condition it is under, split into the two controls that say it: the
   // list, and the box that only matters when the list says Custom.
   const [status, setStatus] = useState(() => statusParts(token?.status).status);
@@ -272,6 +398,16 @@ export default function TokenModal({
         initiativeMod: blankToNull(initMod),
         hp: blankToNull(hp),
         maxHp: blankToNull(maxHp),
+        tempHp: blankToNull(tempHp),
+        // An attack with no name and no dice is a row somebody added and then
+        // thought better of; it is dropped here rather than stored as a blank
+        // line the token would print for ever.
+        //
+        // Here and not on the server, which keeps what it is given: a character
+        // sheet saves as you type, so a row has to survive the moment between
+        // being added and being filled in. This form is a dialog you finish, so
+        // by the time it is submitted an empty row is an answer.
+        attacks: attacks.filter((a) => a.name?.trim() || a.toHit || a.damage),
         // Back to null for "nobody" - the server reads a falsy owner as a token
         // that belongs to the table rather than to a person.
         ownerId: ownerId || null,
@@ -446,6 +582,22 @@ export default function TokenModal({
                   placeholder="-"
                   aria-label="Total hit points"
                 />
+                {/* Third, and set apart by the plus rather than by a caption of
+                    its own: it is not a third quantity of the same kind, it is
+                    what sits in front of the other two. No maximum against it,
+                    because temporary points have none - a ward worth more than
+                    the creature's whole health is a perfectly ordinary thing
+                    for a spell to do. */}
+                <small>plus</small>
+                <input
+                  type="number"
+                  min={0}
+                  value={tempHp}
+                  onChange={(e) => setTempHp(e.target.value)}
+                  placeholder="-"
+                  aria-label="Temporary hit points"
+                  title="Temporary hit points, spent before the ones above"
+                />
               </span>
             </div>
           )}
@@ -618,6 +770,71 @@ export default function TokenModal({
             </span>
           </label>
 
+          {/* What it can do to somebody. Last of the fields because it is the
+              longest of them and the only one that grows: a form you scroll
+              should scroll past the thing that made it long, not past
+              everything else on the way to it. */}
+          {stats && (
+            <div className="token-field token-attacks">
+              <span>Attacks</span>
+
+              {/* The character's, when there is one. First, and not editable
+                  here: they are what the sheet says, and the sheet is where
+                  they are changed. Rollable all the same - what you cannot edit
+                  you can still throw, and it throws exactly as it would from the
+                  sheet, ability modifier and global modifiers included. */}
+              {sheetAttacks.length > 0 && (
+                <ul className="item-list">
+                  {sheetAttacks.map((a) => (
+                    <AttackRow
+                      key={a.id}
+                      attack={a}
+                      readOnly
+                      abilityBonus={(spec) => specAbilityBonus(sheet, spec)}
+                      onRoll={(x) => askAttack(x, true)}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {/* And the token's own, which is what this form is for. */}
+              <ul className="item-list">
+                {attacks.map((a) => (
+                  <AttackRow
+                    key={a.id}
+                    attack={a}
+                    // No ability bonus to add: a token has no ability scores,
+                    // so the cell prints the dice it was given and nothing else.
+                    onChange={(field, value) =>
+                      setAttacks((list) =>
+                        list.map((x) => (x.id === a.id ? { ...x, [field]: value } : x))
+                      )
+                    }
+                    onPickDice={(field) => setDicePicking({ id: a.id, field })}
+                    onRemove={() => setAttacks((list) => list.filter((x) => x.id !== a.id))}
+                    onRoll={(x) => askAttack(x, false)}
+                  />
+                ))}
+                {attacks.length === 0 && sheetAttacks.length === 0 && (
+                  <li className="empty">No attacks yet.</li>
+                )}
+              </ul>
+
+              <button
+                type="button"
+                className="linky"
+                onClick={() =>
+                  setAttacks((list) => [
+                    ...list,
+                    { id: crypto.randomUUID(), name: '', toHit: null, damage: null, damageType: '' },
+                  ])
+                }
+              >
+                + Attack
+              </button>
+            </div>
+          )}
+
           {error && <p className="error">{error}</p>}
 
           <div className="modal-actions">
@@ -630,6 +847,39 @@ export default function TokenModal({
           </div>
         </form>
       </div>
+
+      {confirming && (
+        <RollConfirmModal
+          title={confirming.title}
+          rolls={confirming.rolls}
+          allowAdvantage={confirming.allowAdvantage}
+          onConfirm={runRolls}
+          onClose={() => setConfirming(null)}
+        />
+      )}
+
+      {/* The dice for one attack, set the way the character sheet sets them - the
+        same dialog, so a d8 is chosen the same way wherever you happen to be.
+        No `abilities` passed, which is what turns its Attribute row off: a
+        token has no ability scores for a bonus to be read from. */}
+      {dicePicking && (
+        <DiceModal
+          title={dicePicking.field === 'toHit' ? 'Attack roll' : 'Damage roll'}
+          // "Save", not "Roll": this writes the dice onto the attack for later
+          // rather than throwing them now.
+          confirmLabel="Save"
+          allowed={dicePicking.field === 'toHit' ? TO_HIT_DICE : DAMAGE_DICE}
+          initial={attacks.find((a) => a.id === dicePicking.id)?.[dicePicking.field]}
+          onClose={() => setDicePicking(null)}
+          onConfirm={(spec) =>
+            setAttacks((list) =>
+              list.map((x) =>
+                x.id === dicePicking.id ? { ...x, [dicePicking.field]: spec } : x
+              )
+            )
+          }
+        />
+      )}
 
       {/* A sibling of the form rather than a child of it: a dialog nested inside
         a <form> would be markup that only accidentally works, and this needs

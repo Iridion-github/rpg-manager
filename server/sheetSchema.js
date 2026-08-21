@@ -430,7 +430,25 @@ function legacyDamageType(value) {
     .trim();
 }
 
-function pickAttacks(source) {
+/**
+ * A list of attacks, read the same way wherever they are kept.
+ *
+ * Character sheets have always had these. Tokens have them now too - a figure
+ * on the map can be a goblin nobody wrote a character sheet for, and it still
+ * bites. Both are read here rather than in two places, because they are the
+ * same thing: a name, dice to hit, dice for damage, and what kind of damage it
+ * is. A second copy of this in the scenes router would be a second answer to
+ * "what counts as an attack", and the two would drift the first time either
+ * grew a field.
+ *
+ * `media` is the one difference, and it is the caller's to decide. A sheet's
+ * attack carries a picture of it landing; a token's does not, because a token
+ * is a piece on a board rather than a page about a character, and the place
+ * that picture earns its keep is the sheet it is read off. Passing false
+ * strips the field rather than storing an empty one, so a token's attack is
+ * exactly the four fields it has.
+ */
+function pickAttacks(source, { media = true } = {}) {
   if (!Array.isArray(source)) return [];
   return source.slice(0, MAX_ATTACKS).map((a = {}) => ({
     id: text(a.id, '', 64) || crypto.randomUUID(),
@@ -443,7 +461,7 @@ function pickAttacks(source) {
     // every attack written before this existed, which is an attack with no
     // picture rather than one missing its picture. Held to an address on this
     // server, like every other picture the app stores; see pictures.js.
-    media: pictureUrl(a.media),
+    ...(media ? { media: pictureUrl(a.media) } : {}),
   }));
 }
 
@@ -644,4 +662,6 @@ function sanitizeSheet(body = {}) {
   };
 }
 
-module.exports = { sanitizeSheet, ABILITIES };
+// pickAttacks is exported for the scenes router, which stores the same shape on
+// a token. See its comment for why that is one function rather than two.
+module.exports = { sanitizeSheet, pickAttacks, ABILITIES };

@@ -64,6 +64,7 @@ import {
   recordTokenPaste,
   recordTokenSpawn,
 } from './sceneHistory.js';
+import HpBar, { hpBar } from './HpBar.jsx';
 
 // ~30 position updates a second is smooth to the eye and a fraction of the
 // frames a pointer actually produces.
@@ -634,6 +635,8 @@ export default function Tabletop({ actor, players, offline }) {
   // your own. Each carries the scene it stands on, or null for one waiting to
   // be placed. Filtered by the server, so nothing here is unusable.
   const [roster, setRoster] = useState([]);
+  // The campaign's character sheets, for tokens linked to one. See loadSheets.
+  const [sheets, setSheets] = useState([]);
   // Where a token is about to be put back, in cells. Non-null means the picker
   // is open; the spot was decided by the right-click that opened it, exactly as
   // it is for a brand new token.
@@ -976,11 +979,57 @@ export default function Tabletop({ actor, players, offline }) {
     }
   }, [offline]);
 
+  /**
+   * The characters, for the attacks a linked token borrows from one.
+   *
+   * A token holding a character shows that character's attacks as well as its
+   * own - in the hover bubble, and in its own edit form where they are listed
+   * without being editable. Read from here rather than sent down with the
+   * scene, because the scene is broadcast on every token drag and a copy of
+   * every sheet riding along with it would be the wrong thing to make cheap.
+   *
+   * Permissions come for free: the endpoint only ever answers with the sheets
+   * this person is allowed to open, so a player cannot learn what is on a sheet
+   * by hovering the figure that holds it. Failures are swallowed - being unable
+   * to read the characters costs the borrowed attacks, not the map.
+   */
+  const loadSheets = useCallback(async () => {
+    if (offline) return;
+    try {
+      setSheets(await api.listSheets());
+    } catch {
+      setSheets([]);
+    }
+  }, [offline]);
+
   useEffect(() => {
     refresh();
     loadRoster();
+    loadSheets();
     api.listMaps().then(setMaps).catch(() => setMaps([]));
-  }, [refresh, loadRoster]);
+  }, [refresh, loadRoster, loadSheets]);
+
+  /**
+   * The character a token holds, or null - for nothing linked, for a link
+   * pointing at a sheet that has since been deleted, and for a sheet this
+   * person is not allowed to open, which arrives here as simply absent.
+   */
+  const sheetFor = useCallback(
+    (token) => (token?.sheetId ? sheets.find((x) => x.id === token.sheetId) || null : null),
+    [sheets]
+  );
+
+  // A character edited elsewhere changes what its figure can do, so the list is
+  // kept fresh the same way everything else on this screen is.
+  useEffect(() => {
+    if (offline) return undefined;
+    socket.on('sheets:changed', loadSheets);
+    socket.on('connect', loadSheets);
+    return () => {
+      socket.off('sheets:changed', loadSheets);
+      socket.off('connect', loadSheets);
+    };
+  }, [loadSheets, offline]);
 
   // --- undo and redo ---
   // The stack outlives this component - it's a module, so walking off to the
@@ -4424,11 +4473,10 @@ export default function Tabletop({ actor, players, offline }) {
             ) : (
               <ol className="turn-list" onMouseLeave={() => setSpotlight(null)}>
                 {order.map((t) => {
-                  // The same reading of the same two fields the hover tooltip
-                  // makes: no total means nothing to draw, and a stored current
-                  // can outlive a maximum the DM has since lowered.
-                  const total = t.maxHp ?? 0;
-                  const hp = Math.max(0, Math.min(t.hp ?? 0, total));
+                  // The same reading the hover tooltip makes, from the same
+                  // helper, so one creature cannot look different depending on
+                  // which of the two you happen to be looking at.
+                  const bar = hpBar(t.hp, t.maxHp, t.tempHp);
                   return (
                     // A menu of its own rather than an action on the click: the
                     // list is a thing you read during a fight, and every camera
@@ -4463,13 +4511,18 @@ export default function Tabletop({ actor, players, offline }) {
                         {/* Hit points stay the DM's to know, exactly as they do in
                           the hover tooltip - a tracker every player can see is
                           the last place to print the ogre's remaining health. */}
-                        {isDm && total > 0 && (
+                        {isDm && bar && (
                           <span className="turn-hp">
-                            <span className="hp-bar">
-                              <span className="hp-fill" style={{ width: `${(hp / total) * 100}%` }} />
-                            </span>
+                            <HpBar bar={bar} />
                             <small>
-                              {hp}/{total}
+                              {bar.current}/{bar.total}
+                              {/* Kept out of the fraction: temporary points are
+                                  not part of the total, and "17/20" for a
+                                  creature on 12 with 5 of them would be a
+                                  number that is simply not true. */}
+                              {bar.temp > 0 && (
+                                <b className="hp-temp-text"> +{bar.temp}</b>
+                              )}
                             </small>
                           </span>
                         )}
@@ -4501,6 +4554,9 @@ export default function Tabletop({ actor, players, offline }) {
         <TokenTooltip
           anchor={hovered.el}
           token={hoveredToken}
+          // The whole sheet, not just its attacks: what "+1 to hit" comes to
+          // depends on the character's abilities, which are on the sheet.
+          sheet={sheetFor(hoveredToken)}
           owner={
             hoveredToken.ownerId ? players.find((p) => p.id === hoveredToken.ownerId) : null
           }
@@ -4794,6 +4850,9 @@ export default function Tabletop({ actor, players, offline }) {
           canAssign={isDm}
           canHide={isDm}
           canCloud={isDm}
+          // The linked character, whose attacks are listed in the form without
+          // being editable there: those belong to the sheet.
+          sheet={sheetFor(tokenForm.token)}
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
         />

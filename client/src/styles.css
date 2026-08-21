@@ -2177,21 +2177,91 @@ button.token-tile:hover {
   gap: 0.28rem;
 }
 
-/* The track is the wound: red is what's already been taken off, and the green
-   fill on top is what the creature has left. */
+/* What the creature can do, under what it can take. Set off by a rule above it
+   rather than a heading: the rows below say what they are by their shape, and a
+   word like "Attacks" in a bubble this small is a line spent on a label. */
+.token-tip-attacks {
+  display: grid;
+  gap: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px solid #2b3242;
+}
+
+/* Name over notation, rather than the label-and-answer row the rest of the
+   bubble uses: "1d20+5 to hit · 1d8+3 slashing" will not sit beside anything at
+   this width. */
+.token-tip-attack {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.token-tip-attack b {
+  color: #e7e9ee;
+  overflow-wrap: anywhere;
+}
+
+.token-tip-attack small {
+  color: #8b90a0;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The one hit-point bar, used by the token tooltip, the turn tracker and the
+   character sheet.
+
+   There were two of these, defined a thousand lines apart and both called
+   .hp-bar - so the later one silently decided the colour and the spacing of the
+   earlier one's bars as well. They are one rule now, which is the only way
+   three screens can be relied on to draw the same creature the same way. What
+   it renders is what the pair of them already rendered between them.
+
+   The track is the wound: dark red is what has already been taken off. In front
+   of it sit the segments, laid left to right in the order damage eats them. */
 .hp-bar {
+  display: flex;
   height: 6px;
   border-radius: 999px;
-  background: #b3413b;
+  background: #3a1d1d;
   overflow: hidden;
 }
 
+/* What the creature has left of its own hit points. No radius of its own: the
+   track is rounded and clips it, which is what lets the temporary segment butt
+   against this one without a notch between them. */
 .hp-fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
   background: #3fb950;
   transition: width 0.15s ease-out;
+}
+
+/* Temporary hit points: the cushion in front of the green, spent before it and
+   belonging to no total. Light blue because it has to read as a different kind
+   of thing from the green rather than as more of it - the same light blue the
+   app already uses beside its blue, so the bar stays in the palette it lives
+   in. Sits against the green edge, since that is the order it is used up in. */
+.hp-temp {
+  display: block;
+  height: 100%;
+  background: #79c0ff;
+  transition: width 0.15s ease-out;
+}
+
+/* The same colour in words, for the "+5" printed beside a bar. */
+.hp-temp-text {
+  color: #79c0ff;
+}
+
+/* And again, said loudly enough to be heard inside the hover bubble: every row
+   in there colours its value through `.token-tip-row b`, which is two classes
+   against this one's one and wins on specificity alone. Spelled out rather than
+   marked important - the next person to wonder why this line exists can read
+   the selector and see the rule it is answering. Same colour as above; the two
+   move together. */
+.token-tip-row b.hp-temp-text {
+  color: #79c0ff;
 }
 
 .tabletop-empty {
@@ -3180,18 +3250,12 @@ button.token-tile:hover {
   gap: 0.5rem;
 }
 
-.hp-bar {
+/* On the sheet the bar follows a row of number boxes and wants clearing from
+   them. Scoped to that box: this used to be a second .hp-bar rule, which gave
+   the same margin to the tooltip's bar and the tracker's, where there is
+   nothing above to clear and both already carry their own spacing. */
+.hp-box .hp-bar {
   margin-top: 0.5rem;
-  height: 6px;
-  border-radius: 999px;
-  background: #3a1d1d;
-  overflow: hidden;
-}
-
-.hp-bar i {
-  display: block;
-  height: 100%;
-  background: #3fb950;
 }
 
 .death-row {
@@ -5781,8 +5845,11 @@ button.token-tile:hover {
 /* --- create-token form --- */
 /* A little wider than the default dialog: the file picker has a button and a
    filename to fit, and the alternative is a form that scrolls sideways. */
+/* Wider than it was, since the attack rows moved in: at 27rem the row had to
+   wrap whatever the field widths were. Still a dialog rather than a page - the
+   rest of the fields simply get a little more room than they need. */
 .token-form {
-  width: min(27rem, 100%);
+  width: min(31rem, 100%);
 }
 
 .token-field {
@@ -5850,10 +5917,52 @@ button.token-tile:hover {
 }
 
 /* Numbers are short - a field as wide as its column would say the opposite. */
+/* The attacks on a token, in its own form.
+
+   The one field in this dialog that does not sit in the 5rem label column every
+   other one uses: a caption of "Attacks" beside a list of five would leave the
+   list a fraction of the dialog to wrap inside, which is exactly what it did.
+   One column, so the caption sits above and the rows get the whole width. */
+.token-attacks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* A shade narrower than the same fields on the character sheet, which has a
+   whole column to spread across. These are the numbers that let the name, both
+   dice, the type, the sword and the ✕ share one line here; the sheet's own
+   widths would spill onto a second. */
+.token-attacks .item-field.grow {
+  flex: 1 1 5rem;
+}
+
+.token-attacks .attack-dice {
+  width: 5.6rem;
+}
+
+.token-attacks .attack-type {
+  width: 5rem;
+}
+
+/* The list of attacks the linked character brings, which is read rather than
+   filled in. Dimmed as a whole instead of relying on each disabled input to say
+   so: what matters is that the *group* is somebody else's. The sword is left
+   at full strength, because it is the one control on those rows that still
+   works. */
+.token-attacks .item-row [disabled] {
+  opacity: 0.75;
+}
+
+/* Three number boxes now that temporary points are among them, so the row is
+   allowed to wrap rather than squeeze: on a narrow window the third drops onto
+   its own line and stays readable. */
 .token-stat {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex-wrap: wrap;
   min-width: 0;
 }
 
@@ -7117,29 +7226,34 @@ body.fog-pov .map-tools {
    so an attack reads like the other things a character owns. What it adds is
    the dice cells, which are buttons pretending to be fields, and the picture
    strip underneath. */
-.attacks-box .item-head {
+/* Everything below is keyed to .attack-row rather than to the box the character
+   sheet keeps its attacks in. The row is a component now, and a token's edit
+   dialog draws the same one - scoped to the sheet's box, these rules simply did
+   not reach it, and the dialog got the generic .item-field widths and wrapped
+   into two ragged lines. */
+.attack-row .item-head {
   align-items: flex-end;
 }
 
 /* The dice cells keep their own width: a notation like "d20+7" is short, and
    letting it stretch would make the two of them the widest things on the row. */
-.attacks-box .attack-dice {
+.attack-row .attack-dice {
   flex: none;
   width: 6.5rem;
 }
 
-.attacks-box .attack-dice .dice-cell {
+.attack-row .attack-dice .dice-cell {
   width: 100%;
 }
 
-.attacks-box .attack-type {
+.attack-row .attack-type {
   flex: none;
   width: 6rem;
 }
 
 /* The roll button sits on the line the fields sit on rather than above their
    captions, which is where flex-end would otherwise put it. */
-.attacks-box .item-head > .roll-btn {
+.attack-row .item-head > .roll-btn {
   flex: none;
   margin-bottom: 0.15rem;
 }
@@ -7147,7 +7261,7 @@ body.fog-pov .map-tools {
 /* And the delete goes to the far end of the row, wherever the row happens to
    end: glued to the last field it reads as that field's own button, which on a
    narrow window is whichever one wrapped last. */
-.attacks-box .item-head > .del {
+.attack-row .item-head > .del {
   margin-left: auto;
 }
 

@@ -243,6 +243,8 @@ router.post('/', requireUser, async (req, res, next) => {
       initiativeMod: null,
       hp: null,
       maxHp: null,
+      tempHp: null,
+      attacks: [],
       sheetId: null,
       // Not a copy of anything: this one was made rather than pasted. Written
       // down as null rather than left absent so that every token has the same

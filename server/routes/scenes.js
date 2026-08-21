@@ -33,6 +33,7 @@ const {
 } = require('../campaigns');
 const { sanitizeFog, fogOn, tokensSeenThroughFog } = require('../fog');
 const sheetLink = require('../sheetLink');
+const { pickAttacks } = require('../sheetSchema');
 const {
   rootIdOf,
   locateToken,
@@ -164,18 +165,33 @@ function rolledInitiative(total, die, mod) {
 }
 
 /**
- * Current and total hit points, decided together.
+ * Current, total and temporary hit points, decided together.
  *
  * Current only means something measured against a total - it's what draws the
  * bar - so a token without a total has no hit points at all rather than a
  * number floating free. Given a total but no current, it starts at full: that's
  * the state a creature is in when it walks onto the map.
+ *
+ * Temporary points hang off the same decision, for the same reason: they are a
+ * cushion in front of hit points, and a cushion in front of nothing is not a
+ * number anybody can use. They are *not* clamped to the total, though, because
+ * they genuinely are not part of it - a creature on 4 of 12 with 10 temporary
+ * points has fourteen points between it and the floor, and clamping would be
+ * the sheet quietly disagreeing with the rules.
+ *
+ * Null and zero are kept apart on the way in and mean the same thing on the way
+ * out: nothing is drawn for either. Zero is stored where the DM typed a zero,
+ * which is how clearing the field survives a round trip.
  */
-function hitPoints(maxHp, hp) {
+function hitPoints(maxHp, hp, tempHp) {
   const max = statOrNull(maxHp, 0, 9999);
-  if (max === null) return { maxHp: null, hp: null };
+  if (max === null) return { maxHp: null, hp: null, tempHp: null };
   const current = statOrNull(hp, 0, max);
-  return { maxHp: max, hp: current === null ? max : current };
+  return {
+    maxHp: max,
+    hp: current === null ? max : current,
+    tempHp: statOrNull(tempHp, 0, 9999),
+  };
 }
 
 function sanitizeToken(body = {}, existing = {}) {
@@ -232,6 +248,19 @@ function sanitizeToken(body = {}, existing = {}) {
     initiativeMod = existing.initiativeMod ?? null,
     maxHp = existing.maxHp ?? null,
     hp = existing.hp ?? null,
+    tempHp = existing.tempHp ?? null,
+    /**
+     * What this creature can do to somebody, as a list of its own.
+     *
+     * The token's, not the sheet's, even when the two are linked. A figure
+     * holding a character shows that character's attacks as well - the browser
+     * reads them off the sheet and prints both lists - but the two are never
+     * merged and neither is written from the other. A goblin gets a bite
+     * without anybody writing it a character sheet, and a hobgoblin captain
+     * borrowing the party wizard's sheet for one fight does not get to add
+     * "flaming greatsword" to that wizard's record on the way past.
+     */
+    attacks = existing.attacks ?? [],
     x = existing.x ?? 0,
     y = existing.y ?? 0,
     size = existing.size ?? 1,
@@ -275,7 +304,10 @@ function sanitizeToken(body = {}, existing = {}) {
     // Wide enough for a d20 plus any modifier a table can produce, and for the
     // dexterity contest that follows a tie.
     ...rolledInitiative(initiative, initiativeDie, initiativeMod),
-    ...hitPoints(maxHp, hp),
+    ...hitPoints(maxHp, hp, tempHp),
+    // The sheet's own reading of the same shape, minus the picture: see
+    // pickAttacks in sheetSchema.js.
+    attacks: pickAttacks(attacks, { media: false }),
     x: num(x, 0),
     y: num(y, 0),
     size: clamp(num(size, 1), 0.5, 10),
@@ -338,7 +370,16 @@ function announce(req, action, record, extra = {}) {
 async function touchesForeignSheet(req, token) {
   if (!token?.sheetId) return false;
   const asked = sanitizeToken(req.body, token);
-  if (asked.hp === token.hp && asked.maxHp === token.maxHp) return false;
+  // Temporary points among them: they reach the sheet exactly as the other two
+  // do, so an edit that moves only those is still an edit to somebody's
+  // character.
+  if (
+    asked.hp === token.hp &&
+    asked.maxHp === token.maxHp &&
+    asked.tempHp === token.tempHp
+  ) {
+    return false;
+  }
   const sheet = await store.get(scoped(req.campaignId, 'sheets'), token.sheetId);
   // A link pointing at nothing grants nothing and blocks nothing.
   if (!sheet) return false;

@@ -1,6 +1,10 @@
 import { useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { initiativeText } from './initiative.js';
+import HpBar, { hpBar } from './HpBar.jsx';
+import { notation } from './dice.js';
+import { isBlankAttack } from './sheet/AttackRow.jsx';
+import { specAbilityBonus } from './sheet/rules.js';
 
 /**
  * What a token is, shown while the pointer rests on it.
@@ -20,7 +24,7 @@ const GAP = 10;
 // Closest the bubble may come to the window's edge before it is pushed back in.
 const MARGIN = 4;
 
-export default function TokenTooltip({ anchor, token, owner, showHp, note }) {
+export default function TokenTooltip({ anchor, token, owner, showHp, note, sheet = null }) {
   const ref = useRef(null);
 
   /**
@@ -55,13 +59,39 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note }) {
   }, [anchor]);
 
   const hasInitiative = token.initiative !== null && token.initiative !== undefined;
-  // A total of zero is a token whose hit points nobody set up, not one at death's
-  // door - there is no bar to draw for it.
-  const total = token.maxHp ?? 0;
-  const tracked = showHp && total > 0;
-  // Clamped for the bar's sake: a stored value can outlive the total it was
-  // measured against if the DM lowers the maximum afterwards.
-  const current = Math.max(0, Math.min(token.hp ?? 0, total));
+  // Null when there is nothing to draw - a token whose hit points nobody set up
+  // rather than one at death's door. See hp.js for what the segments mean.
+  const bar = hpBar(token.hp, token.maxHp, token.tempHp);
+  const tracked = showHp && bar;
+
+  /**
+   * What this creature can do, from both places it can be written down: its own
+   * list, and the character sheet it holds if it holds one.
+   *
+   * Listed together and not merged. They are two different things that happen
+   * to print alike - a goblin's bite that nobody wrote a sheet for, and the
+   * greatsword on the fighter's page - and the token's own come first because
+   * they are the ones that were written *about this figure*.
+   *
+   * Behind `showHp`, which is the DM. Same reasoning as the hit points above:
+   * what the ogre can do to you is the table's job to find out, and a bubble
+   * that told a player its damage dice would be answering the question the
+   * fight is supposed to ask.
+   */
+  const attacks = showHp
+    ? [
+      // The token's own first: they are the ones written about this figure.
+      // Nothing to add to their dice - a token has no ability scores.
+      ...(token.attacks || []).map((a) => ({ ...a, bonusFor: () => 0 })),
+      // And the character's, whose dice are worth more than they read: the
+      // ability modifier is kept off the stored spec and worked out from the
+      // sheet, so printing the spec alone would under-report every one of them.
+      ...(sheet?.attacks || []).map((a) => ({
+        ...a,
+        bonusFor: (spec) => specAbilityBonus(sheet, spec),
+      })),
+    ].filter((a) => !isBlankAttack(a))
+    : [];
 
   return createPortal(
     <div className="token-tip" ref={ref} role="tooltip">
@@ -97,14 +127,49 @@ export default function TokenTooltip({ anchor, token, owner, showHp, note }) {
           <span className="token-tip-row">
             Hit points{' '}
             <b>
-              {current} / {total}
+              {bar.current} / {bar.total}
             </b>
           </span>
+          {/* A row of its own, and only when there are any. Not folded into the
+              line above as "12 (+5) / 20", which reads as though the five were
+              part of the twenty; they are the opposite of that - the points
+              that are spent first and belong to no total. */}
+          {bar.temp > 0 && (
+            <span className="token-tip-row">
+              Temporary <b className="hp-temp-text">+{bar.temp}</b>
+            </span>
+          )}
           {/* The track is the wound and the fill is what's left of them, so the
-              red showing through is exactly the damage taken. */}
-          <span className="hp-bar">
-            <span className="hp-fill" style={{ width: `${(current / total) * 100}%` }} />
-          </span>
+              red showing through is exactly the damage taken. Any blue in front
+              of it is the cushion that has to go first. */}
+          <HpBar bar={bar} />
+        </span>
+      )}
+
+      {/* Stacked rather than laid out as the rows above are: those are a label
+          and a short answer, and this is a name with a line of notation under
+          it that will not fit beside anything in a bubble this narrow. */}
+      {attacks.length > 0 && (
+        <span className="token-tip-attacks">
+          {attacks.map((a) => (
+            <span className="token-tip-attack" key={a.id}>
+              {/* An attack with no name is still worth printing - its dice are
+                  the useful half - so it says what it is rather than leaving a
+                  blank where a name should be. */}
+              <b>{a.name || 'Attack'}</b>
+              <small>
+                {[
+                  a.toHit && `${notation(a.toHit, a.bonusFor(a.toHit))} to hit`,
+                  a.damage &&
+                    `${notation(a.damage, a.bonusFor(a.damage))}${
+                      a.damageType ? ` ${a.damageType}` : ''
+                    }`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'no dice set'}
+              </small>
+            </span>
+          ))}
         </span>
       )}
 

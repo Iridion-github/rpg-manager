@@ -28,6 +28,14 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: 'Tokens have attacks. Give a figure a bite or a claw when you make it or edit it, in the same row of boxes the character sheet uses: a name, dice to hit, dice for damage and what kind of damage it does. A goblin can now have its attacks written down without anybody writing it a whole character. If the figure is linked to a character, that character\'s attacks are listed above its own so you can see everything it can do in one place; those stay the sheet\'s to change, and nothing you add to the figure is written onto the character. Every one of them has the crossed swords beside it, so you can throw an attack straight from the figure: its own roll under its own name, and a character\'s exactly as it would roll from their sheet, ability modifier and global modifiers and all. Hovering the figure shows the lot. The one thing a token\'s attack has no room for is the picture a sheet\'s can carry, which belongs on the sheet.',
+      },
+      {
+        kind: 'new',
+        text: 'Temporary hit points are a figure on the map now, not just a box on a character sheet. Give a token some when you make it or edit it: the hit points row reads 9 out of 12 plus 4, and the 4 is the cushion that gets spent first. They show in the hover bubble on their own line, in the turn tracker beside the numbers, and on every hit point bar as a light blue stretch sitting in front of the green. A figure with a character behind it shares them the way it already shares the other two, so warding somebody on the map wards them on their sheet and the other way about. Nothing changes for a creature that has none: no blue, no extra line, the same bar you have always seen.',
+      },
+      {
+        kind: 'new',
         text: 'Rest the pointer on the time beside a chat message and it tells you exactly when that was, down to the second and with the date: 21:07:57 21/08/2026. The line itself still shows the clock time and nothing more, because that is all you need while reading down a conversation. It is the one you come back to hours later, or the second of two rolls that both say 23:28, where knowing precisely when actually matters.',
       },
       {
