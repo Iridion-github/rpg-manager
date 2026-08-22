@@ -13,6 +13,7 @@ import Campaigns from './Campaigns.jsx';
 import Notes from './Notes.jsx';
 import Players from './Players.jsx';
 import Tokens from './Tokens.jsx';
+import Items from './Items.jsx';
 import Music from './Music.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 import Chat from './Chat.jsx';
@@ -255,7 +256,7 @@ export default function App() {
    * than correcting it in an effect means there's no frame where a stale tab is
    * still on screen with nothing in it.
    */
-  const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'players'];
+  const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'items', 'players'];
   const shellTabs = ['campaigns', 'users', 'patch', 'account'];
 
   function resolveTab(wanted) {
@@ -407,6 +408,15 @@ export default function App() {
                     onClick={() => setTab('tokens')}
                   >
                     Tokens
+                  </button>
+                  {/* A reference shelf rather than anything belonging to this
+                  table, so everybody gets it: looking up what a shield costs is
+                  not a thing the DM should have to be asked for. */}
+                  <button
+                    className={activeTab === 'items' ? 'active' : ''}
+                    onClick={() => setTab('items')}
+                  >
+                    Items
                   </button>
                   {/* Last, and for everyone: who is at this table is not the DM's
                   private information - the members endpoint has always been
@@ -603,6 +613,10 @@ export default function App() {
             offline={offline}
           />
         )}
+        {/* Keyed by campaign like the rest, though it holds nothing of the
+            campaign's: it costs nothing and means the next table starts on the
+            categories rather than on whatever the last one was reading. */}
+        {insideCampaign && activeTab === 'items' && <Items key={`items-${campaignId}`} />}
         {insideCampaign && activeTab === 'players' && (
           <Players
             key={`players-${campaignId}`}

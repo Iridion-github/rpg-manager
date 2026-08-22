@@ -34,6 +34,7 @@ const { router: chatRouter } = require('./routes/chat');
 const notesRouter = require('./routes/notes');
 const musicRouter = require('./routes/music');
 const { router: uploadsRouter, UPLOAD_DIR } = require('./routes/uploads');
+const srdRouter = require('./routes/srd');
 const { router: mapsRouter, MAPS_DIR } = require('./routes/maps');
 const { router: tokensRouter, TOKENS_DIR } = require('./routes/tokens');
 const { registerTokenDrag, roomFor, dmRoomFor } = require('./tokenDrag');
@@ -277,6 +278,10 @@ app.use('/api/campaigns/:campaignId/music', attachCampaign, musicRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/maps', mapsRouter);
 app.use('/api/tokens', tokensRouter);
+// The SRD reference shelf, read through this server rather than from the
+// browser - see routes/srd.js for why. Campaign-independent for the same reason
+// the maps are: a longsword is a longsword at every table.
+app.use('/api/srd', srdRouter);
 
 // Uploaded maps are public to anyone who can reach the server - they're just
 // images, and players need to see the map they're standing on.

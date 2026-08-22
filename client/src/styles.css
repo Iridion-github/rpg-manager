@@ -6694,6 +6694,181 @@ button.token-tile:hover {
   padding: 0.3rem 0.5rem;
 }
 
+/* --- the equipment shelf --- */
+.items-view {
+  padding: 1rem;
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.items-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+/* The categories, wrapping across the top. Thirty-nine of them, so a row that
+   scrolled sideways would hide most of the shelf behind a gesture; wrapped,
+   the whole thing is on screen and the one you are in is visible in it. */
+.items-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.items-cats button {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+}
+
+.items-cats button.active {
+  background: #35406a;
+  border-color: #58a6ff;
+  color: #e7e9ee;
+}
+
+/* The way back out. Sits under the categories, above whatever they led to, and
+   is absent entirely until a category has been opened - there is nowhere to go
+   back to from the shelf itself. */
+.items-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.9rem;
+  font-size: 0.82rem;
+  color: #8b90a0;
+}
+
+/* A link rather than a button: it goes somewhere, and the buttons on this page
+   all mean "fetch this". */
+.items-crumbs button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #58a6ff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.items-crumbs button:hover:not(:disabled) {
+  color: #79b8ff;
+}
+
+.items-crumbs button:disabled {
+  color: #4b5163;
+  cursor: default;
+  text-decoration: none;
+}
+
+/* Where you are standing. Not a link, and not the same colour as one. */
+.items-crumbs .current {
+  color: #e7e9ee;
+}
+
+/* What is in a category, when there is more than one thing. A grid rather than
+   a list: some categories hold a hundred and seventy-seven items, and a column
+   of those is a page of scrolling. */
+.items-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.35rem;
+}
+
+.items-list button {
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+/* Something is happening. Centred in the space the answer will fill, so the
+   page does not jump when it arrives. */
+.items-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1rem;
+  color: #8b90a0;
+  font-size: 0.85rem;
+}
+
+.items-loading svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: #58a6ff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  /* Three quarters of the ring, turning: a full circle cannot be seen to move
+     and a dot is not a circle. */
+  stroke-dasharray: 42 14;
+  animation: items-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes items-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* One entry. */
+.items-entry {
+  background: #171b24;
+  border: 1px solid #262b38;
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+}
+
+.items-entry h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.items-entry h4 {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8b90a0;
+}
+
+/* Label and value in two columns, so the values line up and the eye can run
+   down them rather than reading each line as a sentence. */
+.items-facts {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: 0.3rem 1rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.items-facts > div {
+  display: contents;
+}
+
+.items-facts dt {
+  color: #8b90a0;
+}
+
+.items-facts dd {
+  margin: 0;
+  color: #e7e9ee;
+}
+
+.items-contents ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.items-prose p {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 /* --- sign in --- */
 .auth {
   max-width: 22rem;

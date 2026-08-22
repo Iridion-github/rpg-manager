@@ -311,6 +311,14 @@ export const api = {
   // what it rolled, and whether it's on the table at all.
   // The shapes the DM has blacked out, and whether the table is looking at them
   // yet. One call for both: Apply means "this, and show it".
+  /**
+   * The SRD reference shelf, read through this server.
+   *
+   * Through ours rather than straight from the browser because this page may
+   * only talk to its own origin - see server/routes/srd.js, which explains the
+   * choice and holds the list of paths it will follow.
+   */
+  srd: (path) => get(`/api/srd?path=${encodeURIComponent(path)}`),
   setObscuration: (sceneId, obscuration) =>
     put(table(`/scenes/${sceneId}/obscuration`), obscuration),
   setInitiative: (sceneId, tokenId, roll) =>
