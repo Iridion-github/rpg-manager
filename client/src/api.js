@@ -309,6 +309,10 @@ export const api = {
   deleteToken: (sceneId, tokenId) => del(table(`/scenes/${sceneId}/tokens/${tokenId}`)),
   // The three writes an owner may make to their own token: where it stands,
   // what it rolled, and whether it's on the table at all.
+  // The shapes the DM has blacked out, and whether the table is looking at them
+  // yet. One call for both: Apply means "this, and show it".
+  setObscuration: (sceneId, obscuration) =>
+    put(table(`/scenes/${sceneId}/obscuration`), obscuration),
   setInitiative: (sceneId, tokenId, roll) =>
     put(table(`/scenes/${sceneId}/tokens/${tokenId}/initiative`), roll),
   benchToken: (sceneId, tokenId) => put(table(`/scenes/${sceneId}/tokens/${tokenId}/bench`), {}),

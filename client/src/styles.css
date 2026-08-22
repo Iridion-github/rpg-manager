@@ -308,6 +308,7 @@ select option {
    It also brings its own UA box, so the parts of ours that matter are restated
    rather than assumed. */
 @supports (appearance: base-select) {
+
   select,
   ::picker(select) {
     appearance: base-select;
@@ -930,7 +931,7 @@ button.linky:hover {
   min-height: 0;
 }
 
-.map-area > .surface-scroll {
+.map-area>.surface-scroll {
   flex: 1;
   min-width: 0;
 }
@@ -1061,6 +1062,111 @@ button.linky:hover {
    are drawn over the ground, not under it. Deaf to the pointer unless a tool is
    in hand - the rest of the time it's a picture, and a picture must not come
    between anyone and their tokens. */
+/* The blackout the players get: over the whole board and reachable by nothing.
+   Its own layer rather than part of the drawn one, because that sits *under*
+   the tokens - which is exactly wrong for a wall meant to hide them. */
+.obscure-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The two pens, side by side and coloured like what they draw, so the one in
+   hand is readable from across the table rather than only by its label. */
+.obscure-pens {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.obscure-pen {
+  flex: 1;
+  font-size: 0.78rem;
+  border: 1px solid #3a4573;
+}
+
+.obscure-pen.dark {
+  background: #0b0d12;
+  color: #c9cedb;
+}
+
+.obscure-pen.light {
+  background: #e8eaf0;
+  color: #14161c;
+}
+
+/* Which one is in hand. A ring rather than a colour change: the colours are the
+   thing being chosen, so they cannot also be how the choice is shown.
+
+   Every other choice in this panel is shown the same way - the half of the mode
+   you are in, and the tool you are holding. One ring means one thing here: this
+   is the one that is on. */
+.obscure-pen.on,
+.obscure-edit.active,
+.obscure-picker button.active {
+  outline: 2px solid #58a6ff;
+  outline-offset: 1px;
+}
+
+/* The tools, stacked. A column rather than the drawing panel's two abreast:
+   this window is narrower, and "Freehand polygon" in half of it is a word cut
+   in two. */
+.obscure-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* Clear of the tools above it. Wider than the gap between the tools themselves,
+   because that gap says "another one of these" and this one has to say "and now
+   something else": the slider is about the whole layer rather than about the
+   shape you are holding. */
+.obscure-opacity {
+  margin-top: 1rem;
+}
+
+/* The half of the mode that is not a tool. Full width above the row of them,
+   so the two halves read as one choice rather than as a stray button. */
+.obscure-edit {
+  width: 100%;
+  font-size: 0.8rem;
+}
+
+.obscure-edit.active {
+  background: #2b3350;
+}
+
+/* The last row of the panel, laid out like the fog window's: the state on the
+   left, the button hard right.
+
+   One line, and it stays one line. The panel is narrow enough that the tally
+   and the button together are wider than it, so the *text* is what wraps -
+   inside its own half of the row - rather than the button dropping below it.
+   A button that sometimes sits beside the label and sometimes under it is a
+   button whose place you have to look for. */
+.obscure-actions {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.obscure-actions .obscure-state,
+.obscure-actions .fog-state {
+  flex: 1;
+  min-width: 0;
+}
+
+.obscure-actions button {
+  flex: none;
+}
+
+/* The count of what is drawn. Plain grey - it is a tally rather than a warning,
+   and the amber beside it is reserved for the state that is one. */
+.obscure-state {
+  font-size: 0.78rem;
+  color: #8b90a0;
+}
+
 .shape-layer {
   position: absolute;
   left: 0;
@@ -1234,6 +1340,7 @@ button.linky:hover {
 .surface.drawing .shape-pivot {
   display: block;
 }
+
 .shape-turn {
   fill: none;
   /* Thinner along with everything else, but not below a pixel and a half -
@@ -1295,16 +1402,12 @@ button.linky:hover {
   pointer-events: none;
   opacity: var(--grid-alpha, 0.13);
   background-image:
-    repeating-linear-gradient(
-      to right,
+    repeating-linear-gradient(to right,
       var(--grid-ink, #ffffff) 0 var(--grid-line, 1px),
-      transparent var(--grid-line, 1px) var(--cell)
-    ),
-    repeating-linear-gradient(
-      to bottom,
+      transparent var(--grid-line, 1px) var(--cell)),
+    repeating-linear-gradient(to bottom,
       var(--grid-ink, #ffffff) 0 var(--grid-line, 1px),
-      transparent var(--grid-line, 1px) var(--cell)
-    );
+      transparent var(--grid-line, 1px) var(--cell));
   /* One cell per tile, so the pattern repeats on the cell rather than on the
      map: a map that isn't a whole number of cells wide would otherwise show a
      short column where the element-sized tile wrapped, once the grid is moved
@@ -1887,11 +1990,7 @@ button.token-tile:hover {
 .player-rows li {
   display: grid;
   grid-template-columns:
-    [swatch] auto
-    [name] minmax(0, 1fr)
-    [status] 6.5rem
-    [seen] 11rem
-    [role] 4.6rem;
+    [swatch] auto [name] minmax(0, 1fr) [status] 6.5rem [seen] 11rem [role] 4.6rem;
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0.7rem;
@@ -1992,15 +2091,13 @@ button.token-tile:hover {
 }
 
 @media (max-width: 700px) {
+
   /* The timestamp is the first thing to go: it's the least urgent column and
      the widest. The track has to go with it, or the row keeps an 11rem hole
      where the dates used to be. */
   .player-rows li {
     grid-template-columns:
-      [swatch] auto
-      [name] minmax(0, 1fr)
-      [status] 6.5rem
-      [role] 4.6rem;
+      [swatch] auto [name] minmax(0, 1fr) [status] 6.5rem [role] 4.6rem;
   }
 
   .player-seen {
@@ -2355,13 +2452,7 @@ button.token-tile:hover {
 .player-list li {
   display: grid;
   grid-template-columns:
-    [dot] 0.65rem
-    [face] 1.7rem
-    [name] minmax(0, 1fr)
-    [tag] 3.9rem
-    [seen] 9rem
-    [reset] 1.5rem
-    [remove] 1.5rem;
+    [dot] 0.65rem [face] 1.7rem [name] minmax(0, 1fr) [tag] 3.9rem [seen] 9rem [reset] 1.5rem [remove] 1.5rem;
   align-items: center;
   gap: 0.6rem;
 }
@@ -3155,7 +3246,7 @@ button.token-tile:hover {
   min-width: 0;
 }
 
-.gm-field > span {
+.gm-field>span {
   font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -4113,7 +4204,7 @@ button.token-tile:hover {
    should not have to start an inch further down the window for that. The
    summary still carries the answer, so the fold costs no information - you can
    see who has the character without opening anything. */
-.access-panel > summary {
+.access-panel>summary {
   cursor: pointer;
   font-size: 0.82rem;
   color: #8b90a0;
@@ -4121,11 +4212,11 @@ button.token-tile:hover {
   list-style-position: inside;
 }
 
-.access-panel > summary strong {
+.access-panel>summary strong {
   color: #e7e9ee;
 }
 
-.access-panel[open] > summary {
+.access-panel[open]>summary {
   margin-bottom: 0.6rem;
 }
 
@@ -4428,7 +4519,7 @@ button.token-tile:hover {
   border-radius: 10px;
 }
 
-.account-facts > div {
+.account-facts>div {
   display: flex;
   gap: 0.75rem;
   align-items: baseline;
@@ -4702,7 +4793,7 @@ button.token-tile:hover {
   color: #8b90a0;
 }
 
-.shape-field > span {
+.shape-field>span {
   flex: none;
   width: 4.2rem;
 }
@@ -4743,7 +4834,7 @@ button.token-tile:hover {
   cursor: pointer;
 }
 
-.shape-check > span {
+.shape-check>span {
   width: auto;
 }
 
@@ -4941,7 +5032,7 @@ button.token-tile:hover {
 /* Wide enough for "Character sheet" and "Figures on the map", which are the
    captions that stop the column reading as a list of people. Fixed rather than
    sized to the text, so the selects on a stack of rows line up. */
-.link-pair label > span {
+.link-pair label>span {
   flex: none;
   width: 6.6rem;
   line-height: 1.15;
@@ -4967,7 +5058,7 @@ button.token-tile:hover {
   margin: 0;
 }
 
-.cast-list .link-pair label > span {
+.cast-list .link-pair label>span {
   /* Off-screen rather than deleted: the row is a list of tokens and the word
      "Character" beside every one of them is noise to read past, but a select
      with no label at all is a puzzle to anybody using a screen reader. */
@@ -5977,7 +6068,7 @@ button.token-tile:hover {
 
 /* A checkbox row with nothing in the label column: the box lines up under the
    field it qualifies, and says what it does itself. */
-.token-check > span {
+.token-check>span {
   grid-column: 2;
   display: flex;
   align-items: center;
@@ -6339,7 +6430,7 @@ button.token-tile:hover {
 
 /* It stands directly on the list, so the list drops the top margin it keeps
    when it is the first thing under the hint. */
-.add-track-btn + .track-list {
+.add-track-btn+.track-list {
   margin-top: 0.5rem;
 }
 
@@ -6453,11 +6544,11 @@ button.token-tile:hover {
    holds the chat off only while it has something to hold it off with. Idle and
    hidden both collapse to nothing, and there the chat runs to the bottom of the
    column - level with the bottom of the map, which is the point. */
-.sidebar > .music-bar {
+.sidebar>.music-bar {
   margin-top: 0.5rem;
 }
 
-.sidebar > .music-bar.idle {
+.sidebar>.music-bar.idle {
   margin-top: 0;
 }
 
@@ -6780,7 +6871,7 @@ button.token-tile:hover {
   color: #9aa0b2;
 }
 
-.pin-field > input {
+.pin-field>input {
   box-sizing: border-box;
   width: 100%;
 }
@@ -7379,7 +7470,7 @@ body.fog-pov .map-tools {
 
 /* The roll button sits on the line the fields sit on rather than above their
    captions, which is where flex-end would otherwise put it. */
-.attack-row .item-head > .roll-btn {
+.attack-row .item-head>.roll-btn {
   flex: none;
   margin-bottom: 0.15rem;
 }
@@ -7387,7 +7478,7 @@ body.fog-pov .map-tools {
 /* And the delete goes to the far end of the row, wherever the row happens to
    end: glued to the last field it reads as that field's own button, which on a
    narrow window is whichever one wrapped last. */
-.attack-row .item-head > .del {
+.attack-row .item-head>.del {
   margin-left: auto;
 }
 

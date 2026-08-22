@@ -32,6 +32,7 @@ const {
   canEditSheet,
 } = require('../campaigns');
 const { sanitizeFog, fogOn, tokensSeenThroughFog } = require('../fog');
+const { sanitizeObscuration } = require('../obscuration');
 const sheetLink = require('../sheetLink');
 const { pickAttacks } = require('../sheetSchema');
 const {
@@ -1623,6 +1624,36 @@ router.put('/:id/selected', requireDm, async (req, res, next) => {
  * tokensSeenThroughFog - so the announcement that follows is what makes the
  * monsters vanish from their screens, live, without anybody reloading.
  */
+/**
+ * What the DM has blacked out, and whether the table is looking at it yet.
+ *
+ * Its own route for the reason fog has one: a PUT of the whole scene overwrites
+ * every field sanitizeScene knows about, and a client that had never heard of
+ * this would rub out an evening's worth of it by saving a name change.
+ *
+ * One route for the shapes and the switch together. They are written in the
+ * same breath - Apply is a click that means "this, and show it" - and two
+ * routes would leave a window in which the table was shown a set of shapes that
+ * was still being edited.
+ */
+router.put('/:id/obscuration', requireDm, async (req, res, next) => {
+  try {
+    let obscuration = null;
+    const scene = await store.mutate(scenesOf(req), req.params.id, (current) => {
+      obscuration = sanitizeObscuration(req.body, current);
+      return { ...current, obscuration };
+    });
+    if (!scene) return res.status(404).json({ error: 'Not found' });
+    // Per actor, like everything else that carries a scene: what a player is
+    // sent depends on whether this has been applied, and the DM's own working
+    // opacity is never any of their business. See obscuration.js.
+    announce(req, 'obscuration:update', scene);
+    res.json(obscuration);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.put('/:id/fog', requireDm, async (req, res, next) => {
   try {
     let fog = null;

@@ -228,6 +228,112 @@ export function recordShapeDelete({ sceneId, shape }) {
 }
 
 /**
+ * The obscuration, which is one record rather than a list of them.
+ *
+ * That is the whole difference from the drawn shapes above, and it makes these
+ * simpler in one way and fussier in another. Simpler because there is no
+ * per-shape route and nothing mints an id, so a shape put back comes back as
+ * *itself* - no `live.id` to chase. Fussier because the record carries two
+ * things this must not touch: whether the table is looking at it, and the DM's
+ * working opacity. Neither is part of drawing a shape, so both are read fresh
+ * at the moment of reversal and written back unchanged. Undoing a shape you
+ * drew ten minutes ago must not also un-apply the obscuration you switched on
+ * since.
+ */
+async function obscurationNow(sceneId) {
+  const scene = await sceneNow(sceneId);
+  return scene.obscuration || { on: false, opacity: 60, shapes: [] };
+}
+
+/** Write a new list of shapes, leaving the switch and the opacity as they are. */
+async function putShapes(sceneId, shapes) {
+  const now = await obscurationNow(sceneId);
+  await api.setObscuration(sceneId, { ...now, shapes });
+}
+
+const hasShape = (shapes, id) => shapes.some((s) => s.id === id);
+
+/**
+ * A shape put back goes back where it was, not on the end.
+ *
+ * Order is not decoration here: the clearing shapes are painted after the
+ * obscuring ones, and among themselves the later one wins. A shape that came
+ * back at the wrong end of the list would come back meaning something slightly
+ * different from the one that was taken away.
+ */
+const insertAt = (shapes, shape, index) => {
+  const next = shapes.slice();
+  next.splice(Math.min(index, next.length), 0, shape);
+  return next;
+};
+
+export function recordObscureAdd({ sceneId, shape }) {
+  record({
+    label: 'draw that',
+    sceneId,
+    undo: async () => {
+      const now = await obscurationNow(sceneId);
+      if (!hasShape(now.shapes, shape.id)) {
+        throw stale('That shape has already gone.');
+      }
+      await putShapes(sceneId, now.shapes.filter((s) => s.id !== shape.id));
+    },
+    redo: async () => {
+      const now = await obscurationNow(sceneId);
+      if (hasShape(now.shapes, shape.id)) return;
+      await putShapes(sceneId, [...now.shapes, shape]);
+    },
+  });
+}
+
+export function recordObscureDelete({ sceneId, shape, index }) {
+  record({
+    label: 'rub that out',
+    sceneId,
+    undo: async () => {
+      const now = await obscurationNow(sceneId);
+      if (hasShape(now.shapes, shape.id)) return;
+      await putShapes(sceneId, insertAt(now.shapes, shape, index));
+    },
+    redo: async () => {
+      const now = await obscurationNow(sceneId);
+      if (!hasShape(now.shapes, shape.id)) return;
+      await putShapes(sceneId, now.shapes.filter((s) => s.id !== shape.id));
+    },
+  });
+}
+
+/**
+ * Moving, stretching, turning: every change to a shape already down.
+ *
+ * `before` and `after` hold only the fields the action touched, so reversing
+ * puts those back and leaves the rest of the shape as it now stands - the same
+ * rule the scene's own editor follows, and what makes two people fiddling with
+ * different halves of one shape survive each other.
+ */
+export function recordObscureEdit({ sceneId, shapeId, before, after }) {
+  const step = (expected, next) => async () => {
+    const now = await obscurationNow(sceneId);
+    const shape = now.shapes.find((s) => s.id === shapeId);
+    if (!shape) throw stale('That shape is no longer on the map.');
+    if (!matches(shape, expected)) {
+      throw stale('That shape has been changed since - this is no longer yours to take back.');
+    }
+    await putShapes(
+      sceneId,
+      now.shapes.map((s) => (s.id === shapeId ? { ...s, ...next } : s))
+    );
+  };
+
+  record({
+    label: 'change that',
+    sceneId,
+    undo: step(after, before),
+    redo: step(before, after),
+  });
+}
+
+/**
  * Clearing the board. One entry, so one Ctrl+Z brings the whole lot back.
  *
  * The shapes come back as *new* shapes - the server names every one it's given

@@ -27,6 +27,7 @@ const store = require('./store');
 // The sight rules live apart from here, like the ruler's arithmetic does: they
 // are geometry, and geometry is the part worth being able to check on its own.
 const { fogOn, tokensSeenThroughFog } = require('./fog');
+const { forPlayers } = require('./obscuration');
 
 const CAMPAIGNS = 'campaigns';
 
@@ -208,6 +209,17 @@ function sceneAsSeenBy(role, scene, actor, campaign) {
   }
   if (Array.isArray(scene.pins)) {
     seen = { ...seen, pins: scene.pins.filter((pin) => canSeePin(actor, pin, campaign, role)) };
+  }
+  /**
+   * What the DM has blacked out - but only once they have applied it.
+   *
+   * Shapes drawn and not yet applied are the DM's plans for the evening, and a
+   * player who could read them off the wire would be reading ahead. The working
+   * opacity goes the same way: it describes the DM's own window onto the map
+   * and says nothing about anybody else's view. See server/obscuration.js.
+   */
+  if (role !== 'dm' && scene.obscuration) {
+    seen = { ...seen, obscuration: forPlayers(scene.obscuration) };
   }
   return seen;
 }

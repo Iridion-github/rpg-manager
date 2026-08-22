@@ -15,6 +15,7 @@ import PinIcon from './PinIcon.jsx';
 import PinModal from './PinModal.jsx';
 import PinWindow from './PinWindow.jsx';
 import FogSettings from './FogSettings.jsx';
+import ObscurationSettings from './ObscurationSettings.jsx';
 import { discsFor, fogOf, litCellsFor, maskOf, maskOfRects } from './fog.js';
 import GridSettings from './GridSettings.jsx';
 import {
@@ -54,6 +55,9 @@ import { canRedo, canUndo, forget, record, redo, subscribe, undo } from './histo
 import {
   matches,
   pick,
+  recordObscureAdd,
+  recordObscureDelete,
+  recordObscureEdit,
   recordSceneEdit,
   recordShapeAdd,
   recordShapeDelete,
@@ -242,6 +246,10 @@ const GRIP_PX = 14;
 // box, this says nothing about the table - only how much of this screen its
 // owner wants the map to have - so it lives in the browser, not the scene.
 const TURNS_OPACITY_KEY = 'rpg:turns-opacity';
+// The obscuration panel's own, remembered the same way and for the same reason:
+// it is a window you work beside, and how solid you want it is a preference
+// rather than a thing to set again every session.
+const OBSCURE_OPACITY_KEY = 'rpg:obscure-opacity';
 
 // The turn tracker holds a short list, not a character sheet, so it may be
 // pulled far below the floor a FloatingWindow keeps by default. A constant
@@ -321,7 +329,7 @@ const MENU_H = 206;
  * it - the outline, which would thin to nothing zoomed out, and the lettering,
  * which is meant to be read rather than scaled.
  */
-function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
+function ShapeMark({ shape, cell, origin, zoom, selected, sketching, inert = false }) {
   const d = shapePath(shape, cell, origin);
   const at = shapeAnchor(shape, cell, origin);
   const caption = sketching ? shapeSize(shape) : shape.label;
@@ -341,13 +349,23 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
   return (
     <g
       className={`shape${selected ? ' selected' : ''}${sketching ? ' sketching' : ''}`}
-      // What the press handler reads back to know which shape was hit. The one
-      // being dragged out isn't one yet, and has nothing to be picked by.
-      data-shape-id={sketching ? undefined : shape.id}
+      /**
+       * What the press handler reads back to know which shape was hit.
+       *
+       * Absent on the one being dragged out, which isn't a shape yet and has
+       * nothing to be picked by - and absent on a whole layer that is not the
+       * one being edited. The two drawn layers are both on screen at once and
+       * only ever one of them is in hand: obscuration mode must not let you
+       * pick up a spell template, and drawing mode must not let you pick up a
+       * wall. Dropping the attribute is what makes that true, rather than a
+       * check after the fact - a press on the other layer then falls through to
+       * the map underneath, which is where a new shape gets drawn from.
+       */
+      data-shape-id={sketching || inert ? undefined : shape.id}
     >
       <path
         d={d}
-        data-grip="move"
+        data-grip={inert ? undefined : 'move'}
         fill={shape.fill}
         fillOpacity={(shape.opacity ?? 35) / 100}
         stroke={shape.stroke}
@@ -357,7 +375,7 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
       {/* The outline again, unpainted and far thicker, purely as something for
           the hand to catch. Laid over the fill so that near an edge it's the
           edge you get, which is what "grab the border" has to mean. */}
-      {!sketching && (
+      {!sketching && !inert && (
         <path
           className="shape-edge"
           data-grip="resize"
@@ -383,7 +401,9 @@ function ShapeMark({ shape, cell, origin, zoom, selected, sketching }) {
           magnification - which is what lets everything inside it be written in
           plain pixels. Drawn last, so it's the mark you get when it overlaps
           anything else the shape offers. */}
-      {!sketching && (
+      {/* The centre mark goes with the rest: it says "this is yours to turn",
+          which is not true of a layer you are not editing. */}
+      {!sketching && !inert && (
         <g className="shape-pivot" transform={`translate(${middle.x} ${middle.y}) scale(${1 / zoom})`}>
           {turnable && (
             <>
@@ -810,6 +830,43 @@ export default function Tabletop({ actor, players, offline }) {
    * per click.
    */
   const [polyPoints, setPolyPoints] = useState(null);
+  // Whether the obscuration panel is up. The DM's alone, and a mode of its own:
+  // see `obscuring`.
+  const [obscureWindow, setObscureWindow] = useState(false);
+  // Which of the two the next shape will be: obscuring, or cutting back through
+  // what obscures. One switch for the whole panel, because it is a pen you set
+  // down and pick up rather than a property of each shape you draw.
+  const [obscureClear, setObscureClear] = useState(false);
+  /**
+   * Whether the shapes already down are the ones being worked on.
+   *
+   * The other half of a pair with the tool in hand, and the reason the pair
+   * exists: a wall covering the whole map is a wall you cannot click past, so
+   * with a tool chosen the existing shapes have to become untouchable or there
+   * is nowhere left to start a new one from. Choosing a tool puts this down;
+   * choosing this puts the tool down.
+   *
+   * On when the mode opens, so that a DM who comes back to a board they blacked
+   * out last week can pick a shape up without first being told to say so.
+   */
+  const [obscureEditing, setObscureEditing] = useState(true);
+  /**
+   * How solid the obscuration *panel* is - not the layer it draws.
+   *
+   * Two different opacities and they are easy to confuse, so: this one is the
+   * window, the same slider every floating window here carries in its title
+   * bar; the other is inside the panel and says how far through the black the
+   * DM can see the map. This one is nobody else's business and is remembered in
+   * this browser; that one is part of the scene.
+   */
+  const [obscurePanelOpacity, setObscurePanelOpacity] = useState(() => {
+    const saved = Number(localStorage.getItem(OBSCURE_OPACITY_KEY));
+    return Number.isFinite(saved) && saved > 0 ? clamp(saved, OPACITY_MIN, 100) : 100;
+  });
+  const obscureTimer = useRef(null);
+  // The burst of edits in flight, and the shape as it stood before the first of
+  // them. See saveObscureEdit.
+  const obscureEdit = useRef(null);
   const [sketch, setSketch] = useState(null);
 
   // --- the ruler ---
@@ -1452,8 +1509,63 @@ export default function Tabletop({ actor, players, offline }) {
   const placeable = roster.filter(
     (t) => !(t.scenes || []).some((where) => where.id === selectedId)
   );
+  /**
+   * Obscuration mode: blacking parts of the map out by hand.
+   *
+   * A mode like drawing, and exclusive with it for the same reason - the map
+   * answers to one set of shapes at a time, and a click that sometimes drew a
+   * template and sometimes cut a hole in the dark would be a map nobody
+   * trusted. Turn mode and the fog are the exceptions and stay on: neither is
+   * something you do *to* the board, they are ways of reading it, and a DM
+   * blacking out a corridor mid-fight should not have to end the fight first.
+   *
+   * The DM's alone. Not because a player could do any harm with it, but because
+   * it is the one drawing on the board whose whole purpose is that they cannot
+   * see it.
+   */
+  const obscuring = isDm && obscureWindow;
+  const obscuration = scene?.obscuration || { on: false, opacity: 60, shapes: [] };
+  const obscureShapes = obscuration.shapes || [];
   const shapes = scene?.shapes || [];
-  const selectedShape = shapes.find((s) => s.id === selectedShapeId) || null;
+  /**
+   * The shapes the hand is working on, whichever mode is in force.
+   *
+   * One list, so that every gesture below - the press, the drag, the grips, the
+   * selection, the Delete key - is written once and works on whichever layer is
+   * being edited. The two are never editable at once, because the two modes are
+   * never on at once.
+   */
+  const liveShapes = obscuring ? obscureShapes : shapes;
+
+  /**
+   * How an obscuration shape is painted on the DM's own screen.
+   *
+   * Black for the ones that cover and white for the ones that cut back through,
+   * which is the whole of what the two states look like - there is no colour to
+   * choose, so there is none stored. The opacity is the panel's one shared
+   * number: it belongs to the DM's view of the layer rather than to any shape
+   * in it.
+   */
+  const obscureLook = (shape) => ({
+    fill: shape.clear ? '#ffffff' : '#000000',
+    stroke: shape.clear ? '#ffffff' : '#4b5563',
+    opacity: obscuration.opacity ?? 60,
+    strokeWidth: 2,
+    label: '',
+  });
+
+  /**
+   * The blackout as this browser must draw it.
+   *
+   * A player is sent the shapes only once it is applied, so theirs is simply
+   * what arrived. The DM is sent everything always and would otherwise have the
+   * wall over their own map the moment they applied it - which would leave them
+   * running the fight blind. They see the shapes instead, above.
+   */
+  const playerObscuration = isDm ? { on: false, shapes: [] } : obscuration;
+  // One id per scene, so two boards open at once cannot share a mask.
+  const obscureMaskId = `obscure-${scene?.id || 'none'}`;
+  const selectedShape = liveShapes.find((s) => s.id === selectedShapeId) || null;
   // Yours if you drew it, anyone's if you're the DM - the rule the server keeps.
   const canEditShape = useCallback(
     (shape) =>
@@ -1901,7 +2013,7 @@ export default function Tabletop({ actor, players, offline }) {
       addMeasurePoint(e);
       return;
     }
-    if (!drawing || e.button !== 0) return;
+    if (!(drawing || obscuring) || e.button !== 0) return;
     const hit = e.target?.closest?.('[data-shape-id]')?.dataset.shapeId;
     e.preventDefault();
     // A press on the map is the map taking the keyboard. The preventDefault
@@ -1913,12 +2025,15 @@ export default function Tabletop({ actor, players, offline }) {
     e.currentTarget.focus?.({ preventScroll: true });
     e.currentTarget.setPointerCapture(e.pointerId);
 
-    if (hit) {
-      const shape = shapes.find((s) => s.id === hit);
+    const shape = hit ? liveShapes.find((s) => s.id === hit) : null;
+    // An id from the layer that is not in hand is not a hit at all. The markup
+    // above already sees to that; this is the brace to its belt, and it is what
+    // stops a stale id selecting something on the other layer.
+    if (shape) {
       setSelectedShapeId(hit);
       // Somebody else's shape can be pointed at but not pushed around. The
       // selection is still worth making: it's what tells you whose it is.
-      if (!canEditShape(shape)) return;
+      if (!obscuring && !canEditShape(shape)) return;
       // A polygon has neither a box nor a radius, so there is nothing for a
       // stretch to write: grabbing its edge picks it up instead. Better than a
       // grip that quietly set an `r` nothing draws.
@@ -2092,7 +2207,60 @@ export default function Tabletop({ actor, players, offline }) {
     createShape({ ...polygonFrom(corners), ...shapeLook() });
   }
 
+  /**
+   * Write the obscuration - the shapes, the switch and the working opacity.
+   *
+   * All of it every time, because it is one record and the route takes it
+   * whole. That is cheap: it is a handful of shapes, written when a hand stops
+   * rather than as it moves, and it means there is exactly one way for this to
+   * reach the server rather than one per field.
+   *
+   * Applied to the board here as well as sent, so the DM's own view follows the
+   * gesture rather than the round trip.
+   */
+  const saveObscuration = useCallback(
+    async (next) => {
+      if (!scene) return;
+      const merged = { ...obscurationRef.current, ...next };
+      setScenes((prev) =>
+        prev.map((x) => (x.id === scene.id ? { ...x, obscuration: merged } : x))
+      );
+      try {
+        await api.setObscuration(scene.id, merged);
+      } catch (e) {
+        setError(e.message);
+      }
+    },
+    [scene?.id]  // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Read by saveObscuration, which must merge against the obscuration as it
+  // stands rather than as it stood when the callback was built.
+  const obscurationRef = useRef(obscuration);
+  obscurationRef.current = obscuration;
+
+  const obscureShapesNow = () => obscurationRef.current.shapes || [];
+
   async function createShape(shape) {
+    /**
+     * A new obscuring shape is put down locally and written with the rest.
+     *
+     * No id from the server, because there is no per-shape route to get one
+     * from: the whole obscuration is one record. Minted here, and the server
+     * keeps whatever it is given - see obscuration.js, which mints one only for
+     * a shape that arrives without.
+     */
+    if (obscuring) {
+      const made = { ...shape, id: crypto.randomUUID(), clear: obscureClear };
+      setSelectedShapeId(made.id);
+      saveObscuration({ shapes: [...obscureShapesNow(), made] });
+      recordObscureAdd({ sceneId: scene.id, shape: made });
+      return;
+    }
+    return createDrawnShape(shape);
+  }
+
+  async function createDrawnShape(shape) {
     setError('');
     try {
       const created = await api.addShape(scene.id, shape);
@@ -2116,6 +2284,34 @@ export default function Tabletop({ actor, players, offline }) {
    * writes and a hundred broadcasts of a shape nobody has finished choosing.
    */
   function editShape(id, changes) {
+    // The obscuring layer has no owner and no debounce of its own: it is one
+    // record, so a slider moved writes the record. Held back by the same timer
+    // the drawn layer uses, through saveObscuration below.
+    if (obscuring) {
+      const was = obscureShapesNow().find((x) => x.id === id);
+      if (!was) return;
+      const next = obscureShapesNow().map((x) => (x.id === id ? { ...x, ...changes } : x));
+      setScenes((prev) =>
+        prev.map((x) =>
+          x.id === scene.id
+            ? { ...x, obscuration: { ...obscurationRef.current, shapes: next } }
+            : x
+        )
+      );
+      /**
+       * The shape as it stood before the *first* change of a burst is the one
+       * Undo has to put back - not as it stood one slider-notch ago. The same
+       * rule the drawn layer follows, and what makes a drag across the map one
+       * entry rather than sixty.
+       */
+      if (obscureEdit.current?.id !== id) {
+        obscureEdit.current = { id, before: was, changes: {} };
+      }
+      obscureEdit.current.changes = { ...obscureEdit.current.changes, ...changes };
+      clearTimeout(obscureTimer.current);
+      obscureTimer.current = setTimeout(saveObscureEdit, SHAPE_SAVE_MS);
+      return;
+    }
     const shape = shapes.find((s) => s.id === id);
     if (!shape || !canEditShape(shape)) return;
     setScenes((prev) =>
@@ -2181,7 +2377,44 @@ export default function Tabletop({ actor, players, offline }) {
     if (removed?.length) recordShapesCleared({ sceneId: scene.id, shapes: removed });
   }
 
+  /**
+   * Write a burst of edits, and put one entry in the history for the lot.
+   *
+   * The twin of saveShapeEdit below. Recorded only where something actually
+   * moved: a slider nudged and nudged back is not an action, and an undo that
+   * does nothing is worse than no undo at all.
+   */
+  function saveObscureEdit() {
+    const pending = obscureEdit.current;
+    obscureEdit.current = null;
+    if (!pending || !scene) return;
+    const fields = Object.keys(pending.changes);
+    const now = obscureShapesNow().find((x) => x.id === pending.id);
+    if (!now) return;
+    saveObscuration({ shapes: obscureShapesNow() });
+    const before = pick(pending.before, fields);
+    const after = pick(now, fields);
+    if (!matches(after, before)) {
+      recordObscureEdit({ sceneId: scene.id, shapeId: pending.id, before, after });
+    }
+  }
+
   async function eraseShape(id) {
+    if (obscuring) {
+      const index = obscureShapesNow().findIndex((x) => x.id === id);
+      if (index < 0) return;
+      const gone = obscureShapesNow()[index];
+      // Anything still waiting to be written is about a shape that's leaving.
+      clearTimeout(obscureTimer.current);
+      obscureEdit.current = null;
+      setSelectedShapeId(null);
+      saveObscuration({ shapes: obscureShapesNow().filter((x) => x.id !== id) });
+      // Its place in the list goes with it: the order decides which of two
+      // overlapping shapes wins, so putting it back on the end would put back
+      // something subtly different.
+      recordObscureDelete({ sceneId: scene.id, shape: gone, index });
+      return;
+    }
     const shape = shapes.find((s) => s.id === id);
     if (!shape || !canEditShape(shape)) return;
     // Anything still waiting to be written is about a shape that's leaving.
@@ -2885,7 +3118,7 @@ export default function Tabletop({ actor, players, offline }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [runHistory, tokenForm, confirmDelete, movingPins, pinUndo]);
+  }, [runHistory, tokenForm, confirmDelete, movingPins, pinUndo, obscuring]);
 
   /**
    * Escape ends the line you're drawing, and only that.
@@ -2927,7 +3160,7 @@ export default function Tabletop({ actor, players, offline }) {
    * everything else here, which is why it doesn't stop to ask.
    */
   useEffect(() => {
-    if (!drawing || !selectedShapeId) return;
+    if (!(drawing || obscuring) || !selectedShapeId) return;
     const onKey = (e) => {
       if (e.key !== 'Delete') return;
       // Delete inside a text box is a text box's own key - the label field in
@@ -2941,7 +3174,7 @@ export default function Tabletop({ actor, players, offline }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [drawing, selectedShapeId]);
+  }, [drawing, obscuring, selectedShapeId]);
 
   /**
    * Escape finishes the polygon being clicked out.
@@ -2980,8 +3213,37 @@ export default function Tabletop({ actor, players, offline }) {
    * decision was to go and do something else.
    */
   useEffect(() => {
-    if (!drawing || shapeTool !== 'poly') setPolyPoints(null);
-  }, [drawing, shapeTool]);
+    if (!(drawing || obscuring) || shapeTool !== 'poly') setPolyPoints(null);
+  }, [drawing, obscuring, shapeTool]);
+
+  /**
+   * Choosing a tool in obscuration mode puts the existing shapes down.
+   *
+   * Written as an effect on the tool rather than in the button that sets it,
+   * because the tool can be chosen from more than one place - the panel, and
+   * the Escape that finishes a polygon - and this has to hold however it got
+   * there.
+   */
+  useEffect(() => {
+    if (obscuring && shapeTool) setObscureEditing(false);
+  }, [obscuring, shapeTool]);
+
+  // Opening the mode starts you on the shapes that are already there.
+  useEffect(() => {
+    if (obscuring) setObscureEditing(true);
+  }, [obscuring]);
+
+  /**
+   * A selection belongs to the layer it was made on.
+   *
+   * Changing mode drops it rather than carrying it across, so that Delete and
+   * the panel's own buttons can never act on a shape from the layer you have
+   * just left - the two lists are separate and an id from one means nothing in
+   * the other.
+   */
+  useEffect(() => {
+    setSelectedShapeId(null);
+  }, [obscuring, obscureEditing]);
 
   function onContextMenu(e) {
     // Windows fires contextmenu on mouse-*up*, so a pan that finishes over a
@@ -3020,7 +3282,7 @@ export default function Tabletop({ actor, players, offline }) {
      * the corners are drawn on a layer the pointer passes straight through, so
      * that they never get in the way of the map itself.
      */
-    if (drawing && shapeTool === 'poly' && polyPoints?.length) {
+    if ((drawing || obscuring) && shapeTool === 'poly' && polyPoints?.length) {
       e.preventDefault();
       const surf = surfaceRef.current;
       if (!surf) return;
@@ -3550,6 +3812,15 @@ export default function Tabletop({ actor, players, offline }) {
     }
   }
 
+  function setObscureOpacity(next) {
+    setObscurePanelOpacity(next);
+    try {
+      localStorage.setItem(OBSCURE_OPACITY_KEY, String(next));
+    } catch {
+      // As above: it fades either way, it just won't be remembered.
+    }
+  }
+
   // Folding the panel is remembered per browser, not per visit: leaving the
   // tab unmounts the map, and a panel that unfolded itself every time you came
   // back would not be much of a preference.
@@ -4048,7 +4319,7 @@ export default function Tabletop({ actor, players, offline }) {
                 // Held still while a drawing tool is in hand or the ruler is
                 // out: setting a grid up needs the right-drag and the wheel,
                 // and in those modes both are already spoken for.
-                disabled={drawing || measuring || movingPins}
+                disabled={drawing || measuring || obscuring || movingPins}
                 title={
                   drawing
                     ? 'Put the drawing tool down to retune the grid'
@@ -4118,7 +4389,7 @@ export default function Tabletop({ actor, players, offline }) {
           onContextMenu={onContextMenu}
         >
           <div
-            className={`surface${drawing ? ' drawing' : ''}${measuring ? ' measuring' : ''}${movingPins ? ' moving-pins' : ''
+            className={`surface${drawing || obscuring ? ' drawing' : ''}${measuring ? ' measuring' : ''}${movingPins ? ' moving-pins' : ''
               }`}
             ref={surfaceRef}
             // A pointer that leaves the map has no cell to be in, so the leg in
@@ -4161,6 +4432,32 @@ export default function Tabletop({ actor, players, offline }) {
               viewBox={`0 0 ${mapW} ${mapH}`}
               aria-hidden="true"
             >
+              {/* What the DM has blacked out, as *shapes they can still reach*
+                  rather than as the wall the players get. Drawn at the working
+                  opacity so the map shows through the black: a shape laid over
+                  a corridor has to be placeable on the corridor.
+
+                  Only ever on the DM's screen. A player is sent these only once
+                  the thing is applied, and what they do with them is the layer
+                  further down - a solid mask, over everything, unreachable. */}
+              {isDm &&
+                obscureShapes.map((s) => {
+                  if (sketch?.id === s.id) return null;
+                  return (
+                    <ShapeMark
+                      key={s.id}
+                      shape={{ ...s, ...obscureLook(s) }}
+                      cell={gridSize}
+                      origin={{ x: gridOffX, y: gridOffY }}
+                      zoom={zoom}
+                      selected={obscuring && s.id === selectedShapeId}
+                      // Untouchable unless the existing shapes are what the
+                      // hand is on: with a tool chosen, a press anywhere has to
+                      // start a new shape, even over one that covers the lot.
+                      inert={!obscuring || !obscureEditing}
+                    />
+                  );
+                })}
               {shapes.map((s) => {
                 // The one under the hand is drawn from the gesture instead, so it
                 // isn't painted twice while it moves.
@@ -4172,7 +4469,8 @@ export default function Tabletop({ actor, players, offline }) {
                     cell={gridSize}
                     origin={{ x: gridOffX, y: gridOffY }}
                     zoom={zoom}
-                    selected={s.id === selectedShapeId}
+                    selected={!obscuring && s.id === selectedShapeId}
+                    inert={obscuring}
                   />
                 );
               })}
@@ -4342,6 +4640,64 @@ export default function Tabletop({ actor, players, offline }) {
               );
             })}
 
+            {/* The blackout, over everything on the board.
+
+                Over the tokens rather than under them because it is meant to
+                hide what is there, and a creature standing in a blacked-out
+                room that showed through would be the one thing this exists to
+                prevent. Inert to the pointer: a player cannot click what they
+                cannot see, and letting a press land on a token under the black
+                would be handing back exactly what was covered up.
+
+                One mask rather than one shape per hole. The obscuring shapes
+                paint the mask white - where the wall shows - and the clearing
+                ones paint it black again, so a clear shape wins wherever the
+                two overlap without either of them having to be redrawn. The
+                order is what makes that true, which is why the clears come
+                second. */}
+            {playerObscuration.on && playerObscuration.shapes.length > 0 && (
+              <svg
+                className="obscure-layer"
+                width={width}
+                height={height}
+                viewBox={`0 0 ${mapW} ${mapH}`}
+                aria-hidden="true"
+              >
+                <defs>
+                  <mask id={obscureMaskId} maskUnits="userSpaceOnUse">
+                    {/* Nothing shows through by default. */}
+                    <rect x="0" y="0" width={mapW} height={mapH} fill="black" />
+                    {playerObscuration.shapes
+                      .filter((s) => !s.clear)
+                      .map((s) => (
+                        <path
+                          key={s.id}
+                          d={shapePath(s, gridSize, { x: gridOffX, y: gridOffY })}
+                          fill="white"
+                        />
+                      ))}
+                    {playerObscuration.shapes
+                      .filter((s) => s.clear)
+                      .map((s) => (
+                        <path
+                          key={s.id}
+                          d={shapePath(s, gridSize, { x: gridOffX, y: gridOffY })}
+                          fill="black"
+                        />
+                      ))}
+                  </mask>
+                </defs>
+                <rect
+                  x="0"
+                  y="0"
+                  width={mapW}
+                  height={mapH}
+                  fill="#000"
+                  mask={`url(#${obscureMaskId})`}
+                />
+              </svg>
+            )}
+
             {/* The pins, over the tokens: a pin is stuck in the map in front of
               everything standing on it, and one hidden behind an ogre would be
               a pin nobody could click. Only while they are being shown, and
@@ -4366,7 +4722,7 @@ export default function Tabletop({ actor, players, offline }) {
                     // Read back by the right-click handler, which knows which
                     // element was hit rather than which pin it stands for.
                     data-pin-id={pin.id}
-                    className={`map-pin${drawing || measuring ? ' inert' : ''}${openPinIds.includes(pin.id) ? ' open' : ''
+                    className={`map-pin${drawing || measuring || obscuring ? ' inert' : ''}${openPinIds.includes(pin.id) ? ' open' : ''
                       }${movingPins ? (mine ? ' draggable' : ' locked') : ''}${dragging ? ' dragging' : ''}`}
                     style={{ left: spot.x * zoom, top: spot.y * zoom }}
                     title={
@@ -4554,6 +4910,7 @@ export default function Tabletop({ actor, players, offline }) {
                     // and a board that was both a drawing surface and a ruler
                     // would have to guess what a click meant.
                     setMeasureWindow(false);
+                    setObscureWindow(false);
                     setShapeWindow((open) => !open);
                   }}
                   aria-pressed={shapeWindow}
@@ -4571,6 +4928,7 @@ export default function Tabletop({ actor, players, offline }) {
                 onClick={() => {
                   setShapeTool(null);
                   setShapeWindow(false);
+                  setObscureWindow(false);
                   setMeasureWindow((open) => !open);
                 }}
                 aria-pressed={measureWindow}
@@ -4605,6 +4963,35 @@ export default function Tabletop({ actor, players, offline }) {
                   title="Who sees how far, and whether the lights are out"
                 >
                   Fog of War{fogActive ? ' (on)' : ''}
+                </button>
+              )}
+              {/* The DM's alone, and a mode: it takes the map over the way
+                  drawing does, so the two turn each other off. The fog and the
+                  turn order do not - neither is something you do *to* the
+                  board, and a DM blacking out a corridor mid-fight should not
+                  have to end the fight to do it. */}
+              {isDm && (
+                <button
+                  onClick={() => {
+                    setShapeTool(null);
+                    setShapeWindow(false);
+                    setMeasureWindow(false);
+                    setSelectedShapeId(null);
+                    setObscureWindow((open) => !open);
+                  }}
+                  aria-pressed={obscureWindow}
+                  className={obscuration.on ? 'active' : ''}
+                  disabled={offline || movingPins || Boolean(povTokenId)}
+                  title="Black out parts of the map by hand"
+                >
+                  {/* The name stays the name whether the panel is open or
+                      not - it is the thing this button is about, and a button
+                      that renamed itself on being pressed is one you have to
+                      re-read to find again. Whether it is *pressed* is said by
+                      the lit state and by aria-pressed, which is what those are
+                      for. "(on)" is a different fact: the table is looking at
+                      it, said the way the fog button says the same thing. */}
+                  Obscuration mode{obscuration.on ? ' (on)' : ''}
                 </button>
               )}
             </div>
@@ -5162,6 +5549,31 @@ export default function Tabletop({ actor, players, offline }) {
           }
           onSubmit={submitToken}
           onClose={() => setTokenForm(null)}
+        />
+      )}
+
+      {obscureWindow && isDm && (
+        <ObscurationSettings
+          obscuration={obscuration}
+          panelOpacity={obscurePanelOpacity}
+          onPanelOpacity={setObscureOpacity}
+          tool={shapeTool}
+          clear={obscureClear}
+          editing={obscureEditing}
+          onEditing={() => {
+            setShapeTool(null);
+            setObscureEditing(true);
+          }}
+          onTool={setShapeTool}
+          onClear={setObscureClear}
+          onOpacity={(opacity) => saveObscuration({ opacity })}
+          onApply={(on) => saveObscuration({ on })}
+          onClose={() => {
+            setShapeTool(null);
+            setSelectedShapeId(null);
+            setObscureWindow(false);
+          }}
+          offline={offline}
         />
       )}
 
