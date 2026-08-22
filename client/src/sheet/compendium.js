@@ -28,11 +28,14 @@
  * is on the screen the reader is looking at while they decide.
  */
 
-import { ARMOR_TYPES, DEX_CAPS } from './rules.js';
+import { ARMOR_TYPES, DEX_CAPS, SPELL_SCHOOLS } from './rules.js';
 import { DAMAGE_DICE } from '../dice.js';
 import { contentsOf, nameOf, proseOf } from '../srd.js';
 
 const CAP_VALUES = DEX_CAPS.map((c) => c.value);
+
+/** Whatever the book gave, as a trimmed string. Nothing becomes ''. */
+const text = (v) => String(v ?? '').trim();
 
 /**
  * Everything an entry has to say in words, as one block of text.
@@ -272,6 +275,108 @@ export function attackTemplate(node) {
   return fields;
 }
 
+/* ---------------------------------------------------------------------------
+   Spells.
+   ------------------------------------------------------------------------ */
+
+/**
+ * The fields of a spell row, from one compendium entry.
+ *
+ * The closest of the four to a straight copy: the sheet's spell already has a
+ * box for nearly everything the book prints, because both are describing the
+ * same thing. Where the sheet has no box the fact is folded into the nearest
+ * one that will hold it rather than dropped - a ritual is written onto the
+ * casting time and concentration onto the duration, which is how the books
+ * themselves write both.
+ *
+ * `prepared` is not touched. Whether this character has it ready today is the
+ * one thing on the row that is about them rather than about the spell.
+ */
+export function spellTemplate(node) {
+  const level = Number.isFinite(Number(node?.level)) ? Number(node.level) : 0;
+  const school = nameOf(node?.school);
+
+  const fields = {
+    name: node?.name || '',
+    level,
+    // Only a school the sheet's own list knows. The eight match by name, but a
+    // value the select cannot show is a box nobody can read or correct.
+    school: SPELL_SCHOOLS.includes(school) ? school : '',
+    castingTime: [text(node?.casting_time), node?.ritual === true ? '(ritual)' : '']
+      .filter(Boolean)
+      .join(' '),
+    range: text(node?.range) || '',
+    area: node?.area_of_effect?.size
+      ? `${node.area_of_effect.size} ft ${nameOf(node.area_of_effect.type) || ''}`.trim()
+      : '',
+    duration: node?.concentration === true
+      ? `Concentration, ${lowerFirst(text(node?.duration) || '')}`.trim()
+      : text(node?.duration) || '',
+    components: {
+      v: componentsOf(node).includes('V'),
+      s: componentsOf(node).includes('S'),
+      m: componentsOf(node).includes('M'),
+    },
+    materials: text(node?.material) || '',
+    attackSave: attackSaveText(node),
+    // The damage type, or "Healing" for the spells that mend rather than hurt:
+    // the book files those under a separate property with no type on it, and a
+    // blank box beside Cure Wounds says less than it could.
+    damageEffect: nameOf(node?.damage?.damage_type) || (node?.heal_at_slot_level ? 'Healing' : ''),
+    description: proseText(node),
+  };
+
+  /* The dice.
+
+     A spell that grows carries a table rather than one roll, so the row is
+     given the rung it starts on: the slot the spell is written for, or for a
+     cantrip the one a first-level caster throws. That is the honest default -
+     it is what the spell does as written, and the ladder is printed in the
+     description underneath for whoever casts it bigger.
+
+     Whether there is a roll to hit is not guessed. The book saying `attack_type`
+     is it saying this spell is an attack, and the book saying `dc` is it saying
+     just as plainly that it is not - so a save spell clears the to-hit rather
+     than leaving one behind from whatever the row used to be. An entry that says
+     neither leaves both alone. */
+  const dice = parseDice(
+    node?.damage?.damage_at_slot_level?.[level] ?? node?.damage?.damage_at_character_level?.[1]
+  );
+  if (dice) fields.damage = { ...dice, modifier: 0, ability: '' };
+
+  if (node?.attack_type) {
+    fields.toHit = { count: 1, sides: 20, modifier: 0, ability: '' };
+    // The flag the sheet already has for exactly this: proficiency plus the
+    // casting ability, worked out rather than typed, so it survives levelling.
+    fields.useAttackBonus = true;
+  } else if (node?.dc?.dc_type) {
+    fields.toHit = null;
+    fields.useAttackBonus = false;
+  }
+
+  return fields;
+}
+
+/** "V", "S", "M" as the book lists them, whatever case it used. */
+const componentsOf = (node) =>
+  (Array.isArray(node?.components) ? node.components : [])
+    .map((c) => String(c ?? '').trim().toUpperCase());
+
+const lowerFirst = (v) => (v ? v[0].toLowerCase() + v.slice(1) : '');
+
+/** "Ranged attack", "DEX save (half on a success)", or nothing. */
+function attackSaveText(node) {
+  if (node?.attack_type) {
+    const kind = String(node.attack_type);
+    return `${kind[0].toUpperCase()}${kind.slice(1)} attack`;
+  }
+  if (node?.dc?.dc_type) {
+    const onSuccess = node.dc.dc_success === 'half' ? ' (half on a success)' : '';
+    return `${nameOf(node.dc.dc_type)} save${onSuccess}`;
+  }
+  return '';
+}
+
 /**
  * The categories worth offering when the errand is an attack.
  *
@@ -282,7 +387,7 @@ export function attackTemplate(node) {
  * Not staves, rods or wands. They can certainly be attacked with, but the book
  * files them as magic items with no damage in them, so they would fill in a
  * name and leave every die untouched - and they are all still there in the
- * Item Compendium tab for anybody who wants to read one.
+ * Compendia tab for anybody who wants to read one.
  */
 export const WEAPON_CATEGORIES = [
   'weapon',

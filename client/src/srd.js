@@ -42,11 +42,54 @@
  */
 
 import { api } from './api.js';
+import {
+  SPELL_LEVELS,
+  SPELL_SCHOOLS,
+  spellLevelLabel,
+  spellLevelName,
+} from './sheet/rules.js';
 
-/** A path this app is willing to follow. See routes/srd.js, which agrees. */
-const READABLE = /^\/api\/2014\/(equipment-categories(\/[a-z0-9-]+)?|equipment\/[a-z0-9-]+|magic-items\/[a-z0-9-]+)$/;
-
-export const isReadable = (path) => READABLE.test(String(path || ''));
+/**
+ * The two ways into the spell shelf.
+ *
+ * Equipment has an endpoint that lists its categories. Spells do not: there are
+ * three hundred and nineteen of them in one flat list, and the only way to ask
+ * for a slice is a filter. So the rows are written out here from the ten levels
+ * and the eight schools the game has, both of which this app already knows,
+ * because a character sheet asks for exactly the same ten and eight.
+ *
+ * Two rows and one choice. A spell belongs to a level and to a school and
+ * neither is more its category than the other: somebody looking for something
+ * to put in a 3rd level slot and somebody looking for a divination are asking
+ * different questions and both are fair. Picking from one row clears the other,
+ * because those are different questions rather than a narrowing of one.
+ *
+ * The levels stay in level order rather than being alphabetised with everything
+ * else. "Cantrip, 1st, 2nd" is the order that row means; sorted by name it
+ * would read "1st, 2nd, ... 9th, Cantrips", which is nobody's idea of a spell
+ * list. The schools are alphabetical, which is the order the game lists them in
+ * and the only order that suggests itself.
+ *
+ * Here rather than in the tab that draws them because the character sheet opens
+ * the same shelf in a window when somebody is filling a spell in, and two copies
+ * of this would be two lists to keep in step.
+ */
+export const SPELL_CATEGORIES = [
+  ...SPELL_LEVELS.map((level) => ({
+    index: `level-${level}`,
+    name: level === 0 ? 'Cantrips' : `${spellLevelLabel(level)} level`,
+    url: `/api/2014/spells?level=${level}`,
+    group: 'By level',
+  })),
+  ...SPELL_SCHOOLS.map((school) => ({
+    index: `school-${school.toLowerCase()}`,
+    name: school,
+    // The filter wants the index the API files the school under, which is the
+    // name in lower case for all eight of them.
+    url: `/api/2014/spells?school=${school.toLowerCase()}`,
+    group: 'By school',
+  })),
+];
 
 /**
  * The least time a load may take, in milliseconds.
@@ -134,6 +177,31 @@ const yesNo = (v) => (v === true ? 'Yes' : v === false ? 'No' : null);
 const money = (cost) =>
   cost && cost.quantity !== undefined ? `${cost.quantity} ${cost.unit ?? ''}`.trim() : null;
 
+/** "1st", "3rd", "17th". Needed past 9th, where the spell ordinals stop. */
+const ordinal = (n) => {
+  const i = Math.abs(Math.round(Number(n) || 0));
+  const tens = i % 100;
+  if (tens >= 11 && tens <= 13) return `${i}th`;
+  return `${i}${['th', 'st', 'nd', 'rd'][i % 10] || 'th'}`;
+};
+
+/**
+ * One of the book's scaling tables, on a line: "3rd 8d6 - 4th 9d6 - ...".
+ *
+ * A spell that grows carries an object keyed by the slot it was cast with, or
+ * for a cantrip by the caster's own level. Read in key order as numbers, since
+ * an object keyed "11" and "5" is not in any order worth trusting.
+ */
+const scaling = (table) => {
+  if (!table || typeof table !== 'object') return null;
+  const steps = Object.entries(table)
+    .map(([at, dice]) => [Number(at), dice])
+    .filter(([at]) => Number.isFinite(at))
+    .sort((a, b) => a[0] - b[0])
+    .map(([at, dice]) => `${ordinal(at)} ${dice}`);
+  return steps.length ? steps.join(' · ') : null;
+};
+
 /** "1d8 slashing", the way a sheet writes it. */
 const damage = (d) => {
   if (!d?.damage_dice) return null;
@@ -163,6 +231,55 @@ export function describe(node) {
     const value = raw && typeof raw === 'object' ? nameOf(raw) : raw;
     if (value !== null && value !== undefined && value !== '') rows.push({ label, value });
   };
+
+  /* Spells.
+
+     A spell and a piece of equipment never share a field, so both live in the
+     one function and each entry answers only to the rows it has something for -
+     which is how this was built for the six shapes of equipment in the first
+     place. The guards below are about *which* shape rather than about spells
+     being special: `range` is a string on a spell and a pair of numbers on a
+     bow, and only one of the two rows can fire. */
+  if (node.school) {
+    add('Level', spellLevelName(node.level));
+    add('School', nameOf(node.school));
+  }
+  add('Casting time', text(node.casting_time));
+  if (typeof node.range === 'string') add('Range', node.range);
+  if (Array.isArray(node.components) && node.components.length) {
+    add('Components', node.components.map(nameOf).filter(Boolean).join(', '));
+  }
+  add('Materials', text(node.material));
+  add('Duration', text(node.duration));
+  // Only when true. "Ritual: No" and "Concentration: No" on three hundred
+  // spells is two rows of nothing, and the absence says the same thing.
+  if (node.concentration === true) add('Concentration', 'Yes');
+  if (node.ritual === true) add('Ritual', 'Yes');
+  if (node.area_of_effect?.size) {
+    add('Area', `${node.area_of_effect.size} ft ${nameOf(node.area_of_effect.type) || ''}`.trim());
+  }
+  // The book writes this one in lower case ("ranged", "melee") where every
+  // other value on the entry is capitalised. It is a value in a table here, not
+  // a word in a sentence, so it matches the rest of the column.
+  const attackType = text(node.attack_type);
+  add('Attack', attackType && attackType[0].toUpperCase() + attackType.slice(1));
+  if (node.dc?.dc_type) {
+    // "half" is the common one and worth spelling out; the rest of the book's
+    // words for this read well enough as they are.
+    const onSuccess = node.dc.dc_success === 'half' ? ' (half on a success)' : '';
+    add('Save', `${nameOf(node.dc.dc_type)}${onSuccess}`);
+  }
+  if (node.school) {
+    add('Damage type', nameOf(node.damage?.damage_type));
+    add('Damage by slot', scaling(node.damage?.damage_at_slot_level));
+    // A cantrip does not scale with the slot, because it has none: it grows
+    // with the caster, and this table is the only place the book says so.
+    add('Damage by level', scaling(node.damage?.damage_at_character_level));
+    add('Healing by slot', scaling(node.heal_at_slot_level));
+    if (Array.isArray(node.classes) && node.classes.length) {
+      add('Classes', node.classes.map(nameOf).filter(Boolean).join(', '));
+    }
+  }
 
   add('Category', nameOf(node.equipment_category));
   add(
@@ -222,5 +339,9 @@ export const contentsOf = (node) =>
 /** The paragraphs an entry carries, under the heading they belong to. */
 export const proseOf = (node) => [
   { heading: 'Description', lines: Array.isArray(node?.desc) ? node.desc.filter(Boolean) : [] },
+  {
+    heading: 'At higher levels',
+    lines: Array.isArray(node?.higher_level) ? node.higher_level.filter(Boolean) : [],
+  },
   { heading: 'Special', lines: Array.isArray(node?.special) ? node.special.filter(Boolean) : [] },
 ];

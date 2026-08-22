@@ -37,6 +37,23 @@ const ROOT = '/api/2014/equipment-categories';
  * potions. Both are the caller's business and neither changes the walk.
  */
 export default function Compendium({
+  /**
+   * The row across the top, where the caller knows it and the API does not.
+   *
+   * `[{ index, name, url, group }]`, the same shape the equipment categories
+   * arrive in plus an optional caption. Left out for equipment, which has a
+   * real endpoint listing its categories; supplied for spells, where the shelf
+   * has no such endpoint and is divided by a filter on the list.
+   *
+   * `group` is what lets a shelf be divided two ways at once. Spells can be
+   * asked for by level or by school and neither is the right answer, so both
+   * rows are offered under their own caption. Without it the eighteen buttons
+   * would be one undifferentiated row and "Evocation" would look like a level.
+   * Categories with no group are drawn as one row with no caption, which is
+   * every equipment shelf. Either way the walk below is identical: a category
+   * is a url that answers with a list.
+   */
+  categories: given = null,
   // Category indexes to show, as they appear in the API ('armor', 'shields').
   // Null for the lot.
   only = null,
@@ -44,6 +61,8 @@ export default function Compendium({
   // entry. Absent means no button, which is the reading-only case.
   onUse = null,
   useLabel = 'Use as template',
+  emptyHint = 'Pick a category to see what is in it.',
+  catsLabel = 'Equipment categories',
 }) {
   const [categories, setCategories] = useState([]);
   // Which category's button is lit, by index ('armor'). Empty before a choice.
@@ -70,6 +89,14 @@ export default function Compendium({
   const onlyKey = only ? only.join(',') : '';
 
   const loadCategories = useCallback(async () => {
+    // Nothing to fetch when the caller brought its own. Kept in order, which
+    // for spells is by level rather than by name - "Cantrip, 1st, 2nd" is the
+    // order that row means, and alphabetising it would be nonsense.
+    if (given) {
+      setCategories(given);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -84,7 +111,7 @@ export default function Compendium({
     } finally {
       setLoading(false);
     }
-  }, [onlyKey]);
+  }, [given, onlyKey]);
 
   useEffect(() => {
     loadCategories();
@@ -131,6 +158,23 @@ export default function Compendium({
     }
   }, []);
 
+  /**
+   * The categories, in their rows.
+   *
+   * `[[caption, categories]]`, in the order the caller gave them, so a shelf
+   * with no captions comes back as the single unlabelled row it always was.
+   * One filter is chosen at a time whichever row it came from: asking for
+   * Evocation is a different question from asking for 3rd level, not an extra
+   * condition on it, and `chosen` holding one index is what says so.
+   */
+  const groups = [];
+  for (const c of categories) {
+    const group = c.group || '';
+    const last = groups[groups.length - 1];
+    if (last && last[0] === group) last[1].push(c);
+    else groups.push([group, [c]]);
+  }
+
   /** A category from the row above: the trail starts again at that category. */
   const openCategory = (category) => {
     setChosen(category.index);
@@ -156,23 +200,28 @@ export default function Compendium({
     <div className="items-view">
       {/* The categories. Always on screen once they have loaded, so that moving
           from one to the next is one click rather than a click and a Back. */}
-      {categories.length > 0 && (
-        <div className="items-cats" role="tablist" aria-label="Equipment categories">
-          {categories.map((c) => (
-            <button
-              key={c.index}
-              type="button"
-              role="tab"
-              aria-selected={chosen === c.index}
-              className={chosen === c.index ? 'active' : ''}
-              disabled={loading}
-              onClick={() => openCategory(c)}
-            >
-              {c.name}
-            </button>
-          ))}
+      {groups.map(([group, inGroup]) => (
+        <div key={group} className="items-cats-row">
+          {/* Only where there is more than one way in. One unlabelled row is
+              what a shelf with a single axis has always looked like. */}
+          {group && <span className="items-cats-label">{group}</span>}
+          <div className="items-cats" role="tablist" aria-label={group || catsLabel}>
+            {inGroup.map((c) => (
+              <button
+                key={c.index}
+                type="button"
+                role="tab"
+                aria-selected={chosen === c.index}
+                className={chosen === c.index ? 'active' : ''}
+                disabled={loading}
+                onClick={() => openCategory(c)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+      ))}
 
       {/* Where you are, and the way back out of it. The categories above never
           leave the screen, so this only has to cover the steps taken inside one
@@ -219,7 +268,7 @@ export default function Compendium({
       )}
 
       {!loading && !error && !entry && !choices.length && categories.length > 0 && (
-        <p className="empty">Pick a category to see what is in it.</p>
+        <p className="empty">{emptyHint}</p>
       )}
     </div>
   );

@@ -18,7 +18,9 @@ import Compendium from './Compendium.jsx';
  */
 export default function CompendiumModal({
   title = 'Compendium',
+  categories = null,
   only = null,
+  emptyHint,
   useLabel = 'Use as template',
   onUse,
   onClose,
@@ -59,7 +61,9 @@ export default function CompendiumModal({
               errand, so leaving it open afterwards would only ask to be
               dismissed a second time. */}
           <Compendium
+            categories={categories}
             only={only}
+            {...(emptyHint ? { emptyHint } : {})}
             useLabel={useLabel}
             onUse={(node) => {
               onUse(node);

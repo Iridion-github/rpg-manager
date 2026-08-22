@@ -45,6 +45,15 @@ const ALLOWED = [
   /^\/api\/2014\/equipment-categories\/[a-z0-9-]+$/,
   /^\/api\/2014\/equipment\/[a-z0-9-]+$/,
   /^\/api\/2014\/magic-items\/[a-z0-9-]+$/,
+  // Spells. The list takes a filter, which is how that shelf is divided up -
+  // there is no endpoint listing the levels or the schools, so the app asks for
+  // one of them at a time. Spelled out one filter at a time rather than
+  // allowing any query string, so this stays a list of the exact requests the
+  // app makes.
+  /^\/api\/2014\/spells$/,
+  /^\/api\/2014\/spells\?level=[0-9]$/,
+  /^\/api\/2014\/spells\?school=[a-z]+$/,
+  /^\/api\/2014\/spells\/[a-z0-9-]+$/,
 ];
 
 /**

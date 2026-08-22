@@ -13,8 +13,17 @@ import CompendiumModal from '../CompendiumModal.jsx';
  * `only` narrows the categories to what could go in the row that opened it, and
  * is the caller's judgement: armour offers armour, an attack offers weapons,
  * and the inventory offers everything, because anything at all can be carried.
+ * `categories` swaps the shelf outright rather than narrowing it, which is how
+ * a spell row opens the spells instead of the equipment.
  */
-export default function CompendiumButton({ title, only = null, onUse, label = 'Compendium' }) {
+export default function CompendiumButton({
+  title,
+  categories = null,
+  only = null,
+  emptyHint,
+  onUse,
+  label = 'Compendium',
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,7 +40,9 @@ export default function CompendiumButton({ title, only = null, onUse, label = 'C
       {open && (
         <CompendiumModal
           title={title}
+          categories={categories}
           only={only}
+          emptyHint={emptyHint}
           onUse={onUse}
           onClose={() => setOpen(false)}
         />

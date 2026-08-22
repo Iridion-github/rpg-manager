@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Area, Select, Text } from './fields.jsx';
+import CompendiumButton from './CompendiumButton.jsx';
 import DiceModal from '../DiceModal.jsx';
 import Shareable from './Shareable.jsx';
+import { spellTemplate } from './compendium.js';
+import { SPELL_CATEGORIES } from '../srd.js';
 import { TO_HIT_DICE, DAMAGE_DICE, notation } from '../dice.js';
 import {
   SPELL_LEVELS,
@@ -54,6 +57,30 @@ export default function SpellRow({
   return (
     <Shareable sharing={sharing} share={share} onPick={onPick}>
       <div className={`spell-row${open ? ' open' : ''}`}>
+        {/* The buttons that act on the whole spell rather than on one of its
+            boxes, on a line of their own at the right edge - the same strip the
+            inventory and the attacks carry. It stays put whether the entry is
+            folded open or shut: fetching a spell from the book is a thing you
+            do to a row you have just added, which is a row nobody has opened
+            yet. */}
+        {!readOnly && (
+          <div className="item-tools">
+            <CompendiumButton
+              title="Compendium: spells"
+              categories={SPELL_CATEGORIES}
+              emptyHint="Pick a level or a school to see the spells in it."
+              onUse={(node) => onPatch(spellTemplate(node))}
+            />
+            <button
+              className="del"
+              onClick={() => onRemove(spell.id)}
+              title={spell.name ? `Remove ${spell.name}` : 'Remove this spell'}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="spell-head">
           {/* Cantrips are never prepared - they are simply known - so the tick
               that says so is not offered on them. */}
@@ -97,15 +124,6 @@ export default function SpellRow({
           >
             {open ? '▴' : '▾'}
           </button>
-          {!readOnly && (
-            <button
-              className="del"
-              onClick={() => onRemove(spell.id)}
-              title={spell.name ? `Remove ${spell.name}` : 'Remove this spell'}
-            >
-              ✕
-            </button>
-          )}
         </div>
 
         {/* Only while it is shut: open, the boxes themselves say all of this,

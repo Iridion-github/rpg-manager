@@ -409,14 +409,14 @@ export default function App() {
                   >
                     Tokens
                   </button>
-                  {/* A reference shelf rather than anything belonging to this
-                  table, so everybody gets it: looking up what a shield costs is
-                  not a thing the DM should have to be asked for. */}
+                  {/* The reference shelves rather than anything belonging to
+                  this table, so everybody gets them: looking up what a shield
+                  costs is not a thing the DM should have to be asked for. */}
                   <button
                     className={activeTab === 'items' ? 'active' : ''}
                     onClick={() => setTab('items')}
                   >
-                    Item Compendium
+                    Compendia
                   </button>
                   {/* Last, and for everyone: who is at this table is not the DM's
                   private information - the members endpoint has always been

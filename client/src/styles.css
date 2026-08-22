@@ -3880,12 +3880,17 @@ button.token-tile:hover {
    A card like a piece of armour, because it holds the same kind of thing: a
    handful of named boxes that have to read as one entry. Shut, it is the line
    it always was; open, the entry is underneath. */
+/* A little more room than the line of boxes strictly needs. These rows sit one
+   under another twenty deep and a list packed tight is a list you read as a
+   block of text rather than as separate spells. */
 .spell-row {
   background: #10131a;
   border: 1px solid #262b38;
   border-radius: 8px;
-  padding: 0.35rem 0.4rem;
-  margin-top: 0.3rem;
+  padding: 0.5rem 0.5rem 0.6rem;
+  margin-top: 0.45rem;
+  display: grid;
+  gap: 0.35rem;
 }
 
 .spell-row.open {
@@ -6721,17 +6726,34 @@ button.token-tile:hover {
 }
 
 /* --- the equipment shelf --- */
-/* The tab it lives in. The shelf itself carries no page furniture, because the
-   same component is also opened inside a window from a character sheet. */
+/* The tab it lives in. Left-aligned under a width limit, like the roster and
+   the token library beside it: the shell supplies the padding, and a view that
+   centred itself would be the only one on the row that moved as the window
+   resized. The shelf itself carries no page furniture at all, because the same
+   component is also opened inside a window from a character sheet. */
 .items-page {
-  padding: 1rem;
-  max-width: 60rem;
-  margin: 0 auto;
+  max-width: 1200px;
 }
 
 .items-title {
   margin: 0 0 0.25rem;
   font-size: 1.1rem;
+}
+
+/* One way into the shelf, where there is more than one. The caption sits above
+   its row rather than beside it: the rows wrap, and a label in the flow would
+   end up in the middle of the buttons at a narrow width. */
+.items-cats-row + .items-cats-row {
+  margin-top: -0.4rem;
+}
+
+.items-cats-label {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8b90a0;
+  margin-bottom: 0.3rem;
 }
 
 /* The categories, wrapping across the top. Thirty-nine of them, so a row that
