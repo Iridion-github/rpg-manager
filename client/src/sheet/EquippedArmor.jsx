@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Num, Select } from './fields.jsx';
+import { Area, Num, Select } from './fields.jsx';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
+import CompendiumButton from './CompendiumButton.jsx';
 import MediaField from './MediaField.jsx';
 import Shareable from './Shareable.jsx';
+import { ARMOR_CATEGORIES, armorTemplate } from './compendium.js';
 import {
   ARMOR_DEFAULTS,
   ARMOR_TYPES,
@@ -89,10 +91,33 @@ export default function EquippedArmor({
     onChange(on ? wearOnly(next, id) : next);
   }
 
+  /**
+   * Fill a row in from the book.
+   *
+   * Everything the entry describes, and nothing it does not: see
+   * compendium.js, which says what is deliberately left alone and why. The
+   * shield rule has to run afterwards, because a suit of plate turned into a
+   * shield - or the other way about - may now be competing with something else
+   * already worn, exactly as it would if the type had been changed by hand.
+   */
+  function useTemplate(id, node) {
+    const fields = armorTemplate(node);
+    let next = armor.map((a) => (a.id === id ? { ...a, ...fields } : a));
+    if (fields.type !== undefined) next = wearOnly(next, id);
+    onChange(next);
+  }
+
   const add = () =>
     onChange([
       ...armor,
-      { id: uid(), name: '', type: 'Clothes', ...ARMOR_DEFAULTS.Clothes, equipped: false },
+      {
+        id: uid(),
+        name: '',
+        type: 'Clothes',
+        ...ARMOR_DEFAULTS.Clothes,
+        description: '',
+        equipped: false,
+      },
     ]);
 
   return (
@@ -126,13 +151,24 @@ export default function EquippedArmor({
                 onChange={(e) => setField(a.id, 'name', e.target.value)}
               />
               {!readOnly && (
-                <button
-                  className="del"
-                  onClick={() => setConfirmId(a.id)}
-                  title={a.name ? `Remove ${a.name}` : 'Remove this armor'}
-                >
-                  ✕
-                </button>
+                <>
+                  {/* Straight to the book, filtered to what could go in this
+                      row. Beside the name it fills in, and left of the delete
+                      so the destructive button stays where it has always
+                      been - the end of the row. */}
+                  <CompendiumButton
+                    title="Compendium: armor and shields"
+                    only={ARMOR_CATEGORIES}
+                    onUse={(node) => useTemplate(a.id, node)}
+                  />
+                  <button
+                    className="del"
+                    onClick={() => setConfirmId(a.id)}
+                    title={a.name ? `Remove ${a.name}` : 'Remove this armor'}
+                  >
+                    ✕
+                  </button>
+                </>
               )}
             </div>
 
@@ -174,6 +210,19 @@ export default function EquippedArmor({
               />
               Stealth disadvantage
             </label>
+
+            {/* What it does that the numbers do not say: the resistance on a
+                suit of adamantine, the rule the DM made up for it. Under the
+                boxes rather than among them, because it is a paragraph and they
+                are a line. Filled in for you when the row came from the
+                compendium and the entry had rules text. */}
+            <Area
+              label="Description"
+              rows={3}
+              value={a.description ?? ''}
+              readOnly={readOnly}
+              onChange={(v) => setField(a.id, 'description', v)}
+            />
 
             {/* What it looks like. A still, like the inventory's: a suit of
                 plate is not a thing that moves. */}

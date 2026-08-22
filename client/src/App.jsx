@@ -416,7 +416,7 @@ export default function App() {
                     className={activeTab === 'items' ? 'active' : ''}
                     onClick={() => setTab('items')}
                   >
-                    Items
+                    Item Compendium
                   </button>
                   {/* Last, and for everyone: who is at this table is not the DM's
                   private information - the members endpoint has always been

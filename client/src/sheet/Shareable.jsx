@@ -75,6 +75,12 @@ export function shareProps({ sharing, share, onPick, label }) {
  * answers that.
  */
 export function SharePreviewModal({ share, busy, error, onCancel, onSend }) {
+  // Its own, not the wrapper's. These are two components in one file and the
+  // hook above belongs to the other one, so reaching for it from here found
+  // nothing at all and took the whole app down with it the moment anybody
+  // pressed a row in sharing mode.
+  const portalTarget = usePortalTarget();
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onCancel();

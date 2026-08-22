@@ -11,6 +11,12 @@ import GlobalModifiers from './GlobalModifiers.jsx';
 import AcModifiers from './AcModifiers.jsx';
 import EquippedArmor from './EquippedArmor.jsx';
 import ItemList from './ItemList.jsx';
+import CompendiumButton from './CompendiumButton.jsx';
+import {
+  WEAPON_CATEGORIES,
+  attackTemplate,
+  inventoryTemplate,
+} from './compendium.js';
 import SpellRow from './SpellRow.jsx';
 import Shareable, { SharePreviewModal, shareProps } from './Shareable.jsx';
 import MediaField from './MediaField.jsx';
@@ -118,6 +124,13 @@ const INVENTORY_FIELDS = [
   { key: 'quantity', label: 'Qty', kind: 'int', width: 'narrow', placeholder: '–' },
   { key: 'title', label: 'Item', kind: 'text', width: 'grow', placeholder: 'Rope, 50 ft' },
   { key: 'weight', label: 'Weight', kind: 'num', width: 'narrow', placeholder: '–' },
+  {
+    key: 'description',
+    label: 'Description',
+    kind: 'area',
+    rows: 2,
+    placeholder: 'What it does, what is in it, who it was taken from',
+  },
 ];
 
 /**
@@ -193,6 +206,7 @@ export default function CharacterSheet({
 
   const set = (path) => (value) => onChange(setIn(sheet, path, value));
   const pb = proficiencyBonus(sheet.level);
+
 
   /**
    * Hands off, whichever reason there is for it.
@@ -572,6 +586,19 @@ function MainPage({
   // once rather than spelled out forty times.
   const share = (payload) => ({ sharing, share: payload, onPick });
 
+  /**
+   * Write one inventory row from a compendium entry.
+   *
+   * Through `inventoryRows` rather than off `sheet.equipment` directly, because
+   * an old sheet keeps its kit as a block of text and that helper is what turns
+   * it into rows with ids - the row the button belongs to may not exist as a
+   * row anywhere else yet.
+   */
+  const setInventoryFrom = (id, node) => {
+    const fields = inventoryTemplate(node);
+    set('equipment')(inventoryRows(sheet).map((r) => (r.id === id ? { ...r, ...fields } : r)));
+  };
+
   const attacks = sheet.attacks || [];
   // Which attack field is currently being picked: { id, field }.
   const [picking, setPicking] = useState(null);
@@ -621,10 +648,26 @@ function MainPage({
       ...sheet,
       attacks: attacks.map((a) => (a.id === id ? { ...a, [field]: value } : a)),
     });
+
+  /**
+   * Write one attack from a compendium entry.
+   *
+   * Whatever the entry can say, over whatever the row already held: see
+   * compendium.js, which is where the reason for each field being set or left
+   * alone is written down.
+   */
+  const setAttackFrom = (id, node) =>
+    onChange({
+      ...sheet,
+      attacks: attacks.map((a) => (a.id === id ? { ...a, ...attackTemplate(node) } : a)),
+    });
   const addAttack = () =>
     onChange({
       ...sheet,
-      attacks: [...attacks, { id: uid(), name: '', toHit: null, damage: null, damageType: '' }],
+      attacks: [
+        ...attacks,
+        { id: uid(), name: '', toHit: null, damage: null, damageType: '', description: '' },
+      ],
     });
   const removeAttack = (id) =>
     onChange({ ...sheet, attacks: attacks.filter((a) => a.id !== id) });
@@ -936,6 +979,13 @@ function MainPage({
                   onPickDice={(field) => setPicking({ id: a.id, field })}
                   onRemove={() => setConfirmAttackId(a.id)}
                   onRoll={askAttack}
+                  tools={
+                    <CompendiumButton
+                      title="Compendium: weapons"
+                      only={WEAPON_CATEGORIES}
+                      onUse={(node) => setAttackFrom(a.id, node)}
+                    />
+                  }
                 >
                   {/* What it looks like when it lands. Kept to a thumbnail on
                       the sheet however big the file is: this is a sheet, and
@@ -1072,6 +1122,16 @@ function MainPage({
           emptyLabel="Carrying nothing yet."
           noun="this item"
           fields={INVENTORY_FIELDS}
+          /* Anything at all can be carried, so nothing is filtered out here.
+             The row gets the entry's name, what one of them weighs, and what
+             there is to say about it; how many you have is left alone, being
+             the one thing on the row the book cannot know. */
+          rowTools={(row) => (
+            <CompendiumButton
+              title="Compendium"
+              onUse={(node) => setInventoryFrom(row.id, node)}
+            />
+          )}
           // A picture of the thing, under each row. Stills only: a bag of kit
           // where every third line is playing an animation to itself is a list
           // nobody can read down.

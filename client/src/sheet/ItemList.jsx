@@ -57,6 +57,17 @@ export default function ItemList({
    * Dwarvish" is not.
    */
   media = null,
+  /**
+   * Extra buttons for each row, drawn on a line of their own above it.
+   *
+   * A function of the row, or nothing at all. Given one, the row grows a strip
+   * across the top holding whatever it returns and the delete button at the
+   * right edge; without it the delete stays where it has always been, at the
+   * end of the boxes. Only the inventory asks for this so far - it is the list
+   * with somewhere to go and fetch a row from, and a strip of buttons over
+   * every language a character speaks would be furniture for nothing.
+   */
+  rowTools = null,
 }) {
   // Same reasoning as the armour and attack rows: one click, and a sheet has
   // no undo. The dialog names the row so that a column of identical ✕ buttons
@@ -66,6 +77,9 @@ export default function ItemList({
 
   const inline = fields.filter((f) => f.kind !== 'area');
   const areas = fields.filter((f) => f.kind === 'area');
+  // Whether rows get the strip along the top. Asked once, so the two halves of
+  // the decision below cannot drift into a row with two delete buttons or none.
+  const tools = Boolean(rowTools);
 
   const setField = (id, key, value) =>
     onChange(items.map((item) => (item.id === id ? { ...item, [key]: value } : item)));
@@ -98,6 +112,24 @@ export default function ItemList({
             onPick={onPick}
           >
           <li className="item-row">
+            {/* The buttons, on their own line at the top when the list has any
+                beyond the delete. Right-aligned and away from the boxes: they
+                act on the whole row rather than on a field, and the delete in
+                particular is better off nowhere near the box somebody is
+                tabbing through. */}
+            {tools && !readOnly && (
+              <div className="item-tools">
+                {rowTools(item)}
+                <button
+                  className="del"
+                  onClick={() => setConfirmId(item.id)}
+                  title={item.title ? `Remove ${item.title}` : `Remove ${noun}`}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="item-head">
               {inline.map((f) => (
                 <label key={f.key} className={`fld item-field ${f.width || ''}`}>
@@ -110,7 +142,7 @@ export default function ItemList({
                   <span>{f.label}</span>
                 </label>
               ))}
-              {!readOnly && (
+              {!tools && !readOnly && (
                 <button
                   className="del"
                   onClick={() => setConfirmId(item.id)}

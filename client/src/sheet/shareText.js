@@ -210,16 +210,26 @@ export const shareAcModifiers = (sheet) =>
       .join('\n') || 'Nothing running.'
   );
 
-/** One piece of armour: what it is, what it gives, and whether it is on. */
+/**
+ * One piece of armour: what it is, what it gives, and whether it is on.
+ *
+ * The numbers as one line, and what it does under them. The description is the
+ * reason a piece of armour gets shown to the table at all - nobody asks to see
+ * a chain shirt, they ask what the cloak does - so leaving it out would send
+ * the half of the row that was never in question.
+ */
 export const shareArmorPiece = (sheet, row) =>
   block(
     sheet,
     clean(row.name) || row.type || 'Armor',
-    line([
-      row.type === 'Shield' ? `AC ${signed(Number(row.ac) || 0)}` : `AC ${row.ac}`,
-      row.type,
-      row.equipped ? 'worn' : 'not worn',
-      row.stealthDisadvantage ? 'stealth disadvantage' : '',
+    lines([
+      line([
+        row.type === 'Shield' ? `AC ${signed(Number(row.ac) || 0)}` : `AC ${row.ac}`,
+        row.type,
+        row.equipped ? 'worn' : 'not worn',
+        row.stealthDisadvantage ? 'stealth disadvantage' : '',
+      ]),
+      clean(row.description),
     ]),
     row.media
   );
@@ -238,11 +248,17 @@ export const shareInventoryItem = (sheet, row) =>
   block(
     sheet,
     clean(row.title) || 'Item',
-    line([
-      written(row.quantity) ? `${row.quantity} carried` : '',
-      // Said as "each", because that is what the column means and what the
-      // total at the top of the section is worked out from.
-      written(row.weight) ? `${row.weight} each` : '',
+    lines([
+      line([
+        written(row.quantity) ? `${row.quantity} carried` : '',
+        // Said as "each", because that is what the column means and what the
+        // total at the top of the section is worked out from.
+        written(row.weight) ? `${row.weight} each` : '',
+      ]),
+      // What the thing does, where anybody has said. Usually the reason it is
+      // being shown: nobody asks to see a coil of rope, they ask what the vial
+      // is and what happens when you drink it.
+      clean(row.description),
     ]) || 'Nothing else written down.',
     row.media
   );

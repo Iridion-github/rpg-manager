@@ -1895,6 +1895,10 @@ button.token-tile:hover {
      text, and the title attribute carries the whole thing anyway. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  /* The unprefixed property says the same thing and is the one that will still
+     be here later. Both, because the prefixed pair is what actually clamps
+     today: every engine implements this through the old -webkit-box layout. */
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -3603,6 +3607,16 @@ button.token-tile:hover {
   font-size: 0.8rem;
 }
 
+/* The description, sized like the rest of the row rather than like a page of
+   prose. It sits outside .armor-fields because it is a paragraph under the
+   boxes rather than one of them, which also means it misses the shrink above
+   and would otherwise be typed at the browser's own default. */
+.armor-row .fld.area textarea {
+  padding: 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .armor-list .empty {
   color: #8b90a0;
   font-size: 0.8rem;
@@ -3729,6 +3743,18 @@ button.token-tile:hover {
   border-radius: 8px;
   padding: 0.4rem 0.5rem;
   display: grid;
+  gap: 0.35rem;
+}
+
+/* The strip along the top of a row, where the list has buttons that act on the
+   whole row rather than on one of its boxes. Pushed to the right edge and given
+   a line of its own: it puts the delete well away from the fields somebody is
+   tabbing through, and it leaves the boxes below the full width of the column
+   instead of ending each line with a button. */
+.item-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
   gap: 0.35rem;
 }
 
@@ -6695,7 +6721,9 @@ button.token-tile:hover {
 }
 
 /* --- the equipment shelf --- */
-.items-view {
+/* The tab it lives in. The shelf itself carries no page furniture, because the
+   same component is also opened inside a window from a character sheet. */
+.items-page {
   padding: 1rem;
   max-width: 60rem;
   margin: 0 auto;
@@ -6813,6 +6841,29 @@ button.token-tile:hover {
   }
 }
 
+/* The name, and - when somebody came here to fetch rather than to read - the
+   button that takes it. At the top rather than the bottom: a magic item runs to
+   four paragraphs, and the button belongs beside the name it applies to. */
+.items-entry-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.items-entry-head h3 {
+  margin: 0;
+}
+
+.items-use {
+  flex: none;
+  background: #2b3350;
+  border-color: #58a6ff;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 /* One entry. */
 .items-entry {
   background: #171b24;
@@ -6822,7 +6873,6 @@ button.token-tile:hover {
 }
 
 .items-entry h3 {
-  margin: 0 0 0.75rem;
   font-size: 1rem;
 }
 
@@ -6867,6 +6917,45 @@ button.token-tile:hover {
   margin: 0 0 0.5rem;
   font-size: 0.85rem;
   line-height: 1.5;
+}
+
+/* --- the compendium, opened from a sheet --- */
+/* Eighty percent of the screen: the thing inside it is a shelf, and its
+   categories alone are five rows of buttons. Fixed and centred rather than
+   floating - it is an errand you finish and dismiss, not a panel to keep. */
+.compendium-modal {
+  box-sizing: border-box;
+  width: 80vw;
+  height: 80vh;
+  max-width: none;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Over the sheet that opened it, which is itself a floating window. */
+.compendium-back {
+  z-index: 520;
+}
+
+/* Only the shelf scrolls, so the title bar and the way out of it stay put
+   however long a magic item's rules text runs. */
+.compendium-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+
+/* On an armour row, beside the name it fills in. Quiet on purpose: it is an
+   offer rather than the point of the row, and it sits next to the red button,
+   which has to stay the loud one. */
+.compendium-btn {
+  flex: none;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.45rem;
+  white-space: nowrap;
 }
 
 /* --- sign in --- */

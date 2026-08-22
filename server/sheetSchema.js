@@ -207,6 +207,11 @@ function pickArmor(source) {
       dexCap: DEX_CAPS.has(String(a.dexCap)) ? String(a.dexCap) : 'limitless',
       stealthDisadvantage: Boolean(a.stealthDisadvantage),
       equipped: Boolean(a.equipped),
+      // What it does beyond the number: the resistance on a suit of adamantine,
+      // the rule the DM made up for it. The same allowance as an inventory row's
+      // description, because it is the same kind of writing - a paragraph about
+      // one thing rather than a page.
+      description: text(a.description, '', MAX_ITEM_TEXT),
       // What the piece looks like, on the same terms as the kit below it.
       media: pictureUrl(a.media),
     };
@@ -379,6 +384,11 @@ const pickInventory = (source) =>
       quantity: optional(row.quantity, { lo: 0, hi: 99999, whole: true }),
       title: itemText(row.title, 120),
       weight: optional(row.weight, { lo: 0, hi: 99999 }),
+      // What the thing is, past its name and its weight: what a potion does,
+      // what is inside a pack, the note about who it was taken from. The same
+      // allowance the other lists give a description, since it is the same kind
+      // of writing.
+      description: text(row.description, '', MAX_ITEM_TEXT),
       // What it looks like. Empty on every row written before this existed,
       // which is a thing nobody has illustrated rather than one missing its
       // picture. Held to an address on this server, like every other picture
@@ -456,6 +466,11 @@ function pickAttacks(source, { media = true } = {}) {
     toHit: pickDice(a.toHit, TO_HIT_DICE) || legacyToHit(a.bonus),
     damage: pickDice(a.damage, DAMAGE_DICE) || legacyDamage(a.damage),
     damageType: text(a.damageType ?? legacyDamageType(a.damage) ?? a.notes, '', 60),
+    // What the row's four boxes have no room for: the reach, the properties,
+    // the die a versatile weapon rolls in two hands, whatever the DM ruled. A
+    // token's attack gets one too - a bite that recharges on a 5 or a 6 is
+    // exactly this, and the row is meant to be the same row either way.
+    description: text(a.description, '', MAX_ITEM_TEXT),
     // A picture of the attack landing - a still or an animation - shown small
     // beside it on the sheet and in the chat line when it is thrown. Empty on
     // every attack written before this existed, which is an attack with no

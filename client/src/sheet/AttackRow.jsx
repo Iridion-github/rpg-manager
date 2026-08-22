@@ -37,6 +37,10 @@ export const isBlankAttack = (a) => !String(a?.name || '').trim() && !a?.toHit &
  *                   the attack landing there; a token passes nothing, because a
  *                   piece on a board is not a page about a character and the
  *                   place that picture earns its keep is the sheet.
+ *   `tools`         extra buttons for the strip along the top, beside the
+ *                   delete. The sheet puts the compendium there; a token has
+ *                   no compendium button and passes nothing, and the strip is
+ *                   drawn either way so the two rows stay the same shape.
  */
 export default function AttackRow({
   attack,
@@ -46,11 +50,31 @@ export default function AttackRow({
   onPickDice,
   onRemove,
   onRoll,
+  tools = null,
   children,
 }) {
   const a = attack;
   return (
     <li className="item-row attack-row">
+      {/* The buttons, on a line of their own at the right edge. They act on the
+          whole attack rather than on one of its boxes, and out here the four
+          boxes get the width of the row instead of ending in a red cross that
+          moves about as the row wraps. */}
+      {!readOnly && (tools || onRemove) && (
+        <div className="item-tools">
+          {tools}
+          {onRemove && (
+            <button
+              className="del"
+              onClick={onRemove}
+              title={a.name ? `Remove ${a.name}` : 'Remove this attack'}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="item-head">
         {onRoll && (
           <button
@@ -116,16 +140,27 @@ export default function AttackRow({
           <span>Type</span>
         </label>
 
-        {!readOnly && onRemove && (
-          <button
-            className="del"
-            onClick={onRemove}
-            title={a.name ? `Remove ${a.name}` : 'Remove this attack'}
-          >
-            ✕
-          </button>
-        )}
       </div>
+
+      {/* What the boxes cannot hold: the reach, the properties, the die it
+          rolls in two hands, the ruling your DM made. Filled in for you when
+          the row came from the compendium.
+          Left out entirely where there is nothing in it and nothing can be
+          typed - a sheet somebody may only read, or the linked character's
+          attacks listed above a token's own - since an empty disabled box says
+          nothing and there is one of these per attack. */}
+      {(!readOnly || a.description) && (
+      <label className="fld item-area">
+        <textarea
+          rows={2}
+          value={a.description || ''}
+          placeholder="Reach, properties, anything the boxes cannot say"
+          disabled={readOnly}
+          onChange={(e) => onChange('description', e.target.value)}
+        />
+        <span>Description</span>
+      </label>
+      )}
 
       {children}
     </li>

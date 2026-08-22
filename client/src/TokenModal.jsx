@@ -935,7 +935,14 @@ export default function TokenModal({
                 onClick={() =>
                   setAttacks((list) => [
                     ...list,
-                    { id: crypto.randomUUID(), name: '', toHit: null, damage: null, damageType: '' },
+                    {
+                      id: crypto.randomUUID(),
+                      name: '',
+                      toHit: null,
+                      damage: null,
+                      damageType: '',
+                      description: '',
+                    },
                   ])
                 }
               >

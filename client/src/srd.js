@@ -74,14 +74,41 @@ export async function fetchNode(path) {
 }
 
 /**
- * What a document offers to descend into.
+ * A to Z, and the same A to Z for everybody.
+ *
+ * An explicit locale rather than the reader's own, for the reason the dates are
+ * formatted with one: two people at the same table should be looking at the
+ * same list in the same order, and a browser set to another language quietly
+ * sorts some of these differently. The entries are English either way, since
+ * that is the language the book is written in.
+ *
+ * Case is ignored, so "arrow" would file beside "Arrow" rather than after every
+ * capital letter, and digits are read as numbers, so a hypothetical "+2 Weapon"
+ * does not sort behind "+10 Weapon".
+ */
+const byName = (a, b) =>
+  String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'en', {
+    sensitivity: 'base',
+    numeric: true,
+  });
+
+/**
+ * What a document offers to descend into, in alphabetical order.
  *
  * `equipment` on a category, `results` on the root list. A leaf has neither, and
  * that absence is what the walk stops on.
+ *
+ * Sorted here rather than at each of the places that draws a list, so the
+ * categories across the top and the entries inside one cannot end up ordered
+ * differently. The book's own order is dropped on purpose: it puts armour by
+ * ascending armour class and weapons by the table they are printed in, which is
+ * a fine way to read a rulebook and a poor way to find the one item you already
+ * know the name of. A copy is sorted rather than the array itself, since the
+ * caller was handed a document it did not ask to have rearranged.
  */
 export const branchesOf = (node) => {
-  if (Array.isArray(node?.equipment)) return node.equipment;
-  if (Array.isArray(node?.results)) return node.results;
+  if (Array.isArray(node?.equipment)) return [...node.equipment].sort(byName);
+  if (Array.isArray(node?.results)) return [...node.results].sort(byName);
   return [];
 };
 
@@ -100,7 +127,7 @@ const text = (v) => (v === null || v === undefined || v === '' ? null : String(v
  * same thing to a reader, so both are flattened to the name here rather than at
  * each of the places that wants one.
  */
-const nameOf = (v) => (v && typeof v === 'object' ? text(v.name) : text(v));
+export const nameOf = (v) => (v && typeof v === 'object' ? text(v.name) : text(v));
 const yesNo = (v) => (v === true ? 'Yes' : v === false ? 'No' : null);
 
 /** "10 gp", or nothing at all when there is no price. */
