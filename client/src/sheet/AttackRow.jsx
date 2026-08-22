@@ -1,4 +1,5 @@
 import { notation } from '../dice.js';
+import { useAreaSize } from './areaSize.jsx';
 
 /**
  * An attack with nothing on it yet: no name, no dice.
@@ -54,6 +55,10 @@ export default function AttackRow({
   children,
 }) {
   const a = attack;
+  // The description box keeps whatever height it was dragged to, per sheet and
+  // per attack. On a token's attacks there is no sheet to file it under and the
+  // box behaves as it always has - see areaSize.jsx.
+  const sizeRef = useAreaSize(`attack:${a.id}:description`);
   return (
     <li className="item-row attack-row">
       {/* The buttons, on a line of their own at the right edge. They act on the
@@ -152,6 +157,7 @@ export default function AttackRow({
       {(!readOnly || a.description) && (
       <label className="fld item-area">
         <textarea
+          ref={sizeRef}
           rows={2}
           value={a.description || ''}
           placeholder="Reach, properties, anything the boxes cannot say"

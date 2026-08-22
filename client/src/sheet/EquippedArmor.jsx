@@ -219,6 +219,7 @@ export default function EquippedArmor({
             <Area
               label="Description"
               rows={3}
+              sizeKey={`armor:${a.id}:description`}
               value={a.description ?? ''}
               readOnly={readOnly}
               onChange={(v) => setField(a.id, 'description', v)}

@@ -1,5 +1,7 @@
 // Small labelled inputs, so the sheet reads as a sheet rather than as markup.
 
+import { useAreaSize } from './areaSize.jsx';
+
 export function Text({ label, value, onChange, readOnly, placeholder, className = '' }) {
   return (
     <label className={`fld ${className}`}>
@@ -31,10 +33,19 @@ export function Num({ label, value, onChange, readOnly, min, max, title, classNa
   );
 }
 
-export function Area({ label, value, onChange, readOnly, rows = 4, className = '' }) {
+/**
+ * A box of prose.
+ *
+ * `sizeKey` is what the reader's own height for this box is filed under; see
+ * areaSize.jsx. Left out where the box is not part of a character sheet, and
+ * then it opens at `rows` every time as it always did.
+ */
+export function Area({ label, value, onChange, readOnly, rows = 4, className = '', sizeKey = '' }) {
+  const sizeRef = useAreaSize(sizeKey);
   return (
     <label className={`fld area ${className}`}>
       <textarea
+        ref={sizeRef}
         rows={rows}
         value={value ?? ''}
         disabled={readOnly}

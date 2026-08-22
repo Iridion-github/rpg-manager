@@ -82,6 +82,7 @@ import {
 } from './rules.js';
 import HpBar, { hpBar } from '../HpBar.jsx';
 import AttackRow from './AttackRow.jsx';
+import { SheetAreaSizes } from './areaSize.jsx';
 
 /**
  * Write one value into a copy of the sheet, at a dotted path.
@@ -186,7 +187,22 @@ const FEATURE_FIELDS = [
   },
 ];
 
-export default function CharacterSheet({
+/**
+ * The sheet, with the reader's own textarea heights in scope.
+ *
+ * A wrapper rather than one more element inside the sheet: the heights are
+ * filed under the character being drawn, and every box on every page has to be
+ * able to ask which character that is. See areaSize.jsx.
+ */
+export default function CharacterSheet(props) {
+  return (
+    <SheetAreaSizes sheetId={props.sheet?.id}>
+      <Sheet {...props} />
+    </SheetAreaSizes>
+  );
+}
+
+function Sheet({
   sheet,
   onChange,
   readOnly,
@@ -1236,7 +1252,14 @@ function DetailsPage({ sheet, set, readOnly, sharing, onPick }) {
   // rather than written out twice each - once to render and once to share.
   const prose = (label, key, rows) => (
     <Shareable key={key} {...share(shareProse(sheet, label, sheet[key]))}>
-      <Area label={label} value={sheet[key]} onChange={set(key)} readOnly={readOnly} rows={rows} />
+      <Area
+        label={label}
+        value={sheet[key]}
+        onChange={set(key)}
+        readOnly={readOnly}
+        rows={rows}
+        sizeKey={`prose:${key}`}
+      />
     </Shareable>
   );
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ConfirmDeleteModal from '../ConfirmDeleteModal.jsx';
 import MediaField from './MediaField.jsx';
 import Shareable from './Shareable.jsx';
+import { useAreaSize } from './areaSize.jsx';
 
 const uid = () => crypto.randomUUID();
 
@@ -154,16 +155,13 @@ export default function ItemList({
             </div>
 
             {areas.map((f) => (
-              <label key={f.key} className="fld item-area">
-                <textarea
-                  rows={f.rows || 2}
-                  value={item[f.key] ?? ''}
-                  placeholder={f.placeholder}
-                  disabled={readOnly}
-                  onChange={(e) => setField(item.id, f.key, e.target.value)}
-                />
-                <span>{f.label}</span>
-              </label>
+              <ItemArea
+                key={f.key}
+                field={f}
+                item={item}
+                readOnly={readOnly}
+                onChange={(v) => setField(item.id, f.key, v)}
+              />
             ))}
 
             {media && (
@@ -232,5 +230,27 @@ function ItemInput({ field, value, readOnly, onChange }) {
       disabled={readOnly}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+/**
+ * One of a row's boxes of prose, drawn as its own component so that it can hold
+ * the reader's height for it - a hook per box needs a component per box. See
+ * areaSize.jsx.
+ */
+function ItemArea({ field, item, readOnly, onChange }) {
+  const sizeRef = useAreaSize(`item:${item.id}:${field.key}`);
+  return (
+    <label className="fld item-area">
+      <textarea
+        ref={sizeRef}
+        rows={field.rows || 2}
+        value={item[field.key] ?? ''}
+        placeholder={field.placeholder}
+        disabled={readOnly}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span>{field.label}</span>
+    </label>
   );
 }

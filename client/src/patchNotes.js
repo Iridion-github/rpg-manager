@@ -28,6 +28,10 @@ export const PATCH_NOTES = [
     entries: [
       {
         kind: 'new',
+        text: "Every box of prose on a character sheet now stays the size you drag it to. Pull a backstory open to half a page, or squash a spell's description down to a line, and it will be that size the next time you open that character - on the Details page, on an attack, an item, a piece of armour, a spell, anywhere there is a handle in the corner to drag. The heights are yours and yours alone: they are remembered in this browser rather than written onto the character, so the rest of the table still sees their own, and each character keeps its own set.",
+      },
+      {
+        kind: 'new',
         text: "My Characters, a tab of its own outside a campaign, sitting right after Campaigns. It is your own shelf: characters that belong to you rather than to a table, that nobody else on this server can see, and that outlive the campaign they came from. Nothing appears here on its own. Open a character at one of your tables and there is a new button at the top of the sheet, Save to My Characters, which puts a copy of them on the shelf; you can also make one here from scratch. The copy is a copy and not a link, which is the whole point of it: level up at the table and your saved version stays as it was, tidy up your saved version and the table's sheet is untouched. So this is where a character can be kept as they were when a campaign ended, or built up before there is a table to bring them to. Each card says which table its character was copied from, and the sheet has a Campaign box at the top saying the same. Two things the tab inside a campaign has are missing, both because there is no table here to do them to: there is no Sharing mode and no dice to throw. Everything else is there, including the compendium, importing and exporting, and the portrait.",
       },
       {

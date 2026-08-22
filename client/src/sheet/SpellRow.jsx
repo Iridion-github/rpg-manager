@@ -289,6 +289,7 @@ export default function SpellRow({
             <Area
               label="Description"
               rows={5}
+              sizeKey={`spell:${spell.id}:description`}
               value={spell.description}
               readOnly={readOnly}
               onChange={(v) => onPatch({ description: v })}
