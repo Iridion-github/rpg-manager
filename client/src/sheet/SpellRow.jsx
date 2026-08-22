@@ -103,16 +103,20 @@ export default function SpellRow({
           />
           {/* Exactly the attacks' button, because it is exactly the attacks'
               question: this is a thing with dice on it and you want them
-              thrown. Disabled until there are dice to throw. */}
-          <button
-            type="button"
-            className="roll-btn"
-            title={canRoll ? `Roll ${spell.name || 'this spell'}` : 'Set the dice first'}
-            disabled={!canRoll}
-            onClick={() => onRoll(spell)}
-          >
-            🎲
-          </button>
+              thrown. Disabled until there are dice to throw, and absent
+              altogether where there is nothing to throw them into - the same
+              rule the attacks follow, and for the same reason. */}
+          {onRoll && (
+            <button
+              type="button"
+              className="roll-btn"
+              title={canRoll ? `Roll ${spell.name || 'this spell'}` : 'Set the dice first'}
+              disabled={!canRoll}
+              onClick={() => onRoll(spell)}
+            >
+              🎲
+            </button>
+          )}
           {/* Open works on a sheet somebody may only read: the entry is the
               part of a spell worth reading, and reading is what they can do. */}
           <button

@@ -143,6 +143,11 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'The admin account cannot be deleted.' });
     }
     await store.remove(USERS, req.params.id);
+    // And their own shelf of characters, which is kept under the account and is
+    // reachable by nobody else - so an account that is gone leaves rows no
+    // request could ever read again. Their characters *at a table* are the
+    // table's and stay: those are copies, and the campaign still needs them.
+    await store.removeTree(`${USERS}/${req.params.id}`);
     // A live session outlives its account otherwise - the token would still
     // resolve until it expired on its own.
     await destroySessionsFor(req.params.id);

@@ -57,6 +57,16 @@ export async function cacheGetAll(kind, campaignId) {
   }
 }
 
+/**
+ * The tag the characters on your own shelf are kept under.
+ *
+ * Not a campaign, so not a campaign id - and it cannot collide with one, since
+ * every campaign id is a uuid. They share the store with the tables' sheets
+ * because they are the same kind of thing to read back; they are separate
+ * records, so there is nothing for the two to overwrite in each other.
+ */
+export const MINE = '@mine';
+
 // Replace this campaign's snapshot with the latest server state. Records
 // belonging to *other* campaigns are left alone; within this one it's a
 // clear-then-fill, which is what makes deletions propagate - a record the

@@ -104,6 +104,29 @@ function setIn(obj, path, value) {
 const uid = () => crypto.randomUUID();
 
 /**
+ * A name you can click to roll it - or just the name, where there is nothing to
+ * roll into.
+ *
+ * The abilities, the saves and the skills are all the same shape: a word that
+ * throws a d20 at whatever bonus sits beside it. Outside a campaign there is no
+ * chat log for a throw to land in, so the same word is drawn as plain text
+ * instead of as a button that would look live and do nothing. One component
+ * rather than three conditionals, and it takes the decision from whether the
+ * handler exists, which is what `canRoll` already turns into null upstream.
+ *
+ * The span keeps the class it was given but drops `rollable`, which is the
+ * class that supplies the pointer and the underline on hover.
+ */
+function Roller({ className = '', title, onClick, children }) {
+  if (!onClick) return <span className={className || undefined}>{children}</span>;
+  return (
+    <button type="button" className={`${className} rollable`.trim()} title={title} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+/**
  * What a row is made of, in each of the three sections that are lists.
  *
  * Kept here, beside the sections they belong to, rather than inside the list
@@ -177,6 +200,26 @@ export default function CharacterSheet({
    * both of them can see it. Nothing else about the mode moved.
    */
   sharing = false,
+  /**
+   * Whether this sheet can throw dice.
+   *
+   * On at a table, where a roll goes into that table's chat log for everyone to
+   * see. Off outside one, in the Characters tab in the shell: there is no table
+   * listening, so a d20 thrown there would land nowhere. What that turns off is
+   * the handles rather than the buttons' behaviour - the ability, save and skill
+   * names stop being clickable, and the little dice beside an attack or a spell
+   * are simply not drawn, rather than being drawn and refusing.
+   */
+  canRoll = true,
+  /**
+   * The campaign this character belongs to, named.
+   *
+   * Absent inside a campaign, where every sheet on screen is from the one you
+   * are already sitting at and a box repeating its name on each of them says
+   * nothing. Given outside one, where the list holds characters from every
+   * table at once and which table this is is the first thing worth knowing.
+   */
+  campaignLabel = '',
 }) {
   const [page, setPage] = useState('main');
   // A roll waiting to be confirmed: { title, rolls, allowAdvantage }.
@@ -502,6 +545,14 @@ export default function CharacterSheet({
           <Shareable {...identity(shareField(sheet, 'XP', sheet.xp))}>
             <Num label="XP" value={sheet.xp} onChange={set('xp')} readOnly={locked} min={0} />
           </Shareable>
+          {/* Which table this character is at. Last in the grid and never
+              editable: it is not a thing written on the sheet but a fact about
+              where the sheet lives, and moving a character between campaigns is
+              not something a text box should look like it can do. Only appears
+              outside a campaign - see campaignLabel. */}
+          {campaignLabel && (
+            <Text label="Campaign" value={campaignLabel} onChange={() => { }} readOnly />
+          )}
         </div>
       </header>
 
@@ -512,8 +563,12 @@ export default function CharacterSheet({
           onChange={onChange}
           readOnly={locked}
           pb={pb}
-          askCheck={askCheck}
-          askAttack={askAttack}
+          // Null rather than the function where there is nowhere to roll to.
+          // Each page reads a missing handler as "this doesn't roll" and draws
+          // the plain words instead, which is the one place the difference
+          // needs deciding. See canRoll above.
+          askCheck={canRoll ? askCheck : null}
+          askAttack={canRoll ? askAttack : null}
           sharing={sharing}
           onPick={setPreview}
           canCloud={canCloud && !locked}
@@ -536,7 +591,7 @@ export default function CharacterSheet({
           readOnly={locked}
           sharing={sharing}
           onPick={setPreview}
-          askSpell={askSpell}
+          askSpell={canRoll ? askSpell : null}
         />
       )}
 
@@ -706,14 +761,16 @@ function MainPage({
             <Shareable key={a.key} {...share(shareAbility(sheet, a))}>
             <div className="ability">
               {/* The name is the roll handle; the score below stays editable. */}
-              <button
-                type="button"
-                className="ability-name rollable"
+              <Roller
+                className="ability-name"
                 title={`Roll a ${a.label} check`}
-                onClick={() => askCheck(`${a.label} check`, abilityMod(sheet.abilities?.[a.key]))}
+                onClick={
+                  askCheck &&
+                  (() => askCheck(`${a.label} check`, abilityMod(sheet.abilities?.[a.key])))
+                }
               >
                 {a.label}
-              </button>
+              </Roller>
               <b className="ability-mod">{signed(abilityMod(sheet.abilities?.[a.key]))}</b>
               <input
                 type="number"
@@ -763,16 +820,16 @@ function MainPage({
                 aria-label={`${a.label} save proficiency`}
               />
               <b>{signed(saveBonus(sheet, a.key))}</b>
-              <button
-                type="button"
-                className="rollable"
+              <Roller
                 title={`Roll a ${a.label} saving throw`}
-                onClick={() =>
-                  askCheck(`${a.label} saving throw`, saveBonus(sheet, a.key), { kind: 'save' })
+                onClick={
+                  askCheck &&
+                  (() =>
+                    askCheck(`${a.label} saving throw`, saveBonus(sheet, a.key), { kind: 'save' }))
                 }
               >
                 {a.label}
-              </button>
+              </Roller>
             </div>
             </Shareable>
           ))}
@@ -799,18 +856,18 @@ function MainPage({
                   {rank === 2 ? '◉' : rank === 1 ? '●' : '○'}
                 </button>
                 <b>{signed(skillBonus(sheet, s))}</b>
-                <button
-                  type="button"
-                  className="rollable"
+                <Roller
                   title={`Roll a ${s.label} check`}
-                  onClick={() =>
-                    askCheck(`${s.label} check`, skillBonus(sheet, s), {
-                      note: hampered ? '(Equipped armor)' : '',
-                    })
+                  onClick={
+                    askCheck &&
+                    (() =>
+                      askCheck(`${s.label} check`, skillBonus(sheet, s), {
+                        note: hampered ? '(Equipped armor)' : '',
+                      }))
                   }
                 >
                   {s.label} <i>({s.ability})</i>
-                </button>
+                </Roller>
               </div>
               </Shareable>
             );
@@ -855,7 +912,7 @@ function MainPage({
               label="Initiative"
               value={signed(initiative(sheet))}
               hint="DEX modifier + bonus"
-              onClick={() => askCheck('Initiative', initiative(sheet))}
+              onClick={askCheck && (() => askCheck('Initiative', initiative(sheet)))}
             />
           </Shareable>
           <Shareable {...share(shareSpeed(sheet))}>

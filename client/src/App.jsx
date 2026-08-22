@@ -8,6 +8,7 @@ import Account from './Account.jsx';
 import Avatar from './Avatar.jsx';
 import ConfirmChange from './ConfirmChange.jsx';
 import CharacterSheets from './CharacterSheets.jsx';
+import MyCharacters from './MyCharacters.jsx';
 import Roster from './Roster.jsx';
 import Campaigns from './Campaigns.jsx';
 import Notes from './Notes.jsx';
@@ -257,7 +258,7 @@ export default function App() {
    * still on screen with nothing in it.
    */
   const tableTabs = ['tabletop', 'sheets', 'notes', 'music', 'tokens', 'items', 'players'];
-  const shellTabs = ['campaigns', 'users', 'patch', 'account'];
+  const shellTabs = ['campaigns', 'characters', 'users', 'patch', 'account'];
 
   function resolveTab(wanted) {
     if (!insideCampaign) return tableTabs.includes(wanted) ? 'campaigns' : wanted;
@@ -444,6 +445,20 @@ export default function App() {
                   Campaigns
                 </button>
               )}
+              {/* Straight after the directory, because it is the other half of
+              the same question: those are your tables, and these are your
+              characters. Your own shelf rather than a view onto the tables' -
+              a character gets here by being copied off a campaign sheet, and
+              the copy is nobody else's and moves with neither. See
+              MyCharacters.jsx. */}
+              {!insideCampaign && authed && (
+                <button
+                  className={activeTab === 'characters' ? 'active' : ''}
+                  onClick={() => setTab('characters')}
+                >
+                  My Characters
+                </button>
+              )}
               {/* Everyone signed in can see who else is here - a DM picking members
               is reading this same list from inside their campaign. What you can
               *do* to it is another matter, and the tab itself decides that. */}
@@ -530,6 +545,18 @@ export default function App() {
             onChanged={loadCampaigns}
           />
         )}
+        {/* Mounted for as long as you are outside a campaign, not just for its
+            tab - the same arrangement as the sheets inside one, and for the
+            same reason: an open character floats over the app in a window of
+            its own, and it should survive a look at the campaign list. Walking
+            into a campaign unmounts this, which is what shuts those windows. */}
+        {!insideCampaign && authed && (
+          <MyCharacters
+            offline={offline}
+            onOfflineData={setLastSynced}
+            showRoster={activeTab === 'characters'}
+          />
+        )}
         {activeTab === 'users' && authed && (
           <Roster isAdmin={isAdmin} onUsersChanged={loadCampaigns} />
         )}
@@ -581,6 +608,7 @@ export default function App() {
             players={members}
             offline={offline}
             campaignId={campaignId}
+            campaignName={campaign?.name || ''}
             onOfflineData={setLastSynced}
             showRoster={activeTab === 'sheets'}
           />

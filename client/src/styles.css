@@ -2692,6 +2692,30 @@ button.token-tile:hover {
   font-size: 0.95rem;
 }
 
+/* The same tile outside a campaign, while it asks which table the new
+   character belongs to. A plain block rather than a button, because it now
+   holds one button per campaign and a button inside a button is not something
+   markup can say - so it also opts out of the tile's hover, which would
+   otherwise light up while the pointer is on its way to one of them. */
+.sheet-card.new.choosing,
+.sheet-card.new.choosing:hover {
+  background: none;
+  border-color: #35406a;
+  color: #8b90a0;
+  gap: 0.5rem;
+}
+
+.new-here {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.new-here button {
+  width: 100%;
+  font-size: 0.85rem;
+}
+
 /* What a card says, as one box. It is the card's only child where there is no
    portrait, and the picture's neighbour where there is. */
 .card-body {
@@ -5364,6 +5388,25 @@ button.token-tile:hover {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 0.25rem;
+}
+
+/* Two ways of answering the same dialog, side by side under its heading. The
+   character sheet's own page row (.sheet-pages) drawn in a modal: the same
+   thing is being said, so it should look the same rather than inventing a
+   second kind of tab. The margin is the modal's own gap's job. */
+.modal-tabs {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.modal-tabs button {
+  background: #1e222b;
+  font-size: 0.85rem;
+}
+
+.modal-tabs button.active {
+  background: #35406a;
+  border-color: #58a6ff;
 }
 
 /* --- floating window --- */

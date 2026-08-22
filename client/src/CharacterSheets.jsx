@@ -3,12 +3,13 @@ import { api, clientId } from './api.js';
 import { socket } from './socket.js';
 import { cacheGetAll, cachePutAll, getLastSynced } from './cache.js';
 import CharacterSheet from './sheet/CharacterSheet.jsx';
+import SheetCard from './SheetCard.jsx';
 import SheetTokenLink from './SheetTokenLink.jsx';
 import FloatingWindow, { OPACITY_MIN } from './FloatingWindow.jsx';
 import ConfirmDeleteModal from './ConfirmDeleteModal.jsx';
 import SheetImportModal from './SheetImportModal.jsx';
-import { downloadSheet } from './sheetFile.js';
-import { abilityMod, armorClass, blankSheet, signed } from './sheet/rules.js';
+import { characterOnly, downloadSheet } from './sheetFile.js';
+import { blankSheet } from './sheet/rules.js';
 import { provideSheetOpener } from './sheetWindows.js';
 
 // How long we let edits settle before writing them to the server. Typing a
@@ -37,6 +38,9 @@ export default function CharacterSheets({
   players,
   offline,
   campaignId,
+  // What this table is called, for the note a saved copy carries about where it
+  // came from. The name and not the id: see saveToMine below.
+  campaignName = '',
   onOfflineData,
   showRoster = true,
 }) {
@@ -183,6 +187,59 @@ export default function CharacterSheets({
       return next;
     });
   };
+
+  /**
+   * Characters saved to the shelf a moment ago, by sheet id.
+   *
+   * Purely so the button can say it worked. Nothing else on screen changes when
+   * you press it - the copy lands in a tab you are not looking at - and a
+   * button that does something invisible and then looks exactly as it did is a
+   * button people press three times. It clears itself after a few seconds,
+   * because it is a receipt for the press rather than a fact about the sheet:
+   * pressing it again later, to save a newer version, is a perfectly good thing
+   * to want.
+   */
+  const [savedToMine, setSavedToMine] = useState(() => new Set());
+  const savedTimers = useRef(new Map());
+
+  async function saveToMine(sheet) {
+    if (offline) return;
+    setError('');
+    try {
+      await api.createMySheet({
+        ...characterOnly(sheet),
+        // The one thing recorded about where it came from, and a name rather
+        // than an id: it is a note for whoever reads it later, not a pointer to
+        // follow back into a campaign that may not still be there.
+        savedFrom: campaignName || '',
+      });
+      setSavedToMine((prev) => new Set(prev).add(sheet.id));
+      clearTimeout(savedTimers.current.get(sheet.id));
+      savedTimers.current.set(
+        sheet.id,
+        setTimeout(() => {
+          setSavedToMine((prev) => {
+            const next = new Set(prev);
+            next.delete(sheet.id);
+            return next;
+          });
+          savedTimers.current.delete(sheet.id);
+        }, 3000)
+      );
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  // The receipts above are timers, and a window closed before one fires would
+  // otherwise set state on a component that has gone.
+  useEffect(() => {
+    const timers = savedTimers.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+    };
+  }, []);
 
   const markSaving = (id, busy) =>
     setSavingIds((prev) => {
@@ -516,48 +573,14 @@ export default function CharacterSheets({
                 {/* Clicking one already open brings its window to the front
                     rather than doing nothing - the card is how you find a sheet
                     you've lost behind another. */}
-                <button
-                  className={`sheet-card${openIds.includes(s.id) ? ' open' : ''}${s.portraitUrl ? ' has-portrait' : ''
-                    }`}
-                  onClick={() => openSheet(s.id)}
-                >
-                  {/* Only where there is one, and the card is laid out in two
-                      columns only where there is one: an empty frame on every
-                      character nobody has drawn yet would cost the whole roster
-                      a column to say nothing. */}
-                  {s.portraitUrl && (
-                    <img className="card-portrait" src={s.portraitUrl} alt="" />
-                  )}
-                  {/* Everything the card says, in one box beside the picture.
-                      A wrapper rather than letting these sit in the card's own
-                      grid: the portrait has to stand alongside all of them at
-                      once, and a cell can only span rows the grid actually
-                      declares - which these, arriving one per character, are
-                      not. */}
-                  <span className="card-body">
-                    <strong>{s.name || 'Unnamed'}</strong>
-                    <span>
-                      {[s.race, s.class && `${s.class} ${s.level ?? 1}`]
-                        .filter(Boolean)
-                        .join(' · ') || 'No class yet'}
-                    </span>
-                    <div className="card-stats">
-                      <span>
-                        HP {s.hp?.current ?? 0}/{s.hp?.max ?? 0}
-                      </span>
-                      <span>AC {armorClass(s)}</span>
-                      <span>
-                        {/* A quick read on the character without opening them up. */}
-                        STR {signed(abilityMod(s.abilities?.str))} DEX{' '}
-                        {signed(abilityMod(s.abilities?.dex))} CON{' '}
-                        {signed(abilityMod(s.abilities?.con))}
-                      </span>
-                    </div>
-                    {/* Only the GM learns anything from this line: a player is
-                        looking at a list of sheets they can already open. */}
-                    {isDm && <span className="card-access">{accessSummary(s, players)}</span>}
-                  </span>
-                </button>
+                <SheetCard
+                  sheet={s}
+                  open={openIds.includes(s.id)}
+                  onOpen={() => openSheet(s.id)}
+                  // Only the GM learns anything from this line: a player is
+                  // looking at a list of sheets they can already open.
+                  note={isDm ? accessSummary(s, players) : ''}
+                />
               </li>
             ))}
             {/* Only where there's no create tile to say it better. Telling a GM
@@ -601,6 +624,23 @@ export default function CharacterSheets({
                 {savingIds.has(sheet.id) && <span className="badge saving">saving…</span>}
                 {readOnly && <span className="badge role anon">read-only</span>}
                 <div className="spacer" />
+                {/* First of the things you can do to the whole sheet, and the
+                    only one that reaches outside this campaign: it puts a copy
+                    of this character on your own shelf, under My Characters.
+                    A copy and not a link - see MyCharacters.jsx - so what
+                    happens to either of them afterwards is its own business.
+
+                    Offered to anybody who can read the sheet, on the same
+                    reasoning as Export beside it: this is a copy, and a copy
+                    takes nothing from anybody. */}
+                <button
+                  className="save-to-mine"
+                  disabled={offline || savedToMine.has(sheet.id)}
+                  onClick={() => saveToMine(sheet)}
+                  title="Keep a copy of this character under My Characters, outside this campaign"
+                >
+                  {savedToMine.has(sheet.id) ? 'Saved ✓' : 'Save to My Characters'}
+                </button>
                 {/* What the sheet is *for* right now, at the head of the three
                     things you can do to the whole of it. Its label is the way
                     out, because while the mode is on the sheet is already
@@ -760,6 +800,12 @@ export default function CharacterSheets({
       {importSheetTarget && (
         <SheetImportModal
           sheet={importSheetTarget}
+          // At a table, the other way in is worth having: the character you are
+          // bringing to this campaign already exists somewhere, and it is
+          // usually at another one of your tables rather than in a file you
+          // exported five minutes ago. The dialog outside a campaign is not
+          // offered it - see SheetImportModal.
+          offerMine
           onConfirm={(incoming) => importSheet(importSheetTarget.id, incoming)}
           onClose={() => setImportId('')}
         />

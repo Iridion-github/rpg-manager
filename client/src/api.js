@@ -197,6 +197,18 @@ export const api = {
   importCampaign: (payload) => post('/api/campaigns/import', payload),
   setMembers: (id, members) => put(`/api/campaigns/${id}/members`, { members }),
 
+  /* --- My Characters: your own shelf, kept under your account ---
+
+     Not campaign-scoped, and not a view onto anything that is: these are your
+     own records, private to you, and a character gets here by being copied off
+     a table's sheet rather than by being the same record seen from elsewhere.
+     Which is why `createMySheet` takes a whole character - that is the copy -
+     and why editing one of these never reaches the table it came from. */
+  listMySheets: () => get('/api/sheets'),
+  createMySheet: (data) => post('/api/sheets', data),
+  updateMySheet: (id, data) => put(`/api/sheets/${id}`, data),
+  deleteMySheet: (id) => del(`/api/sheets/${id}`),
+
   // --- inside the current campaign ---
   listSheets: () => get(table('/sheets')),
   createSheet: (data) => post(table('/sheets'), data),

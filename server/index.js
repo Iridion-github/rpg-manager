@@ -27,6 +27,7 @@ const authRouter = require('./routes/auth');
 const usersRouter = require('./routes/users');
 const campaignsRouter = require('./routes/campaigns');
 const sheetsRouter = require('./routes/sheets');
+const mySheetsRouter = require('./routes/mySheets');
 const scenesRouter = require('./routes/scenes');
 const campaignTokensRouter = require('./routes/campaignTokens');
 const cloudRouter = require('./routes/cloud');
@@ -251,6 +252,10 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/campaigns', campaignsRouter);
+// Your own shelf of characters, kept under your account rather than under a
+// campaign, and private to it. Copies of table characters live here, and they
+// are copies - see routes/mySheets.js.
+app.use('/api/sheets', mySheetsRouter);
 
 /**
  * --- campaign scope ---

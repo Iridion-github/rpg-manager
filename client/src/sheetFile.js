@@ -21,14 +21,32 @@ export const SHEET_FILE = { app: 'rpg-manager', kind: 'character-sheet', version
  * would export a list of somebody's user ids to no purpose, and importing it
  * could only ever be wrong - the sheet being written over already knows who may
  * read it, and that answer must survive being handed a new character.
+ *
+ * `savedFrom` is the same argument again, arriving from a different direction:
+ * a character on your own shelf remembers which table it was copied off (see
+ * routes/mySheets.js). That is a note about where the record came from, not
+ * something the character has, so it stays behind on both journeys - a file
+ * does not carry it, and neither does a character being poured into a sheet
+ * that has provenance of its own.
  */
-const NOT_THE_CHARACTER = ['id', 'access', 'createdAt', 'updatedAt'];
+const NOT_THE_CHARACTER = ['id', 'access', 'createdAt', 'updatedAt', 'savedFrom'];
 
 const withoutIdentity = (sheet) => {
   const out = { ...sheet };
   for (const key of NOT_THE_CHARACTER) delete out[key];
   return out;
 };
+
+/**
+ * The character out of a record, with everything that is about the record
+ * rather than the character taken off.
+ *
+ * The same trim a file gets, for a character that never becomes one: importing
+ * from your own roster copies one sheet into another without either of them
+ * touching the disk, and the thing being copied is the character, not the row
+ * it was read from.
+ */
+export const characterOnly = withoutIdentity;
 
 /** The object that gets written to disk. */
 export const sheetExport = (sheet) => ({
